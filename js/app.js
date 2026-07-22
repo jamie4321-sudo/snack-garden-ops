@@ -1222,7 +1222,14 @@
       if (!window.INTERVIEWS) window.INTERVIEWS = [];
       var idx = id ? indexById(window.INTERVIEWS, id) : -1;
       if (idx > -1) window.INTERVIEWS[idx] = rec; else window.INTERVIEWS.push(rec);
-      saveToSheet(Object.assign({ type: "interview", action: id ? "update" : "add" }, rec));
+      // 주의: 봉투의 type("interview")과 면담 유형(rec.type)이 충돌하지 않도록 유형은 ivType 으로 전송
+      saveToSheet({
+        type: "interview", action: id ? "update" : "add",
+        id: rec.id, date: rec.date, time: rec.time,
+        crewId: rec.crewId, crewName: rec.crewName,
+        ivType: rec.type, condition: rec.condition, recorder: rec.recorder,
+        content: rec.content, followUp: rec.followUp, followUpNote: rec.followUpNote, privateNote: rec.privateNote
+      });
       closeInterviewModal();
       renderInterview();
     });

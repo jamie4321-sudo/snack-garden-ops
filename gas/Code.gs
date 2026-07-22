@@ -301,7 +301,7 @@ function interviewValuesObj_(data) {
   return {
     id: data.id, date: data.date || "", time: data.time || "",
     crewId: data.crewId || "", crewName: data.crewName || "",
-    type: data.type || "", condition: data.condition || "",
+    type: data.ivType || "", condition: data.condition || "",
     recorder: data.recorder || "", content: data.content || "",
     followUp: data.followUp ? "필요" : "", followUpNote: data.followUpNote || "", privateNote: data.privateNote || ""
   };

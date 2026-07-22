@@ -50,10 +50,20 @@
     if (Array.isArray(v)) return v;
     return String(v || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
   }
+  /* 시트가 날짜를 ISO datetime 으로 내려줄 때 → YYYY-MM-DD 로 정리
+     (저장된 자정 기준값의 타임존 시프트를 +12h 로 보정) */
+  function fmtDay(v) {
+    if (!v) return "";
+    var s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return new Date(d.getTime() + 12 * 3600 * 1000).toISOString().slice(0, 10);
+  }
   function normCrew(r) {
     return {
       name: r.name || "", role: r.role || "", team: r.team || "", group: r.group || "미지정",
-      status: r.status || "재직", joinDate: r.joinDate || "", phone: r.phone || "",
+      status: r.status || "재직", joinDate: fmtDay(r.joinDate), phone: r.phone || "",
       site: r.site || "", duties: toArr(r.duties), note: r.note || "",
     };
   }

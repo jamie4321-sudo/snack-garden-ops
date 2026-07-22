@@ -245,7 +245,8 @@ button { font-family: inherit; }
 .summary__point { color: var(--ink-3); font-size: 13px; }
 
 .cal-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; margin-bottom: 18px; }
-.cal-toolbar__nav { display: flex; align-items: center; gap: 10px; }
+.cal-toolbar__nav, .at-nav { display: flex; align-items: center; gap: 10px; }
+.at-nav { margin-bottom: 16px; }
 .cal-toolbar__range { font-weight: 800; font-size: 17px; letter-spacing: -.4px; padding: 0 6px; }
 .cal-toolbar__range span { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--ink-3); margin-left: 8px; }
 .iconbtn {
@@ -487,6 +488,8 @@ button { font-family: inherit; }
 .stat--green .stat__num { color: var(--green); }
 .stat--warn { border-color: color-mix(in srgb, var(--red) 38%, var(--line-soft)); }
 .stat--warn .stat__num { color: var(--red); }
+.stat--clickable { cursor: pointer; transition: border-color .14s, transform .1s, box-shadow .14s; }
+.stat--clickable:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow); }
 .stats--3 { grid-template-columns: repeat(3, 1fr); }
 
 .toolbar-row { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }

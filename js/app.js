@@ -435,10 +435,10 @@
       + '<button type="button" class="evt__act evt__act--next" data-id="' + esc(e.id || "") + '" title="다음 날로 업무 이관">&rarr;</button>'
       + '<button type="button" class="evt__act evt__act--del" data-id="' + esc(e.id || "") + '" title="삭제">&times;</button>'
       + '</span>';
-    var toggle = '<button type="button" class="evt__toggle" data-id="' + esc(e.id || "") + '"'
+    var toggle = e.category === "휴일" ? '' : ('<button type="button" class="evt__toggle" data-id="' + esc(e.id || "") + '"'
       + (e.done ? '' : ' style="border-color:' + color + '"')
       + ' aria-pressed="' + (e.done ? "true" : "false") + '" title="' + (e.done ? "완료 해제" : "완료 처리") + '">'
-      + (e.done ? "&check;" : "") + '</button>';
+      + (e.done ? "&check;" : "") + '</button>');
     return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
       + toggle
       + '<span class="evt__body">' + lead + '<span class="evt__text">' + esc(e.title) + '</span></span>'
@@ -862,14 +862,14 @@
   /* ---------- 면담 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ---------- */
   function interviewBoardRow(r, showCrew) {
     var cond = condOf(r.condition);
+    var issueTag = r.type === "근무 이슈" ? '<span class="board__issue-tag" title="근무 이슈">issue</span> ' : '';
     var flags = "";
-    if (r.type === "근무 이슈") flags += '<span class="board__issue-tag" title="근무 이슈">issue</span>';
     if (r.followUp === "필요") flags += '<span class="board__flag board__flag--follow" title="' + esc(r.followUpNote || "후속 조치 필요") + '">후속</span>';
     if (r.privateNote) flags += '<span class="board__flag board__flag--private" title="비공개 메모">🔒</span>';
     return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
       + (showCrew ? '<td class="board__crew"><b>' + esc(r.crewName || "—") + '</b></td>' : '')
       + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
-      + '<td class="board__type">' + esc(r.type) + '</td>'
+      + '<td class="board__type">' + issueTag + esc(r.type) + '</td>'
       + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
       + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
       + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
@@ -1273,9 +1273,17 @@
   function attKindOf(k) { for (var i = 0; i < ATT_KINDS.length; i++) if (ATT_KINDS[i].key === k) return ATT_KINDS[i]; return ATT_KINDS[0]; }
   var attKindFilter = "전체";
   var attQuery = "";
+  var attAnchor = TODAY; // 근태 기록 목록에서 보고 있는 기준 월
+
+  function attMonthLabel(iso) { var p = (iso || attAnchor).split("-"); return +p[0] + "년 " + +p[1] + "월"; }
+
+  function attendanceInMonth() {
+    var ym = attAnchor.slice(0, 7);
+    return (window.ATTENDANCE || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
+  }
 
   function filteredAttendance() {
-    var list = (window.ATTENDANCE || []).slice();
+    var list = attendanceInMonth();
     list = list.filter(function (r) {
       if (attKindFilter !== "전체" && r.kind !== attKindFilter) return false;
       if (attQuery) {
@@ -1333,21 +1341,30 @@
   }
 
   function renderAttendance() {
-    var all = window.ATTENDANCE || [];
+    var all = attendanceInMonth();
 
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Crew / Attendance</p>'
       + '<h2>근태 기록</h2>'
-      + '<p class="sub">크루의 지각 · 결근 · 조퇴 · 병가 등 근태 기록을 시간순으로.</p></div>'
+      + '<p class="sub">크루의 지각 · 결근 · 조퇴 · 병가 등 근태 기록을 시간순으로. <span class="muted">구분 카드를 누르면 해당 인원을 볼 수 있어요.</span></p></div>'
       + '<button class="btn btn--primary" id="addAttendanceBtn">+ 근태 기록</button>'
+      + '</div>';
+
+    html += '<div class="at-nav">'
+      + '<button class="iconbtn" data-at-nav="-1" aria-label="이전 달">&larr;</button>'
+      + '<span class="cal-toolbar__range">' + attMonthLabel() + '</span>'
+      + '<button class="iconbtn" data-at-nav="1" aria-label="다음 달">&rarr;</button>'
       + '</div>';
 
     html += '<div class="stats">'
       + statCard("acid", all.length, "건", "Total")
       + ATT_KINDS.map(function (k) {
           var n = all.filter(function (r) { return r.kind === k.key; }).length;
-          return statCard(n ? "warn" : "", n, "건", k.key);
+          return '<div class="stat stat--clickable' + (n ? " stat--warn" : "") + '" data-kind="' + esc(k.key) + '">'
+            + '<div class="stat__num">' + n + '<small>건</small></div>'
+            + '<div class="stat__label">' + esc(k.key) + '</div>'
+            + '</div>';
         }).join("")
       + '</div>';
 
@@ -1495,6 +1512,55 @@
     return wrap;
   }
 
+  /* ---------- 근태 구분별 인원 팝업 (게시판 형식, 읽기 전용) ---------- */
+  function openAttendanceKindModal(kind) {
+    var el = document.getElementById("attendanceKindModal");
+    if (!el) { el = buildAttendanceKindModal(); document.body.appendChild(el); }
+
+    var rows = attendanceInMonth().filter(function (r) { return r.kind === kind; })
+      .sort(function (a, b) {
+        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+        return (a.time || "") < (b.time || "") ? 1 : -1;
+      });
+
+    el.querySelector("#akModalTitle").textContent = kind + " · " + attMonthLabel();
+    el.querySelector("#akModalCount").textContent = rows.length + "건";
+    el.querySelector("#akModalBody").innerHTML = rows.length
+      ? rows.map(function (r) {
+          return '<tr>'
+            + '<td class="board__crew"><b>' + esc(r.crewName || "—") + '</b></td>'
+            + '<td class="board__date mono">' + fmtDotDate(r.date) + '</td>'
+            + '<td class="board__type mono">' + esc(r.time || "—") + '</td>'
+            + '<td class="board__content"><span class="board__ctext">' + esc(r.reason || "—") + '</span></td>'
+            + '</tr>';
+        }).join("")
+      : '<tr><td colspan="4" class="board__empty">해당 월에 기록이 없습니다.</td></tr>';
+
+    el.hidden = false;
+  }
+  function closeAttendanceKindModal() {
+    var el = document.getElementById("attendanceKindModal");
+    if (el) el.hidden = true;
+  }
+  function buildAttendanceKindModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "attendanceKindModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="근태 구분별 인원">'
+      + '<div class="modal__head"><h3><span id="akModalTitle"></span> <span class="chip-mono" id="akModalCount"></span></h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<th>크루</th><th>날짜</th><th>시간</th><th>사유</th>'
+      + '</tr></thead><tbody id="akModalBody"></tbody></table></div>'
+      + '</div>';
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) closeAttendanceKindModal();
+    });
+    return wrap;
+  }
+
   /* ======================================================
      DASHBOARD (placeholder)
      ====================================================== */
@@ -1637,6 +1703,12 @@
 
       var atKindBtn = ev.target.closest("#atKindFilter button[data-k]");
       if (atKindBtn) { attKindFilter = atKindBtn.getAttribute("data-k"); renderAttendance(); return; }
+
+      var atNavBtn = ev.target.closest(".at-nav .iconbtn[data-at-nav]");
+      if (atNavBtn) { attAnchor = addMonths(attAnchor, +atNavBtn.getAttribute("data-at-nav")); renderAttendance(); return; }
+
+      var atStatBtn = ev.target.closest(".stat--clickable[data-kind]");
+      if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }
 
       var mchip = ev.target.closest(".mchip[data-id]");
       if (mchip) { var mev = findById(window.SCHEDULE, mchip.getAttribute("data-id")); if (mev) openEventModal(mev); return; }

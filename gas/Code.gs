@@ -26,6 +26,7 @@ var CREW_FIELDS = [
 ];
 var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link"];
 var ISSUE_FIELDS = ["id","text","link"];
+var POINT_FIELDS = ["id","text"];
 
 var SHEET_ID = ""; // 비우면 이 스크립트에 연결된 시트를 사용
 
@@ -143,10 +144,12 @@ function doGet(e) {
   if (action === "crew")     return json_(rows_("crew", CREW_FIELDS));
   if (action === "schedule") return json_(mapSchedule_(rows_("schedule", SCH_FIELDS)));
   if (action === "issues")   return json_(rows_("issues", ISSUE_FIELDS));
+  if (action === "points")   return json_(rows_("points", POINT_FIELDS));
   return json_({
     crew: rows_("crew", CREW_FIELDS),
     schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)),
-    issues: rows_("issues", ISSUE_FIELDS)
+    issues: rows_("issues", ISSUE_FIELDS),
+    points: rows_("points", POINT_FIELDS)
   });
 }
 
@@ -201,6 +204,7 @@ function doPost(e) {
   if (data.type === "crew")     return handleCrew_(action, data);
   if (data.type === "schedule") return handleSchedule_(action, data);
   if (data.type === "issue")    return handleIssue_(action, data);
+  if (data.type === "point")    return handlePoint_(action, data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -267,6 +271,25 @@ function handleIssue_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, { id: id, text: data.text || "", link: data.link || "" });
+    return json_({ ok: true, id: id });
+  }
+
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+
+  return json_({ ok: false, error: "unknown action" });
+}
+
+function handlePoint_(action, data) {
+  var sh = sheet_("points", POINT_FIELDS);
+
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, { id: id, text: data.text || "" });
     return json_({ ok: true, id: id });
   }
 

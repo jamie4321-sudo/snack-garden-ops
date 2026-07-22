@@ -122,6 +122,7 @@
         if (d && d.crew && d.crew.length) window.CREW = d.crew.map(normCrew);
         if (d && d.schedule && d.schedule.length) window.SCHEDULE = d.schedule;
         if (d && d.issues) window.SUMMARY.issues = d.issues;
+        if (d && d.points) window.SUMMARY.points = d.points;
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -194,8 +195,20 @@
           + '</li>';
         }).join("") : '<li class="muted" style="cursor:default"><span class="issue-text">— 등록된 이슈가 없습니다</span></li>') + '</ul>'
       + '</div>'
-      + '<div class="summary__col"><h4>Focus Point</h4><p class="summary__point">'
-      + (s.points && s.points.length ? s.points.map(esc).join("<br>") : "— 등록된 포인트가 없습니다") + '</p></div>'
+      + '<div class="summary__col">'
+      + '<div class="summary__subhead"><h4>Focus Point</h4>'
+        + '<button type="button" class="issue-add" id="addPointBtn" title="포인트 추가">+</button>'
+      + '</div>'
+      + '<ul>' + (s.points && s.points.length ? s.points.map(function (p) {
+          return '<li data-id="' + esc(p.id || "") + '">'
+            + '<span class="issue-text">' + esc(p.text) + '</span>'
+            + '<span class="evt__actions">'
+              + '<button type="button" class="evt__act point-act--edit" data-id="' + esc(p.id || "") + '" title="수정">✎</button>'
+              + '<button type="button" class="evt__act point-act--del" data-id="' + esc(p.id || "") + '" title="삭제">&times;</button>'
+            + '</span>'
+          + '</li>';
+        }).join("") : '<li class="muted" style="cursor:default"><span class="issue-text">— 등록된 포인트가 없습니다</span></li>') + '</ul>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="cal-toolbar">'
@@ -405,10 +418,12 @@
       + '<button type="button" class="evt__act evt__act--next" data-id="' + esc(e.id || "") + '" title="다음 날로 업무 이관">&rarr;</button>'
       + '<button type="button" class="evt__act evt__act--del" data-id="' + esc(e.id || "") + '" title="삭제">&times;</button>'
       + '</span>';
+    var toggle = '<button type="button" class="evt__toggle" data-id="' + esc(e.id || "") + '"'
+      + (e.done ? '' : ' style="border-color:' + color + '"')
+      + ' aria-pressed="' + (e.done ? "true" : "false") + '" title="' + (e.done ? "완료 해제" : "완료 처리") + '">'
+      + (e.done ? "&check;" : "") + '</button>';
     return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
-      + (e.done
-          ? '<span class="evt__check">&check;</span>'
-          : '<span class="evt__cat" style="background:' + color + '"></span>')
+      + toggle
       + '<span class="evt__body">' + lead + '<span class="evt__text">' + esc(e.title) + '</span></span>'
       + link
       + actions
@@ -424,6 +439,14 @@
                   title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
     renderSchedule();
   }
+  function toggleEventDone(id) {
+    var evt = findById(window.SCHEDULE, id);
+    if (!evt) return;
+    evt.done = !evt.done;
+    saveToSheet({ type: "schedule", action: "update", id: evt.id, date: evt.date, time: evt.time,
+                  title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+    renderSchedule();
+  }
   function deleteEventQuick(id) {
     if (!confirm("이 일정을 삭제할까요?")) return;
     window.SCHEDULE = window.SCHEDULE.filter(function (s) { return String(s.id) !== String(id); });
@@ -434,6 +457,12 @@
     if (!confirm("이 이슈를 삭제할까요?")) return;
     window.SUMMARY.issues = window.SUMMARY.issues.filter(function (it) { return String(it.id) !== String(id); });
     saveToSheet({ type: "issue", action: "delete", id: id });
+    renderSchedule();
+  }
+  function deletePointQuick(id) {
+    if (!confirm("이 포인트를 삭제할까요?")) return;
+    window.SUMMARY.points = (window.SUMMARY.points || []).filter(function (p) { return String(p.id) !== String(id); });
+    saveToSheet({ type: "point", action: "delete", id: id });
     renderSchedule();
   }
 
@@ -539,6 +568,77 @@
       window.SUMMARY.issues = window.SUMMARY.issues.filter(function (it) { return String(it.id) !== String(id); });
       saveToSheet({ type: "issue", action: "delete", id: id });
       closeIssueModal();
+      renderSchedule();
+    });
+    return wrap;
+  }
+
+  /* ---------- Focus Point 등록/수정 모달 ---------- */
+  function openPointModal(prefill) {
+    var el = document.getElementById("pointModal");
+    if (!el) { el = buildPointModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#pointModalTitle").textContent = editing ? "Focus Point 수정" : "Focus Point 등록";
+    el.querySelector("#pointDelBtn").hidden = !editing;
+    form.text.value = (prefill && prefill.text) || "";
+    el.hidden = false;
+    setTimeout(function () { form.text.focus(); }, 30);
+  }
+  function closePointModal() {
+    var el = document.getElementById("pointModal");
+    if (el) el.hidden = true;
+  }
+
+  function buildPointModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "pointModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="Focus Point 등록">'
+      + '<div class="modal__head"><h3 id="pointModalTitle">Focus Point 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="pointForm">'
+      + '<label class="fld"><span>내용</span><input type="text" name="text" maxlength="80" required placeholder="예) 이번 주 핵심 : 신규 크루 온보딩 완료"></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="pointDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) closePointModal();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !wrap.hidden) closePointModal();
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var text = f.text.value.trim();
+      if (!text) return;
+      if (!Array.isArray(window.SUMMARY.points)) window.SUMMARY.points = [];
+      var id = f.dataset.id;
+      var p = { id: id || newId("p"), text: text };
+      var idx = id ? indexById(window.SUMMARY.points, id) : -1;
+      if (idx > -1) window.SUMMARY.points[idx] = p; else window.SUMMARY.points.push(p);
+      saveToSheet({ type: "point", action: id ? "update" : "add", id: p.id, text: p.text });
+      closePointModal();
+      renderSchedule();
+    });
+    wrap.querySelector("#pointDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 포인트를 삭제할까요?")) return;
+      window.SUMMARY.points = (window.SUMMARY.points || []).filter(function (p) { return String(p.id) !== String(id); });
+      saveToSheet({ type: "point", action: "delete", id: id });
+      closePointModal();
       renderSchedule();
     });
     return wrap;
@@ -850,13 +950,105 @@
   /* ======================================================
      DASHBOARD (placeholder)
      ====================================================== */
+  /* 장애유형 팔레트 (감각적 · 애시드 라임 기준 조화) */
+  var TYPE_PALETTE = ["#c6ff2e", "#4ade80", "#60a5fa", "#b39dff", "#f472b6", "#fb923c", "#f0b429", "#22d3ee", "#94a3b8"];
+
+  /** 도넛 SVG 생성 — segments: [{label,value,color}] */
+  function donutSVG(segments, total) {
+    var r = 54, cx = 72, cy = 72, sw = 18;
+    var C = 2 * Math.PI * r;
+    var GAP = total > 0 ? Math.min(C * 0.012, 6) : 0; // 세그먼트 사이 미세 간격
+    var offset = 0;
+    var live = segments.filter(function (s) { return s.value > 0; });
+    var arcs = live.map(function (s) {
+      var frac = s.value / total;
+      var len = Math.max(frac * C - GAP, 0.5);
+      var el = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none"'
+        + ' stroke="' + s.color + '" stroke-width="' + sw + '"'
+        + ' stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '"'
+        + ' stroke-dashoffset="' + (-offset).toFixed(2) + '"'
+        + ' stroke-linecap="round"'
+        + ' transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
+      offset += frac * C;
+      return el;
+    }).join("");
+    var track = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--line-soft)" stroke-width="' + sw + '"></circle>';
+    return '<svg class="donut" viewBox="0 0 144 144" role="img" aria-label="장애 · 비장애 비율">'
+      + track + arcs
+      + '<text class="donut__num" x="72" y="70" text-anchor="middle">' + total + '</text>'
+      + '<text class="donut__unit" x="72" y="90" text-anchor="middle">전체 크루</text>'
+      + '</svg>';
+  }
+
+  function pct(n, total) { return total > 0 ? (Math.round((n / total) * 1000) / 10) : 0; }
+
   function renderDashboard() {
-    view.innerHTML = '<div class="placeholder">'
-      + '<p class="eyebrow">Main / Dashboard</p>'
+    var crew = window.CREW || [];
+    var disabled = crew.filter(function (c) { return c.disability === "장애"; });
+    var nondis = crew.filter(function (c) { return c.disability === "비장애"; });
+    var other = crew.length - disabled.length - nondis.length;
+
+    // 장애유형 집계
+    var typeMap = {};
+    disabled.forEach(function (c) {
+      var t = (c.disabilityType || "").trim() || "미분류";
+      typeMap[t] = (typeMap[t] || 0) + 1;
+    });
+    var types = Object.keys(typeMap).map(function (k) { return { label: k, value: typeMap[k] }; })
+      .sort(function (a, b) { return b.value - a.value; });
+    var typeMax = types.reduce(function (m, t) { return Math.max(m, t.value); }, 0);
+
+    var donutSegs = [
+      { label: "장애", value: disabled.length, color: "var(--accent)" },
+      { label: "비장애", value: nondis.length, color: "var(--slate)" },
+    ];
+    if (other > 0) donutSegs.push({ label: "미분류", value: other, color: "var(--line)" });
+
+    var legend = donutSegs.map(function (s) {
+      return '<li class="dleg__row">'
+        + '<span class="dleg__dot" style="background:' + s.color + '"></span>'
+        + '<span class="dleg__label">' + esc(s.label) + '</span>'
+        + '<span class="dleg__val mono">' + s.value + '<small>명</small></span>'
+        + '<span class="dleg__pct mono">' + pct(s.value, crew.length) + '%</span>'
+        + '</li>';
+    }).join("");
+
+    var typeRows = types.length ? types.map(function (t, i) {
+      var color = TYPE_PALETTE[i % TYPE_PALETTE.length];
+      var w = typeMax > 0 ? Math.round((t.value / typeMax) * 100) : 0;
+      return '<div class="tbar">'
+        + '<span class="tbar__label">' + esc(t.label) + '</span>'
+        + '<span class="tbar__track"><span class="tbar__fill" style="width:' + w + '%;background:' + color + '"></span></span>'
+        + '<span class="tbar__val mono">' + t.value + '<small>명</small></span>'
+        + '</div>';
+    }).join("") : '<p class="muted" style="margin:8px 2px">— 장애 크루 데이터가 없습니다</p>';
+
+    var html = '';
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Main / Dashboard</p>'
       + '<h2>대시보드</h2>'
-      + '<p class="muted">크루 · 일정 요약 위젯이 이 자리에 들어갑니다.</p>'
-      + '<p class="muted">좌측에서 <b style="color:var(--accent-text)">크루 목록</b> · <b style="color:var(--accent-text)">일정 관리</b>를 확인해 보세요.</p>'
+      + '<p class="sub">크루 구성과 장애유형 분포를 한눈에.</p></div>'
       + '</div>';
+
+    html += '<div class="dash-grid">'
+      // 도넛 카드
+      + '<section class="dash-card dash-card--donut">'
+        + '<div class="summary__head"><h3>장애 · 비장애 현황</h3>'
+          + '<span class="chip-mono">' + crew.length + '명</span></div>'
+        + '<div class="donut-wrap">'
+          + donutSVG(donutSegs, crew.length)
+          + '<ul class="dleg">' + legend + '</ul>'
+        + '</div>'
+      + '</section>'
+      // 유형 카드
+      + '<section class="dash-card">'
+        + '<div class="summary__head"><h3>장애유형별 분포</h3>'
+          + '<span class="chip-mono">' + disabled.length + '명</span></div>'
+        + '<div class="tbars">' + typeRows + '</div>'
+      + '</section>'
+      + '</div>';
+
+    view.innerHTML = html;
   }
 
   /* ======================================================
@@ -901,11 +1093,22 @@
       var issueDelBtn = ev.target.closest(".issue-act--del[data-id]");
       if (issueDelBtn) { deleteIssueQuick(issueDelBtn.getAttribute("data-id")); return; }
 
+      if (ev.target.closest("#addPointBtn")) { openPointModal(null); return; }
+
+      var pointEditBtn = ev.target.closest(".point-act--edit[data-id]");
+      if (pointEditBtn) { var pev = findById(window.SUMMARY.points || [], pointEditBtn.getAttribute("data-id")); if (pev) openPointModal(pev); return; }
+
+      var pointDelBtn = ev.target.closest(".point-act--del[data-id]");
+      if (pointDelBtn) { deletePointQuick(pointDelBtn.getAttribute("data-id")); return; }
+
       var nextBtn = ev.target.closest(".evt__act--next[data-id]");
       if (nextBtn) { moveEventToNextDay(nextBtn.getAttribute("data-id")); return; }
 
       var delBtn = ev.target.closest(".evt__act--del[data-id]");
       if (delBtn) { deleteEventQuick(delBtn.getAttribute("data-id")); return; }
+
+      var toggleBtn = ev.target.closest(".evt__toggle[data-id]");
+      if (toggleBtn) { toggleEventDone(toggleBtn.getAttribute("data-id")); return; }
 
       var evtEl = ev.target.closest(".evt[data-id]");
       if (evtEl) { var sev = findById(window.SCHEDULE, evtEl.getAttribute("data-id")); if (sev) openEventModal(sev); return; }

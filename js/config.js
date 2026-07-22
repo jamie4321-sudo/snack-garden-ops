@@ -8,5 +8,5 @@
    예) endpoint: "https://script.google.com/macros/s/AKfyc.../exec"
    ========================================================= */
 window.CONFIG = {
-  endpoint: "https://script.google.com/macros/s/AKfycbzS_btGcm4aAY9D5xtNOkdzhsNn9jVkPG7Ld9vaYIZjMqke9QfeX8AqXsUbcWWNsGa2/exec"
+  endpoint: "https://script.google.com/macros/s/AKfycbxNV7X2fDwkEB3yXnbrXfkm6y-0kChB0uLzMBUx2jKEfG61QcJXDVujQiSN8V4eOYHX/exec"
 };

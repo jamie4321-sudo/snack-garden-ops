@@ -108,6 +108,14 @@
     };
   }
 
+  function normAttendance(r) {
+    return {
+      id: r.id || "", date: fmtDay(r.date), time: r.time || "",
+      crewId: r.crewId || "", crewName: r.crewName || "",
+      kind: r.kind || "지각", reason: r.reason || "", recorder: r.recorder || "",
+    };
+  }
+
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
     if (!iso) return "—";
@@ -135,6 +143,7 @@
         if (d && d.issues) window.SUMMARY.issues = d.issues;
         if (d && d.points) window.SUMMARY.points = d.points;
         if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
+        if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -666,9 +675,7 @@
   var CREW_TABS = [
     { key: "basic", label: "기본정보" },
     { key: "interview", label: "면담기록" },
-    { key: "growth", label: "성장평가" },
-    { key: "issue", label: "이슈기록" },
-    { key: "attendance", label: "근태요약" },
+    { key: "attendance", label: "근태기록" },
     { key: "edu", label: "교육OJT" },
     { key: "change", label: "인사변동" },
     { key: "ai", label: "AI 지원가이드" },
@@ -796,15 +803,13 @@
   /* ---------- 크루 상세 페이지 ---------- */
   function renderCrewDetail(c) {
     var g = groupOf(c.group);
-    var initial = (c.name || "?").slice(0, 1);
 
     var html = '<div class="crew-detail">';
     html += '<button class="btn btn--sm" id="crewBackBtn">&larr; 목록으로</button>';
 
     html += '<div class="crew-detail__banner">'
-      + '<div class="crew-detail__avatar" style="background:' + g.bg + ';color:' + g.fg + '">' + esc(initial) + '</div>'
       + '<div class="crew-detail__info">'
-        + '<h2>' + esc(c.name) + '</h2>'
+        + '<h2><i class="gdot gdot--lg" style="background:' + g.bg + '" title="' + esc(c.group || "미지정") + '"></i>' + esc(c.name) + '</h2>'
         + '<p class="muted">' + esc(c.team || c.group || "—") + '</p>'
         + '<div class="crew-detail__tags">'
           + '<span class="chip-tag">📅 ' + esc(c.joinDate || "—") + '</span>'
@@ -831,6 +836,7 @@
 
   function crewTabPanel(c, tab) {
     if (tab === "interview") return crewInterviewBoard(c);
+    if (tab === "attendance") return crewAttendanceBoard(c);
     if (tab !== "basic") {
       return '<div class="placeholder placeholder--sm"><p class="muted">이 탭은 준비 중입니다.</p></div>';
     }
@@ -855,6 +861,23 @@
       + '<span class="detail-fld__value">' + esc(value || "—") + '</span></div>';
   }
 
+  /* ---------- 면담 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ---------- */
+  function interviewBoardRow(r, showCrew) {
+    var cond = condOf(r.condition);
+    var flags = "";
+    if (r.type === "근무 이슈") flags += '<span class="board__issue-tag" title="근무 이슈">issue</span>';
+    if (r.followUp === "필요") flags += '<span class="board__flag board__flag--follow" title="' + esc(r.followUpNote || "후속 조치 필요") + '">후속</span>';
+    if (r.privateNote) flags += '<span class="board__flag board__flag--private" title="비공개 메모">🔒</span>';
+    return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
+      + (showCrew ? '<td class="board__crew"><b>' + esc(r.crewName || "—") + '</b></td>' : '')
+      + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
+      + '<td class="board__type">' + esc(r.type) + '</td>'
+      + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
+      + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
+      + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
+      + '</tr>';
+  }
+
   /* ---------- 크루 상세 · 면담기록 게시판 ---------- */
   function crewInterviewBoard(c) {
     var rows = (window.INTERVIEWS || []).filter(function (r) {
@@ -875,19 +898,7 @@
         + '</div>';
     }
 
-    var body = rows.map(function (r) {
-      var cond = condOf(r.condition);
-      var flags = "";
-      if (r.followUp === "필요") flags += '<span class="board__flag board__flag--follow" title="' + esc(r.followUpNote || "후속 조치 필요") + '">후속</span>';
-      if (r.privateNote) flags += '<span class="board__flag board__flag--private" title="비공개 메모">🔒</span>';
-      return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
-        + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
-        + '<td class="board__type">' + esc(r.type) + '</td>'
-        + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
-        + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
-        + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
-        + '</tr>';
-    }).join("");
+    var body = rows.map(function (r) { return interviewBoardRow(r, false); }).join("");
 
     return '<div class="board">' + head
       + '<div class="board__scroll"><table class="board__table"><thead><tr>'
@@ -1020,7 +1031,7 @@
      INTERVIEW · 면담 & 근무 기록
      ====================================================== */
   var CURRENT_USER = "제이미";
-  var INTERVIEW_TYPES = ["정기 면담", "수시 면담", "온보딩 면담", "근무 관련", "고충 처리", "기타"];
+  var INTERVIEW_TYPES = ["정기 면담", "수시 면담", "온보딩 면담", "근무 관련", "근무 이슈", "고충 처리", "기타"];
   var CONDITIONS = [
     { key: "좋음",   emoji: "😊", c: "var(--green)" },
     { key: "보통",   emoji: "😐", c: "var(--slate)" },
@@ -1083,57 +1094,16 @@
       + '</div>';
 
     var rows = filteredInterviews();
-    html += '<div class="iv-list" id="ivList">'
-      + (rows.length ? rows.map(interviewCard).join("")
-          : '<div class="placeholder placeholder--sm"><p class="muted">기록이 없습니다. <b style="color:var(--accent-text)">+ 기록 등록</b>으로 첫 면담을 남겨보세요.</p></div>')
+    html += '<div class="board">'
+      + '<div class="board__scroll"><table class="board__table board__table--iv"><thead><tr>'
+      + '<th>크루</th><th>날짜</th><th>유형</th><th>컨디션</th><th>내용</th><th>표시</th>'
+      + '</tr></thead><tbody id="ivBody">'
+      + (rows.length ? rows.map(function (r) { return interviewBoardRow(r, true); }).join("")
+          : '<tr><td colspan="6" class="board__empty">기록이 없습니다. <b style="color:var(--accent-text)">+ 기록 등록</b>으로 첫 면담을 남겨보세요.</td></tr>')
+      + '</tbody></table></div>'
       + '</div>';
 
     view.innerHTML = html;
-  }
-
-  function interviewCard(r) {
-    var crew = findById(window.CREW || [], r.crewId);
-    var g = groupOf(crew ? crew.group : "");
-    var cond = condOf(r.condition);
-    var groupName = (crew && crew.group) || "";
-
-    var foot = "";
-    if (r.followUp === "필요") {
-      foot += '<span class="iv-flag" title="' + esc(r.followUpNote || "후속 조치 필요") + '">↪ 후속조치'
-        + (r.followUpNote ? ' <span class="iv-flag__note">' + esc(r.followUpNote) + '</span>' : '') + '</span>';
-    }
-    if (r.privateNote) foot += '<span class="iv-private" title="비공개 메모">🔒 비공개 메모</span>';
-
-    return '<article class="ivcard" data-id="' + esc(r.id || "") + '" style="--c:' + cond.c + '">'
-      + '<div class="ivcard__top">'
-        + '<div class="ivcard__who">'
-          + '<span class="ivcard__dot" style="background:' + g.bg + '" title="' + esc(groupName || "미지정") + '"></span>'
-          + '<div class="ivcard__id">'
-            + '<b class="ivcard__name">' + esc(r.crewName || "—") + '</b>'
-            + '<span class="ivcard__meta mono">' + (groupName ? esc(groupName) + ' · ' : '') + fmtDotDate(r.date) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.recorder || "—") + '</span>'
-          + '</div>'
-        + '</div>'
-        + '<div class="ivcard__tags">'
-          + '<span class="iv-type">' + esc(r.type) + '</span>'
-          + '<span class="badge badge--cond" style="--c:' + cond.c + '">' + esc(r.condition) + '</span>'
-        + '</div>'
-      + '</div>'
-      + '<p class="ivcard__content">' + esc(r.content || "—") + '</p>'
-      + '<div class="ivcard__foot">'
-        + '<div class="ivcard__flags">' + foot + '</div>'
-        + '<span class="ivcard__actions">'
-          + '<button type="button" class="evt__act iv-act--edit" data-id="' + esc(r.id || "") + '" title="수정">✎</button>'
-          + '<button type="button" class="evt__act iv-act--del" data-id="' + esc(r.id || "") + '" title="삭제">&times;</button>'
-        + '</span>'
-      + '</div>'
-    + '</article>';
-  }
-
-  function deleteInterviewQuick(id) {
-    if (!confirm("이 기록을 삭제할까요?")) return;
-    window.INTERVIEWS = (window.INTERVIEWS || []).filter(function (r) { return String(r.id) !== String(id); });
-    saveToSheet({ type: "interview", action: "delete", id: id });
-    rerenderAfterInterview();
   }
 
   /* 면담 저장/삭제 후: 크루 상세를 보고 있으면 상세로, 아니면 면담 목록으로 갱신 */
@@ -1293,6 +1263,240 @@
   }
 
   /* ======================================================
+     ATTENDANCE · 근태 기록 (지각 · 조퇴)
+     ====================================================== */
+  var ATT_KINDS = [
+    { key: "지각", c: "var(--amber)" },
+    { key: "조퇴", c: "var(--slate)" },
+  ];
+  function attKindOf(k) { for (var i = 0; i < ATT_KINDS.length; i++) if (ATT_KINDS[i].key === k) return ATT_KINDS[i]; return ATT_KINDS[0]; }
+  var attKindFilter = "전체";
+  var attQuery = "";
+
+  function filteredAttendance() {
+    var list = (window.ATTENDANCE || []).slice();
+    list = list.filter(function (r) {
+      if (attKindFilter !== "전체" && r.kind !== attKindFilter) return false;
+      if (attQuery) {
+        var hay = (r.crewName + r.kind + r.reason + r.recorder).toLowerCase();
+        if (hay.indexOf(attQuery.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+    return list.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.time || "") < (b.time || "") ? 1 : -1;
+    });
+  }
+
+  /* ---------- 근태 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ---------- */
+  function attendanceBoardRow(r, showCrew) {
+    var kind = attKindOf(r.kind);
+    return '<tr class="board__row" data-att-id="' + esc(r.id || "") + '">'
+      + (showCrew ? '<td class="board__crew"><b>' + esc(r.crewName || "—") + '</b></td>' : '')
+      + '<td class="board__date mono">' + fmtDotDate(r.date) + '</td>'
+      + '<td class="board__cond"><span class="board__conddot" style="background:' + kind.c + '"></span>' + esc(r.kind) + '</td>'
+      + '<td class="board__type mono">' + esc(r.time || "—") + '</td>'
+      + '<td class="board__content"><span class="board__ctext">' + esc(r.reason || "—") + '</span></td>'
+      + '<td class="board__recorder muted">' + esc(r.recorder || "—") + '</td>'
+      + '</tr>';
+  }
+
+  /* ---------- 크루 상세 · 근태 기록 게시판 ---------- */
+  function crewAttendanceBoard(c) {
+    var rows = (window.ATTENDANCE || []).filter(function (r) {
+      return String(r.crewId) === String(c.id) || (r.crewName && r.crewName === c.name);
+    }).sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.time || "") < (b.time || "") ? 1 : -1;
+    });
+
+    var head = '<div class="board__head">'
+      + '<h3 class="board__title">근태 기록 <span class="chip-mono">' + rows.length + '건</span></h3>'
+      + '<button type="button" class="btn btn--sm btn--primary" id="crewAddAttendanceBtn">+ 근태 기록</button>'
+      + '</div>';
+
+    if (!rows.length) {
+      return '<div class="board">' + head
+        + '<div class="board__empty">아직 등록된 근태 기록이 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 근태 기록</b>으로 지각·조퇴를 기록해보세요.</span></div>'
+        + '</div>';
+    }
+
+    var body = rows.map(function (r) { return attendanceBoardRow(r, false); }).join("");
+
+    return '<div class="board">' + head
+      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<th>날짜</th><th>구분</th><th>시간</th><th>사유</th><th>기록자</th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+      + '</div>';
+  }
+
+  function renderAttendance() {
+    var all = window.ATTENDANCE || [];
+    var lateCnt = all.filter(function (r) { return r.kind === "지각"; }).length;
+    var earlyCnt = all.filter(function (r) { return r.kind === "조퇴"; }).length;
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Crew / Attendance</p>'
+      + '<h2>근태 기록</h2>'
+      + '<p class="sub">크루의 지각 · 조퇴 기록을 시간순으로.</p></div>'
+      + '<button class="btn btn--primary" id="addAttendanceBtn">+ 근태 기록</button>'
+      + '</div>';
+
+    html += '<div class="stats stats--3">'
+      + statCard("acid", all.length, "건", "Total")
+      + statCard(lateCnt ? "warn" : "", lateCnt, "건", "지각")
+      + statCard(earlyCnt ? "warn" : "", earlyCnt, "건", "조퇴")
+      + '</div>';
+
+    html += '<div class="toolbar-row">'
+      + '<div class="filter" id="atKindFilter">'
+      + ["전체"].concat(ATT_KINDS.map(function (k) { return k.key; })).map(function (f) {
+          return '<button class="btn btn--sm btn--pill ' + (f === attKindFilter ? "is-on" : "") + '" data-k="' + f + '">' + f + '</button>';
+        }).join("")
+      + '</div>'
+      + '<input class="searchbox" id="atSearch" type="search" placeholder="크루 · 사유 검색" value="' + esc(attQuery) + '">'
+      + '</div>';
+
+    var rows = filteredAttendance();
+    html += '<div class="board">'
+      + '<div class="board__scroll"><table class="board__table board__table--iv board__table--at"><thead><tr>'
+      + '<th>크루</th><th>날짜</th><th>구분</th><th>시간</th><th>사유</th><th>기록자</th>'
+      + '</tr></thead><tbody id="atBody">'
+      + (rows.length ? rows.map(function (r) { return attendanceBoardRow(r, true); }).join("")
+          : '<tr><td colspan="6" class="board__empty">기록이 없습니다. <b style="color:var(--accent-text)">+ 근태 기록</b>으로 첫 기록을 남겨보세요.</td></tr>')
+      + '</tbody></table></div>'
+      + '</div>';
+
+    view.innerHTML = html;
+  }
+
+  /* 근태 저장/삭제 후: 크루 상세를 보고 있으면 상세로, 아니면 근태 목록으로 갱신 */
+  function rerenderAfterAttendance() {
+    if (crewDetailId) renderCrew(); else renderAttendance();
+  }
+
+  /* ---------- 근태 기록 등록/수정 모달 ---------- */
+  function openAttendanceModal(prefill) {
+    var el = document.getElementById("attendanceModal");
+    if (!el) { el = buildAttendanceModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#attendanceModalTitle").textContent = editing ? "근태 기록 수정" : "근태 기록 등록";
+    el.querySelector("#attendanceDelBtn").hidden = !editing;
+
+    var sel = form.crewId;
+    sel.innerHTML = '<option value="">크루 선택</option>' + (window.CREW || []).map(function (c) {
+      return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+    }).join("");
+
+    form.crewId.value = (prefill && prefill.crewId) || "";
+    form.date.value = (prefill && prefill.date) || TODAY;
+    form.time.value = (prefill && prefill.time) || "";
+    form.reason.value = (prefill && prefill.reason) || "";
+
+    var kind = (prefill && prefill.kind) || "지각";
+    form.kind.value = kind;
+    Array.prototype.forEach.call(el.querySelectorAll(".ivseg__btn"), function (b) {
+      b.classList.toggle("is-on", b.getAttribute("data-kind") === kind);
+    });
+
+    el.hidden = false;
+    setTimeout(function () { form.crewId.focus(); }, 30);
+  }
+  function closeAttendanceModal() {
+    var el = document.getElementById("attendanceModal");
+    if (el) el.hidden = true;
+  }
+
+  function buildAttendanceModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "attendanceModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="근태 기록 등록">'
+      + '<div class="modal__head"><h3 id="attendanceModalTitle">근태 기록 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="attendanceForm">'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>크루 <em>*</em></span><select name="crewId" required></select></label>'
+        + '<label class="fld"><span>일자 <em>*</em></span><input type="date" name="date" required></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<div class="fld"><span>구분</span>'
+          + '<input type="hidden" name="kind" value="지각">'
+          + '<div class="ivseg">' + ATT_KINDS.map(function (k) {
+              return '<button type="button" class="ivseg__btn" data-kind="' + k.key + '" style="--c:' + k.c + '">' + k.key + '</button>';
+            }).join("") + '</div>'
+        + '</div>'
+        + '<label class="fld"><span>시간 <em>(선택)</em></span><input type="time" name="time"></label>'
+      + '</div>'
+      + '<label class="fld"><span>사유 <em>(선택)</em></span><input type="text" name="reason" maxlength="80" placeholder="사유를 입력하세요…"></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="attendanceDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { closeAttendanceModal(); return; }
+      var segBtn = ev.target.closest(".ivseg__btn");
+      if (segBtn) {
+        var form = wrap.querySelector("form");
+        form.kind.value = segBtn.getAttribute("data-kind");
+        Array.prototype.forEach.call(wrap.querySelectorAll(".ivseg__btn"), function (b) { b.classList.toggle("is-on", b === segBtn); });
+        return;
+      }
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var crewId = f.crewId.value;
+      if (!crewId) { alert("크루를 선택해주세요."); f.crewId.focus(); return; }
+      var crew = findById(window.CREW || [], crewId);
+      var id = f.dataset.id;
+      var rec = {
+        id: id || newId("at"),
+        date: f.date.value,
+        time: f.time.value || "",
+        crewId: crewId,
+        crewName: crew ? crew.name : "",
+        kind: f.kind.value || "지각",
+        reason: f.reason.value.trim(),
+        recorder: (id && findById(window.ATTENDANCE || [], id) || {}).recorder || CURRENT_USER,
+      };
+      if (!window.ATTENDANCE) window.ATTENDANCE = [];
+      var idx = id ? indexById(window.ATTENDANCE, id) : -1;
+      if (idx > -1) window.ATTENDANCE[idx] = rec; else window.ATTENDANCE.push(rec);
+      saveToSheet({
+        type: "attendance", action: id ? "update" : "add",
+        id: rec.id, date: rec.date, time: rec.time,
+        crewId: rec.crewId, crewName: rec.crewName,
+        kind: rec.kind, reason: rec.reason, recorder: rec.recorder
+      });
+      closeAttendanceModal();
+      rerenderAfterAttendance();
+    });
+    wrap.querySelector("#attendanceDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 기록을 삭제할까요?")) return;
+      window.ATTENDANCE = (window.ATTENDANCE || []).filter(function (r) { return String(r.id) !== String(id); });
+      saveToSheet({ type: "attendance", action: "delete", id: id });
+      closeAttendanceModal();
+      rerenderAfterAttendance();
+    });
+    return wrap;
+  }
+
+  /* ======================================================
      DASHBOARD (placeholder)
      ====================================================== */
   /* 장애유형 팔레트 (감각적 · 애시드 라임 기준 조화) */
@@ -1328,7 +1532,7 @@
   function pct(n, total) { return total > 0 ? (Math.round((n / total) * 1000) / 10) : 0; }
 
   function renderDashboard() {
-    var crew = window.CREW || [];
+    var crew = (window.CREW || []).filter(function (c) { return c.status !== "퇴사"; });
     var disabled = crew.filter(function (c) { return c.disability === "장애"; });
     var nondis = crew.filter(function (c) { return c.disability === "비장애"; });
     var other = crew.length - disabled.length - nondis.length;
@@ -1400,10 +1604,11 @@
      ROUTER
      ====================================================== */
   var VIEWS = {
-    dashboard: { title: "DASHBOARD", render: renderDashboard },
-    crew:      { title: "CREW", render: renderCrew },
-    interview: { title: "INTERVIEW", render: renderInterview },
-    schedule:  { title: "SCHEDULE", render: renderSchedule },
+    dashboard:   { title: "DASHBOARD", render: renderDashboard },
+    crew:        { title: "CREW", render: renderCrew },
+    interview:   { title: "INTERVIEW", render: renderInterview },
+    attendance:  { title: "ATTENDANCE", render: renderAttendance },
+    schedule:    { title: "SCHEDULE", render: renderSchedule },
   };
 
   function go(name) {
@@ -1426,17 +1631,13 @@
       if (ev.target.closest("#addCrewBtn")) { openCrewModal(null); return; }
       if (ev.target.closest("#addInterviewBtn")) { openInterviewModal(null); return; }
 
-      var ivEditBtn = ev.target.closest(".iv-act--edit[data-id]");
-      if (ivEditBtn) { var ive = findById(window.INTERVIEWS || [], ivEditBtn.getAttribute("data-id")); if (ive) openInterviewModal(ive); return; }
-
-      var ivDelBtn = ev.target.closest(".iv-act--del[data-id]");
-      if (ivDelBtn) { deleteInterviewQuick(ivDelBtn.getAttribute("data-id")); return; }
-
       var ivCondBtn = ev.target.closest("#ivCondFilter button[data-c]");
       if (ivCondBtn) { interviewCond = ivCondBtn.getAttribute("data-c"); renderInterview(); return; }
 
-      var ivCardEl = ev.target.closest(".ivcard[data-id]");
-      if (ivCardEl) { var ivc = findById(window.INTERVIEWS || [], ivCardEl.getAttribute("data-id")); if (ivc) openInterviewModal(ivc); return; }
+      if (ev.target.closest("#addAttendanceBtn")) { openAttendanceModal(null); return; }
+
+      var atKindBtn = ev.target.closest("#atKindFilter button[data-k]");
+      if (atKindBtn) { attKindFilter = atKindBtn.getAttribute("data-k"); renderAttendance(); return; }
 
       var mchip = ev.target.closest(".mchip[data-id]");
       if (mchip) { var mev = findById(window.SCHEDULE, mchip.getAttribute("data-id")); if (mev) openEventModal(mev); return; }
@@ -1509,6 +1710,15 @@
       var boardRow = ev.target.closest(".board__row[data-iv-id]");
       if (boardRow) { var bIv = findById(window.INTERVIEWS || [], boardRow.getAttribute("data-iv-id")); if (bIv) openInterviewModal(bIv); return; }
 
+      if (ev.target.closest("#crewAddAttendanceBtn")) {
+        var addAtC = findById(window.CREW, crewDetailId);
+        openAttendanceModal(addAtC ? { crewId: addAtC.id } : null);
+        return;
+      }
+
+      var atBoardRow = ev.target.closest(".board__row[data-att-id]");
+      if (atBoardRow) { var bAt = findById(window.ATTENDANCE || [], atBoardRow.getAttribute("data-att-id")); if (bAt) openAttendanceModal(bAt); return; }
+
       var crewDetailEditBtn = ev.target.closest("#crewDetailEditBtn");
       if (crewDetailEditBtn) { var cd = findById(window.CREW, crewDetailId); if (cd) openCrewModal(cd); return; }
 
@@ -1542,11 +1752,20 @@
       }
       if (ev.target.id === "ivSearch") {
         interviewQuery = ev.target.value;
-        var list = document.getElementById("ivList");
-        if (list) {
+        var body = document.getElementById("ivBody");
+        if (body) {
           var rows = filteredInterviews();
-          list.innerHTML = rows.length ? rows.map(interviewCard).join("")
-            : '<div class="placeholder placeholder--sm"><p class="muted">검색 결과가 없습니다.</p></div>';
+          body.innerHTML = rows.length ? rows.map(function (r) { return interviewBoardRow(r, true); }).join("")
+            : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
+        }
+      }
+      if (ev.target.id === "atSearch") {
+        attQuery = ev.target.value;
+        var atBody = document.getElementById("atBody");
+        if (atBody) {
+          var atRows = filteredAttendance();
+          atBody.innerHTML = atRows.length ? atRows.map(function (r) { return attendanceBoardRow(r, true); }).join("")
+            : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
         }
       }
     });

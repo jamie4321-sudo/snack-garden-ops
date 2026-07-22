@@ -8,6 +8,8 @@
  *  - "crew"     : id | name | role | team | group | status | joinDate | phone | site | duties | note
  *                 | contractType | birthDate | disability | disabilityType | emergencyContact | badgeNumber | workHours
  *  - "schedule" : id | date | time | title | category | done | assignee | link
+ *  - "interviews"  : id | date | time | crewId | crewName | type | condition | recorder | content | followUp | followUpNote | privateNote
+ *  - "attendance"  : id | date | time | crewId | crewName | kind | reason | recorder  (kind = 지각|조퇴)
  *
  * 읽기/쓰기 모두 "컬럼 순서"가 아니라 "헤더 이름"으로 매칭합니다.
  * (실제 시트의 컬럼 순서가 달라도, 컬럼이 중간에 추가/삭제돼도 안전하게 동작)
@@ -28,6 +30,7 @@ var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link"
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
 var INTERVIEW_FIELDS = ["id","date","time","crewId","crewName","type","condition","recorder","content","followUp","followUpNote","privateNote"];
+var ATTENDANCE_FIELDS = ["id","date","time","crewId","crewName","kind","reason","recorder"];
 
 var SHEET_ID = ""; // 비우면 이 스크립트에 연결된 시트를 사용
 
@@ -147,12 +150,14 @@ function doGet(e) {
   if (action === "issues")   return json_(rows_("issues", ISSUE_FIELDS));
   if (action === "points")   return json_(rows_("points", POINT_FIELDS));
   if (action === "interviews") return json_(mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)));
+  if (action === "attendance") return json_(mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)));
   return json_({
     crew: rows_("crew", CREW_FIELDS),
     schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)),
     issues: rows_("issues", ISSUE_FIELDS),
     points: rows_("points", POINT_FIELDS),
-    interviews: mapInterviews_(rows_("interviews", INTERVIEW_FIELDS))
+    interviews: mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)),
+    attendance: mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS))
   });
 }
 
@@ -170,6 +175,14 @@ function mapInterviews_(list) {
     r.date = fmtDate_(r.date);
     r.time = fmtTime_(r.time);
     r.followUp = (r.followUp === true || r.followUp === "필요" || String(r.followUp).toLowerCase() === "true") ? "필요" : "";
+    return r;
+  });
+}
+
+function mapAttendance_(list) {
+  return list.map(function (r) {
+    r.date = fmtDate_(r.date);
+    r.time = fmtTime_(r.time);
     return r;
   });
 }
@@ -218,6 +231,7 @@ function doPost(e) {
   if (data.type === "issue")    return handleIssue_(action, data);
   if (data.type === "point")    return handlePoint_(action, data);
   if (data.type === "interview") return handleInterview_(action, data);
+  if (data.type === "attendance") return handleAttendance_(action, data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -313,6 +327,33 @@ function handleInterview_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, interviewValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+
+  return json_({ ok: false, error: "unknown action" });
+}
+
+function attendanceValuesObj_(data) {
+  return {
+    id: data.id, date: data.date || "", time: data.time || "",
+    crewId: data.crewId || "", crewName: data.crewName || "",
+    kind: data.kind || "지각", reason: data.reason || "", recorder: data.recorder || ""
+  };
+}
+
+function handleAttendance_(action, data) {
+  var sh = sheet_("attendance", ATTENDANCE_FIELDS);
+
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, attendanceValuesObj_(Object.assign({}, data, { id: id })));
     return json_({ ok: true, id: id });
   }
 

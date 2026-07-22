@@ -80,6 +80,13 @@ window.INTERVIEWS = [
     followUp:"필요", followUpNote:"주 1회 업무 우선순위 체크인 도입.", privateNote:"" },
 ];
 
+/* --- 근태 기록 : 시트 "attendance" (헤더 = id,date,time,crewId,crewName,kind,reason,recorder)
+   kind : 지각 | 조퇴 --- */
+window.ATTENDANCE = [
+  { id:"at1", date:"2026-07-21", time:"09:15", crewId:"c8", crewName:"신엔조", kind:"지각", reason:"버스 지연", recorder:"제이미" },
+  { id:"at2", date:"2026-07-24", time:"14:00", crewId:"c8", crewName:"신엔조", kind:"조퇴", reason:"병원 진료", recorder:"제이미" },
+];
+
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */
 window.SUMMARY = {
   monthLabel: "2026년 7월",

@@ -1263,11 +1263,14 @@
   }
 
   /* ======================================================
-     ATTENDANCE · 근태 기록 (지각 · 조퇴)
+     ATTENDANCE · 근태 기록 (지각 · 결근 · 조퇴 · 병가 · 기타)
      ====================================================== */
   var ATT_KINDS = [
     { key: "지각", c: "var(--amber)" },
+    { key: "결근", c: "var(--red)" },
     { key: "조퇴", c: "var(--slate)" },
+    { key: "병가", c: "#60a5fa" },
+    { key: "기타", c: "#b39dff" },
   ];
   function attKindOf(k) { for (var i = 0; i < ATT_KINDS.length; i++) if (ATT_KINDS[i].key === k) return ATT_KINDS[i]; return ATT_KINDS[0]; }
   var attKindFilter = "전체";
@@ -1318,7 +1321,7 @@
 
     if (!rows.length) {
       return '<div class="board">' + head
-        + '<div class="board__empty">아직 등록된 근태 기록이 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 근태 기록</b>으로 지각·조퇴를 기록해보세요.</span></div>'
+        + '<div class="board__empty">아직 등록된 근태 기록이 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 근태 기록</b>으로 기록해보세요.</span></div>'
         + '</div>';
     }
 
@@ -1333,21 +1336,21 @@
 
   function renderAttendance() {
     var all = window.ATTENDANCE || [];
-    var lateCnt = all.filter(function (r) { return r.kind === "지각"; }).length;
-    var earlyCnt = all.filter(function (r) { return r.kind === "조퇴"; }).length;
 
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Crew / Attendance</p>'
       + '<h2>근태 기록</h2>'
-      + '<p class="sub">크루의 지각 · 조퇴 기록을 시간순으로.</p></div>'
+      + '<p class="sub">크루의 지각 · 결근 · 조퇴 · 병가 등 근태 기록을 시간순으로.</p></div>'
       + '<button class="btn btn--primary" id="addAttendanceBtn">+ 근태 기록</button>'
       + '</div>';
 
-    html += '<div class="stats stats--3">'
+    html += '<div class="stats">'
       + statCard("acid", all.length, "건", "Total")
-      + statCard(lateCnt ? "warn" : "", lateCnt, "건", "지각")
-      + statCard(earlyCnt ? "warn" : "", earlyCnt, "건", "조퇴")
+      + ATT_KINDS.map(function (k) {
+          var n = all.filter(function (r) { return r.kind === k.key; }).length;
+          return statCard(n ? "warn" : "", n, "건", k.key);
+        }).join("")
       + '</div>';
 
     html += '<div class="toolbar-row">'
@@ -1426,15 +1429,13 @@
         + '<label class="fld"><span>크루 <em>*</em></span><select name="crewId" required></select></label>'
         + '<label class="fld"><span>일자 <em>*</em></span><input type="date" name="date" required></label>'
       + '</div>'
-      + '<div class="fld-row">'
-        + '<div class="fld"><span>구분</span>'
-          + '<input type="hidden" name="kind" value="지각">'
-          + '<div class="ivseg">' + ATT_KINDS.map(function (k) {
-              return '<button type="button" class="ivseg__btn" data-kind="' + k.key + '" style="--c:' + k.c + '">' + k.key + '</button>';
-            }).join("") + '</div>'
-        + '</div>'
-        + '<label class="fld"><span>시간 <em>(선택)</em></span><input type="time" name="time"></label>'
+      + '<div class="fld"><span>구분</span>'
+        + '<input type="hidden" name="kind" value="지각">'
+        + '<div class="ivseg">' + ATT_KINDS.map(function (k) {
+            return '<button type="button" class="ivseg__btn" data-kind="' + k.key + '" style="--c:' + k.c + '">' + k.key + '</button>';
+          }).join("") + '</div>'
       + '</div>'
+      + '<label class="fld"><span>시간 <em>(선택)</em></span><input type="time" name="time"></label>'
       + '<label class="fld"><span>사유 <em>(선택)</em></span><input type="text" name="reason" maxlength="80" placeholder="사유를 입력하세요…"></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="attendanceDelBtn" hidden>삭제</button>'

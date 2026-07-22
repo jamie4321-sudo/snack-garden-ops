@@ -66,8 +66,8 @@ window.SCHEDULE = [
 window.SUMMARY = {
   monthLabel: "2026년 7월",
   issues: [
-    { text: "헤이든 — 팔로업 사항 : 법인카드 상신", link: "" },
-    { text: "헤이든 — 안내 사항", link: "https://docs.google.com/document/d/EXAMPLE_DOC_ID/edit" },
+    { id: "i1", text: "헤이든 — 팔로업 사항 : 법인카드 상신", link: "" },
+    { id: "i2", text: "헤이든 — 안내 사항", link: "https://docs.google.com/document/d/EXAMPLE_DOC_ID/edit" },
   ],
   points: [],
 };

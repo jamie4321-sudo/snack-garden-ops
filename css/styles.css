@@ -226,9 +226,17 @@ button { font-family: inherit; }
 .summary__head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .summary__head h3 { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: -.2px; }
 .chip-mono { font-family: var(--mono); font-size: 11px; font-weight: 700; background: var(--accent); color: var(--accent-ink); padding: 3px 9px; border-radius: 999px; }
+.issue-add {
+  width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--ink-2); font-size: 14px; line-height: 1; cursor: pointer; display: grid; place-items: center;
+  margin-left: auto; transition: border-color .14s, color .14s;
+}
+.issue-add:hover { border-color: var(--accent); color: var(--accent-text); }
 .summary ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
-.summary li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-2); }
+.summary li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-2); cursor: default; }
 .summary li::before { content: ""; margin-top: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex: none; }
+.issue-text { min-width: 0; }
+.summary li:hover .evt__actions { opacity: 1; }
 .link-chip {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 7px; margin-left: 4px; vertical-align: middle;
@@ -472,6 +480,11 @@ button { font-family: inherit; }
   border-radius: var(--r-lg); box-shadow: var(--shadow);
   padding: 24px 26px; animation: pop .18s cubic-bezier(.2,.9,.3,1.2);
 }
+.modal__card--crew { max-width: 640px; padding: 20px 24px; }
+.modal__card--crew .modal__head { margin-bottom: 14px; }
+.modal__card--crew #crewForm { gap: 13px; }
+.modal__card--crew .fld { gap: 6px; }
+.modal__card--crew .fld input, .modal__card--crew .fld select { padding: 9px 12px; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
 .modal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
@@ -494,6 +507,7 @@ button { font-family: inherit; }
 .fld input:focus, .fld select:focus { border-color: var(--accent); }
 .fld input::placeholder { color: var(--ink-3); }
 .fld-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fld-row--3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .fld--check { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .fld--check input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 .fld--check span { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); text-transform: none; letter-spacing: 0; }
@@ -517,4 +531,6 @@ button { font-family: inherit; }
   .page-head h2 { font-size: 26px; }
   .mcell { min-height: 64px; padding: 6px; }
   .mchip__t { font-size: 9.5px; }
+  .fld-row, .fld-row--3 { grid-template-columns: 1fr; }
+  .modal__card--crew { max-width: 440px; }
 }

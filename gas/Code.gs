@@ -25,6 +25,7 @@ var CREW_FIELDS = [
   "contractType","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
 ];
 var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link"];
+var ISSUE_FIELDS = ["id","text","link"];
 
 var SHEET_ID = ""; // 비우면 이 스크립트에 연결된 시트를 사용
 
@@ -136,12 +137,17 @@ function upsertRowByHeader_(sh, id, valuesObj) {
   }
 }
 
-/** 조회: GET ?action=crew | schedule | all */
+/** 조회: GET ?action=crew | schedule | issues | all */
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || "all";
   if (action === "crew")     return json_(rows_("crew", CREW_FIELDS));
   if (action === "schedule") return json_(mapSchedule_(rows_("schedule", SCH_FIELDS)));
-  return json_({ crew: rows_("crew", CREW_FIELDS), schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)) });
+  if (action === "issues")   return json_(rows_("issues", ISSUE_FIELDS));
+  return json_({
+    crew: rows_("crew", CREW_FIELDS),
+    schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)),
+    issues: rows_("issues", ISSUE_FIELDS)
+  });
 }
 
 function mapSchedule_(list) {
@@ -186,7 +192,7 @@ function fmtTime_(v) {
   return s.slice(0, 5);
 }
 
-/** 저장/수정/삭제: POST body(JSON) { type:"crew"|"schedule", action:"add"|"update"|"delete", ... } */
+/** 저장/수정/삭제: POST body(JSON) { type:"crew"|"schedule"|"issue", action:"add"|"update"|"delete", ... } */
 function doPost(e) {
   var data = {};
   try { data = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: "bad json" }); }
@@ -194,6 +200,7 @@ function doPost(e) {
 
   if (data.type === "crew")     return handleCrew_(action, data);
   if (data.type === "schedule") return handleSchedule_(action, data);
+  if (data.type === "issue")    return handleIssue_(action, data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -254,6 +261,25 @@ function handleSchedule_(action, data) {
   return json_({ ok: false, error: "unknown action" });
 }
 
+function handleIssue_(action, data) {
+  var sh = sheet_("issues", ISSUE_FIELDS);
+
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, { id: id, text: data.text || "", link: data.link || "" });
+    return json_({ ok: true, id: id });
+  }
+
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+
+  return json_({ ok: false, error: "unknown action" });
+}
+
 /** ★ 처음 한 번만 실행: 데모와 동일한 데이터로 시트를 채웁니다.
  *  (기존 데이터는 지우고 새로 씁니다) */
 function seed() {
@@ -301,8 +327,13 @@ function seed() {
     ["s30","2026-07-29","","온보딩관련(7/31) 미팅 사진 확인 · 레오","운영","","레오",""],
     ["s31","2026-07-31","","연차","휴일","","팀",""]
   ];
+  var issues = [
+    ["i1","헤이든 — 팔로업 사항 : 법인카드 상신",""],
+    ["i2","헤이든 — 안내 사항","https://docs.google.com/document/d/EXAMPLE_DOC_ID/edit"]
+  ];
   writeAll_("crew", CREW_FIELDS, crew);
   writeAll_("schedule", SCH_FIELDS, sch);
+  writeAll_("issues", ISSUE_FIELDS, issues);
 }
 
 function writeAll_(name, fields, data) {

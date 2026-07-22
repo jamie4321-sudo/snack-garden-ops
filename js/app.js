@@ -121,6 +121,7 @@
       .then(function (d) {
         if (d && d.crew && d.crew.length) window.CREW = d.crew.map(normCrew);
         if (d && d.schedule && d.schedule.length) window.SCHEDULE = d.schedule;
+        if (d && d.issues) window.SUMMARY.issues = d.issues;
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -178,12 +179,20 @@
 
     html += '<div class="summary">'
       + '<div class="summary__col">'
-      + '<div class="summary__head"><h3>이달의 사업 · 이슈</h3><span class="chip-mono">' + esc(s.monthLabel) + '</span></div>'
-      + '<ul>' + s.issues.map(function (it) {
+      + '<div class="summary__head"><h3>이달의 사업 · 이슈</h3><span class="chip-mono">' + esc(s.monthLabel) + '</span>'
+        + '<button type="button" class="issue-add" id="addIssueBtn" title="이슈 추가">+</button>'
+      + '</div>'
+      + '<ul>' + (s.issues.length ? s.issues.map(function (it) {
           var body = esc(it.text);
-          if (it.link) body += ' <a class="link-chip" href="' + esc(it.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>';
-          return '<li>' + body + '</li>';
-        }).join("") + '</ul>'
+          var link = it.link ? ' <a class="link-chip" href="' + esc(it.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
+          return '<li data-id="' + esc(it.id || "") + '">'
+            + '<span class="issue-text">' + body + '</span>' + link
+            + '<span class="evt__actions">'
+              + '<button type="button" class="evt__act issue-act--edit" data-id="' + esc(it.id || "") + '" title="수정">✎</button>'
+              + '<button type="button" class="evt__act evt__act--del issue-act--del" data-id="' + esc(it.id || "") + '" title="삭제">&times;</button>'
+            + '</span>'
+          + '</li>';
+        }).join("") : '<li class="muted" style="cursor:default"><span class="issue-text">— 등록된 이슈가 없습니다</span></li>') + '</ul>'
       + '</div>'
       + '<div class="summary__col"><h4>Focus Point</h4><p class="summary__point">'
       + (s.points && s.points.length ? s.points.map(esc).join("<br>") : "— 등록된 포인트가 없습니다") + '</p></div>'
@@ -421,6 +430,12 @@
     saveToSheet({ type: "schedule", action: "delete", id: id });
     renderSchedule();
   }
+  function deleteIssueQuick(id) {
+    if (!confirm("이 이슈를 삭제할까요?")) return;
+    window.SUMMARY.issues = window.SUMMARY.issues.filter(function (it) { return String(it.id) !== String(id); });
+    saveToSheet({ type: "issue", action: "delete", id: id });
+    renderSchedule();
+  }
 
   /* ---------- 일정 인라인 등록 (팝업 없이 날짜 칸에서 바로 입력) ---------- */
   function activateQuickAdd(trigger) {
@@ -455,6 +470,78 @@
       else if (ev.key === "Escape") { cancel(); }
     });
     input.addEventListener("blur", function () { commit(); });
+  }
+
+  /* ---------- 이달의 사업 · 이슈 등록/수정 모달 ---------- */
+  function openIssueModal(prefill) {
+    var el = document.getElementById("issueModal");
+    if (!el) { el = buildIssueModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#issueModalTitle").textContent = editing ? "이슈 수정" : "이슈 등록";
+    el.querySelector("#issueDelBtn").hidden = !editing;
+    form.text.value = (prefill && prefill.text) || "";
+    form.link.value = (prefill && prefill.link) || "";
+    el.hidden = false;
+    setTimeout(function () { form.text.focus(); }, 30);
+  }
+  function closeIssueModal() {
+    var el = document.getElementById("issueModal");
+    if (el) el.hidden = true;
+  }
+
+  function buildIssueModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "issueModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="이슈 등록">'
+      + '<div class="modal__head"><h3 id="issueModalTitle">이슈 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="issueForm">'
+      + '<label class="fld"><span>내용</span><input type="text" name="text" maxlength="80" required placeholder="예) 헤이든 — 팔로업 사항 : 법인카드 상신"></label>'
+      + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="issueDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) closeIssueModal();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !wrap.hidden) closeIssueModal();
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var text = f.text.value.trim();
+      if (!text) return;
+      var id = f.dataset.id;
+      var it = { id: id || newId("i"), text: text, link: f.link.value.trim() };
+      var idx = id ? indexById(window.SUMMARY.issues, id) : -1;
+      if (idx > -1) window.SUMMARY.issues[idx] = it; else window.SUMMARY.issues.push(it);
+      saveToSheet({ type: "issue", action: id ? "update" : "add", id: it.id, text: it.text, link: it.link });
+      closeIssueModal();
+      renderSchedule();
+    });
+    wrap.querySelector("#issueDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 이슈를 삭제할까요?")) return;
+      window.SUMMARY.issues = window.SUMMARY.issues.filter(function (it) { return String(it.id) !== String(id); });
+      saveToSheet({ type: "issue", action: "delete", id: id });
+      closeIssueModal();
+      renderSchedule();
+    });
+    return wrap;
   }
 
   /* ======================================================
@@ -680,39 +767,35 @@
     wrap.hidden = true;
     wrap.innerHTML =
       '<div class="modal__backdrop" data-close></div>'
-      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="크루 등록">'
+      + '<div class="modal__card modal__card--crew" role="dialog" aria-modal="true" aria-label="크루 등록">'
       + '<div class="modal__head"><h3 id="crewModalTitle">신규 크루 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="crewForm">'
       + '<label class="fld"><span>이름</span><input type="text" name="name" maxlength="20" required placeholder="이름"></label>'
-      + '<div class="fld-row">'
+      + '<div class="fld-row--3">'
         + '<label class="fld"><span>직책</span><input type="text" name="role" maxlength="20" placeholder="크루 / 매니저 …"></label>'
         + '<label class="fld"><span>팀 표기 <em>(선택)</em></span><input type="text" name="team" maxlength="20" placeholder="닉네임 등"></label>'
-      + '</div>'
-      + '<div class="fld-row">'
         + '<label class="fld"><span>업무 그룹</span><select name="group">' + CREW_GROUPS.map(function (g) { return '<option value="' + g + '">' + g + '</option>'; }).join("") + '</select></label>'
-        + '<label class="fld"><span>상태</span><select name="status">' + CREW_STATUSES.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("") + '</select></label>'
       + '</div>'
-      + '<div class="fld-row">'
+      + '<div class="fld-row--3">'
+        + '<label class="fld"><span>상태</span><select name="status">' + CREW_STATUSES.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("") + '</select></label>'
         + '<label class="fld"><span>계약현황</span><select name="contractType">' + CREW_CONTRACTS.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("") + '</select></label>'
         + '<label class="fld"><span>업무시간 <em>(선택)</em></span><input type="text" name="workHours" placeholder="09:00-18:00(8h)"></label>'
       + '</div>'
-      + '<div class="fld-row">'
+      + '<div class="fld-row--3">'
         + '<label class="fld"><span>입사일</span><input type="date" name="joinDate"></label>'
         + '<label class="fld"><span>연락처</span><input type="text" name="phone" placeholder="010-0000-0000"></label>'
-      + '</div>'
-      + '<div class="fld-row">'
         + '<label class="fld"><span>생년월일 <em>(선택)</em></span><input type="date" name="birthDate"></label>'
-        + '<label class="fld"><span>비상연락처 <em>(선택)</em></span><input type="text" name="emergencyContact" placeholder="010-0000-0000"></label>'
       + '</div>'
-      + '<div class="fld-row">'
+      + '<div class="fld-row--3">'
+        + '<label class="fld"><span>비상연락처 <em>(선택)</em></span><input type="text" name="emergencyContact" placeholder="010-0000-0000"></label>'
         + '<label class="fld"><span>장애여부</span><select name="disability">' + CREW_DISABILITY.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("") + '</select></label>'
         + '<label class="fld"><span>장애유형 <em>(선택)</em></span><input type="text" name="disabilityType" placeholder="발달장애 등"></label>'
       + '</div>'
-      + '<div class="fld-row">'
+      + '<div class="fld-row--3">'
         + '<label class="fld"><span>근무지</span><input type="text" name="site" maxlength="30" placeholder="판교 오아시스"></label>'
         + '<label class="fld"><span>출입증번호 <em>(선택)</em></span><input type="text" name="badgeNumber" placeholder="O0000"></label>'
+        + '<label class="fld"><span>담당 업무 <em>(쉼표로 구분)</em></span><input type="text" name="duties" placeholder="발주, 온보딩"></label>'
       + '</div>'
-      + '<label class="fld"><span>담당 업무 <em>(쉼표로 구분)</em></span><input type="text" name="duties" placeholder="발주, 온보딩"></label>'
       + '<label class="fld"><span>비고 <em>(선택)</em></span><input type="text" name="note" maxlength="60" placeholder="메모"></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="crewDelBtn" hidden>삭제</button>'
@@ -809,6 +892,14 @@
 
       var mmore = ev.target.closest(".mchip--more[data-date]");
       if (mmore) { schedMode = "week"; schedAnchor = mmore.getAttribute("data-date"); renderSchedule(); return; }
+
+      if (ev.target.closest("#addIssueBtn")) { openIssueModal(null); return; }
+
+      var issueEditBtn = ev.target.closest(".issue-act--edit[data-id]");
+      if (issueEditBtn) { var iev = findById(window.SUMMARY.issues, issueEditBtn.getAttribute("data-id")); if (iev) openIssueModal(iev); return; }
+
+      var issueDelBtn = ev.target.closest(".issue-act--del[data-id]");
+      if (issueDelBtn) { deleteIssueQuick(issueDelBtn.getAttribute("data-id")); return; }
 
       var nextBtn = ev.target.closest(".evt__act--next[data-id]");
       if (nextBtn) { moveEventToNextDay(nextBtn.getAttribute("data-id")); return; }

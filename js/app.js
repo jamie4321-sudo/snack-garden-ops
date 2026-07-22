@@ -97,6 +97,17 @@
     };
   }
 
+  function normInterview(r) {
+    return {
+      id: r.id || "", date: fmtDay(r.date), time: r.time || "",
+      crewId: r.crewId || "", crewName: r.crewName || "",
+      type: r.type || "정기 면담", condition: r.condition || "보통",
+      recorder: r.recorder || "", content: r.content || "",
+      followUp: (r.followUp === true || r.followUp === "필요" || String(r.followUp).toLowerCase() === "true") ? "필요" : "",
+      followUpNote: r.followUpNote || "", privateNote: r.privateNote || "",
+    };
+  }
+
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
     if (!iso) return "—";
@@ -123,6 +134,7 @@
         if (d && d.schedule && d.schedule.length) window.SCHEDULE = d.schedule;
         if (d && d.issues) window.SUMMARY.issues = d.issues;
         if (d && d.points) window.SUMMARY.points = d.points;
+        if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -948,6 +960,272 @@
   }
 
   /* ======================================================
+     INTERVIEW · 면담 & 근무 기록
+     ====================================================== */
+  var CURRENT_USER = "제이미";
+  var INTERVIEW_TYPES = ["정기 면담", "수시 면담", "온보딩 면담", "근무 관련", "고충 처리", "기타"];
+  var CONDITIONS = [
+    { key: "좋음",   emoji: "😊", c: "var(--green)" },
+    { key: "보통",   emoji: "😐", c: "var(--slate)" },
+    { key: "우려됨", emoji: "😟", c: "var(--red)" },
+  ];
+  function condOf(k) { for (var i = 0; i < CONDITIONS.length; i++) if (CONDITIONS[i].key === k) return CONDITIONS[i]; return CONDITIONS[1]; }
+  var interviewCond = "전체";
+  var interviewQuery = "";
+
+  function fmtDotDate(iso) {
+    if (!iso) return "—";
+    var p = iso.split("-");
+    if (p.length < 3) return iso;
+    return p[0] + "." + p[1] + "." + p[2] + " <small>" + WD[wd(iso)] + "</small>";
+  }
+
+  function filteredInterviews() {
+    var list = (window.INTERVIEWS || []).slice();
+    list = list.filter(function (r) {
+      if (interviewCond !== "전체" && r.condition !== interviewCond) return false;
+      if (interviewQuery) {
+        var hay = (r.crewName + r.type + r.content + r.recorder).toLowerCase();
+        if (hay.indexOf(interviewQuery.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+    // 최신순 (일자 desc, 시간 desc)
+    return list.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.time || "") < (b.time || "") ? 1 : -1;
+    });
+  }
+
+  function renderInterview() {
+    var all = window.INTERVIEWS || [];
+    var followCnt = all.filter(function (r) { return r.followUp === "필요"; }).length;
+    var worryCnt = all.filter(function (r) { return r.condition === "우려됨"; }).length;
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Crew / Interview</p>'
+      + '<h2>면담 &amp; 근무기록</h2>'
+      + '<p class="sub">크루 면담과 근무 관련 기록을 시간순으로. <span class="muted">🔒 비공개 메모는 기록자 참고용입니다.</span></p></div>'
+      + '<button class="btn btn--primary" id="addInterviewBtn">+ 기록 등록</button>'
+      + '</div>';
+
+    html += '<div class="stats stats--3">'
+      + statCard("acid", all.length, "건", "Total")
+      + statCard("", followCnt, "건", "후속조치 필요")
+      + statCard(worryCnt ? "warn" : "", worryCnt, "건", "우려됨")
+      + '</div>';
+
+    html += '<div class="toolbar-row">'
+      + '<div class="filter" id="ivCondFilter">'
+      + ["전체"].concat(CONDITIONS.map(function (c) { return c.key; })).map(function (f) {
+          return '<button class="btn btn--sm btn--pill ' + (f === interviewCond ? "is-on" : "") + '" data-c="' + f + '">' + f + '</button>';
+        }).join("")
+      + '</div>'
+      + '<input class="searchbox" id="ivSearch" type="search" placeholder="크루 · 유형 · 내용 검색" value="' + esc(interviewQuery) + '">'
+      + '</div>';
+
+    var rows = filteredInterviews();
+    html += '<div class="iv-list" id="ivList">'
+      + (rows.length ? rows.map(interviewCard).join("")
+          : '<div class="placeholder placeholder--sm"><p class="muted">기록이 없습니다. <b style="color:var(--accent-text)">+ 기록 등록</b>으로 첫 면담을 남겨보세요.</p></div>')
+      + '</div>';
+
+    view.innerHTML = html;
+  }
+
+  function interviewCard(r) {
+    var crew = findById(window.CREW || [], r.crewId);
+    var g = groupOf(crew ? crew.group : "");
+    var cond = condOf(r.condition);
+    var initial = (r.crewName || "?").slice(0, 1);
+
+    var foot = "";
+    if (r.followUp === "필요") {
+      foot += '<span class="iv-flag" title="' + esc(r.followUpNote || "후속 조치 필요") + '">↪ 후속조치'
+        + (r.followUpNote ? ' <span class="iv-flag__note">' + esc(r.followUpNote) + '</span>' : '') + '</span>';
+    }
+    if (r.privateNote) foot += '<span class="iv-private" title="비공개 메모">🔒 비공개 메모</span>';
+
+    return '<article class="ivcard" data-id="' + esc(r.id || "") + '" style="--c:' + cond.c + '">'
+      + '<div class="ivcard__top">'
+        + '<div class="ivcard__who">'
+          + '<span class="ivcard__avatar" style="background:' + g.bg + ';color:' + g.fg + '">' + esc(initial) + '</span>'
+          + '<div class="ivcard__id">'
+            + '<b class="ivcard__name">' + esc(r.crewName || "—") + '</b>'
+            + '<span class="ivcard__meta mono">' + fmtDotDate(r.date) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.recorder || "—") + '</span>'
+          + '</div>'
+        + '</div>'
+        + '<div class="ivcard__tags">'
+          + '<span class="iv-type">' + esc(r.type) + '</span>'
+          + '<span class="badge badge--cond" style="--c:' + cond.c + '">' + cond.emoji + ' ' + esc(r.condition) + '</span>'
+        + '</div>'
+      + '</div>'
+      + '<p class="ivcard__content">' + esc(r.content || "—") + '</p>'
+      + '<div class="ivcard__foot">'
+        + '<div class="ivcard__flags">' + foot + '</div>'
+        + '<span class="ivcard__actions">'
+          + '<button type="button" class="evt__act iv-act--edit" data-id="' + esc(r.id || "") + '" title="수정">✎</button>'
+          + '<button type="button" class="evt__act iv-act--del" data-id="' + esc(r.id || "") + '" title="삭제">&times;</button>'
+        + '</span>'
+      + '</div>'
+    + '</article>';
+  }
+
+  function deleteInterviewQuick(id) {
+    if (!confirm("이 기록을 삭제할까요?")) return;
+    window.INTERVIEWS = (window.INTERVIEWS || []).filter(function (r) { return String(r.id) !== String(id); });
+    saveToSheet({ type: "interview", action: "delete", id: id });
+    renderInterview();
+  }
+
+  /* ---------- 면담 기록 등록/수정 모달 ---------- */
+  function openInterviewModal(prefill) {
+    var el = document.getElementById("interviewModal");
+    if (!el) { el = buildInterviewModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#interviewModalTitle").textContent = editing ? "면담 · 근무 기록 수정" : "면담 · 근무 기록 등록";
+    el.querySelector("#interviewDelBtn").hidden = !editing;
+
+    // 크루 셀렉트 옵션 재구성 (현재 크루 목록 반영)
+    var sel = form.crewId;
+    sel.innerHTML = '<option value="">크루 선택</option>' + (window.CREW || []).map(function (c) {
+      return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+    }).join("");
+
+    form.crewId.value = (prefill && prefill.crewId) || "";
+    form.date.value = (prefill && prefill.date) || TODAY;
+    form.time.value = (prefill && prefill.time) || "";
+    form.type.value = (prefill && prefill.type) || "정기 면담";
+    form.content.value = (prefill && prefill.content) || "";
+    form.followUpNote.value = (prefill && prefill.followUpNote) || "";
+    form.privateNote.value = (prefill && prefill.privateNote) || "";
+    form.querySelector("#ivRecorder").textContent = (prefill && prefill.recorder) || CURRENT_USER;
+
+    // 컨디션 세그먼트
+    var cond = (prefill && prefill.condition) || "보통";
+    form.condition.value = cond;
+    Array.prototype.forEach.call(el.querySelectorAll(".ivseg__btn"), function (b) {
+      b.classList.toggle("is-on", b.getAttribute("data-cond") === cond);
+    });
+
+    // 후속조치 토글 → 조치 내용 노출
+    var need = !!(prefill && prefill.followUp === "필요");
+    form.followUp.checked = need;
+    el.querySelector("#ivFollowWrap").hidden = !need;
+
+    el.hidden = false;
+    setTimeout(function () { form.crewId.focus(); }, 30);
+  }
+  function closeInterviewModal() {
+    var el = document.getElementById("interviewModal");
+    if (el) el.hidden = true;
+  }
+
+  function buildInterviewModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "interviewModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="면담 기록 등록">'
+      + '<div class="modal__head"><h3 id="interviewModalTitle">면담 · 근무 기록 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="interviewForm">'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>크루 <em>*</em></span><select name="crewId" required></select></label>'
+        + '<label class="fld"><span>일자 <em>*</em></span><input type="date" name="date" required></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>시간 <em>(선택)</em></span><input type="time" name="time"></label>'
+        + '<label class="fld"><span>유형</span><select name="type">'
+          + INTERVIEW_TYPES.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("")
+        + '</select></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<div class="fld"><span>크루 컨디션</span>'
+          + '<input type="hidden" name="condition" value="보통">'
+          + '<div class="ivseg">' + CONDITIONS.map(function (c) {
+              return '<button type="button" class="ivseg__btn" data-cond="' + c.key + '" style="--c:' + c.c + '">' + c.emoji + ' ' + c.key + '</button>';
+            }).join("") + '</div>'
+        + '</div>'
+        + '<div class="fld"><span>기록자</span><div class="iv-recorder" id="ivRecorder">' + esc(CURRENT_USER) + '</div></div>'
+      + '</div>'
+      + '<label class="fld"><span>주요 내용 <em>*</em></span><textarea name="content" rows="5" required placeholder="면담 내용, 주요 발언, 관찰 사항 등을 기록하세요…"></textarea></label>'
+      + '<label class="fld fld--check fld--check-box"><input type="checkbox" name="followUp"><span>후속 조치 필요 <em>— 체크하면 조치 내용 입력란이 열립니다</em></span></label>'
+      + '<label class="fld" id="ivFollowWrap" hidden><span>조치 내용</span><textarea name="followUpNote" rows="2" placeholder="필요한 후속 조치를 적어주세요…"></textarea></label>'
+      + '<label class="fld fld--private"><span>🔒 비공개 메모 <em>— 기록자 참고용 (민감 내용용)</em></span><textarea name="privateNote" rows="2" placeholder="공식 기록에 남기기 어려운 내용…"></textarea></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="interviewDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { closeInterviewModal(); return; }
+      var segBtn = ev.target.closest(".ivseg__btn");
+      if (segBtn) {
+        var form = wrap.querySelector("form");
+        form.condition.value = segBtn.getAttribute("data-cond");
+        Array.prototype.forEach.call(wrap.querySelectorAll(".ivseg__btn"), function (b) { b.classList.toggle("is-on", b === segBtn); });
+        return;
+      }
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && !wrap.hidden) closeInterviewModal();
+    });
+    wrap.querySelector('input[name="followUp"]').addEventListener("change", function (ev) {
+      wrap.querySelector("#ivFollowWrap").hidden = !ev.target.checked;
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var content = f.content.value.trim();
+      var crewId = f.crewId.value;
+      if (!crewId) { alert("크루를 선택해주세요."); f.crewId.focus(); return; }
+      if (!content) { f.content.focus(); return; }
+      var crew = findById(window.CREW || [], crewId);
+      var id = f.dataset.id;
+      var rec = {
+        id: id || newId("iv"),
+        date: f.date.value,
+        time: f.time.value || "",
+        crewId: crewId,
+        crewName: crew ? crew.name : "",
+        type: f.type.value,
+        condition: f.condition.value || "보통",
+        recorder: (id && findById(window.INTERVIEWS || [], id) || {}).recorder || CURRENT_USER,
+        content: content,
+        followUp: f.followUp.checked ? "필요" : "",
+        followUpNote: f.followUp.checked ? f.followUpNote.value.trim() : "",
+        privateNote: f.privateNote.value.trim(),
+      };
+      if (!window.INTERVIEWS) window.INTERVIEWS = [];
+      var idx = id ? indexById(window.INTERVIEWS, id) : -1;
+      if (idx > -1) window.INTERVIEWS[idx] = rec; else window.INTERVIEWS.push(rec);
+      saveToSheet(Object.assign({ type: "interview", action: id ? "update" : "add" }, rec));
+      closeInterviewModal();
+      renderInterview();
+    });
+    wrap.querySelector("#interviewDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 기록을 삭제할까요?")) return;
+      window.INTERVIEWS = (window.INTERVIEWS || []).filter(function (r) { return String(r.id) !== String(id); });
+      saveToSheet({ type: "interview", action: "delete", id: id });
+      closeInterviewModal();
+      renderInterview();
+    });
+    return wrap;
+  }
+
+  /* ======================================================
      DASHBOARD (placeholder)
      ====================================================== */
   /* 장애유형 팔레트 (감각적 · 애시드 라임 기준 조화) */
@@ -1057,6 +1335,7 @@
   var VIEWS = {
     dashboard: { title: "DASHBOARD", render: renderDashboard },
     crew:      { title: "CREW", render: renderCrew },
+    interview: { title: "INTERVIEW", render: renderInterview },
     schedule:  { title: "SCHEDULE", render: renderSchedule },
   };
 
@@ -1078,6 +1357,19 @@
     view.addEventListener("click", function (ev) {
       if (ev.target.closest("#addEventBtn")) { openEventModal({ date: TODAY }); return; }
       if (ev.target.closest("#addCrewBtn")) { openCrewModal(null); return; }
+      if (ev.target.closest("#addInterviewBtn")) { openInterviewModal(null); return; }
+
+      var ivEditBtn = ev.target.closest(".iv-act--edit[data-id]");
+      if (ivEditBtn) { var ive = findById(window.INTERVIEWS || [], ivEditBtn.getAttribute("data-id")); if (ive) openInterviewModal(ive); return; }
+
+      var ivDelBtn = ev.target.closest(".iv-act--del[data-id]");
+      if (ivDelBtn) { deleteInterviewQuick(ivDelBtn.getAttribute("data-id")); return; }
+
+      var ivCondBtn = ev.target.closest("#ivCondFilter button[data-c]");
+      if (ivCondBtn) { interviewCond = ivCondBtn.getAttribute("data-c"); renderInterview(); return; }
+
+      var ivCardEl = ev.target.closest(".ivcard[data-id]");
+      if (ivCardEl) { var ivc = findById(window.INTERVIEWS || [], ivCardEl.getAttribute("data-id")); if (ivc) openInterviewModal(ivc); return; }
 
       var mchip = ev.target.closest(".mchip[data-id]");
       if (mchip) { var mev = findById(window.SCHEDULE, mchip.getAttribute("data-id")); if (mev) openEventModal(mev); return; }
@@ -1168,6 +1460,15 @@
         crewQuery = ev.target.value;
         var body = document.getElementById("crewBody");
         if (body) body.innerHTML = tbodyHTML();
+      }
+      if (ev.target.id === "ivSearch") {
+        interviewQuery = ev.target.value;
+        var list = document.getElementById("ivList");
+        if (list) {
+          var rows = filteredInterviews();
+          list.innerHTML = rows.length ? rows.map(interviewCard).join("")
+            : '<div class="placeholder placeholder--sm"><p class="muted">검색 결과가 없습니다.</p></div>';
+        }
       }
     });
   }

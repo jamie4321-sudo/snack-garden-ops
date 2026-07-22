@@ -358,6 +358,94 @@ button { font-family: inherit; }
 .mchip--more { color: var(--ink-3); font-family: var(--mono); }
 
 /* =========================================================
+   INTERVIEW · 면담 & 근무 기록
+   ========================================================= */
+.iv-list { display: grid; gap: 12px; }
+.ivcard {
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  background: var(--card-bg); padding: 18px 20px; cursor: pointer;
+  transition: border-color .14s, transform .1s, box-shadow .14s;
+  position: relative; overflow: hidden;
+}
+.ivcard::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--c, var(--line)); opacity: .9;
+}
+.ivcard:hover { border-color: var(--line); box-shadow: var(--shadow); transform: translateY(-1px); }
+
+.ivcard__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.ivcard__who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ivcard__avatar {
+  width: 40px; height: 40px; border-radius: var(--r-sm); flex: none;
+  display: grid; place-items: center; font-size: 16px; font-weight: 800;
+}
+.ivcard__id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ivcard__name { font-size: 15px; font-weight: 700; letter-spacing: -.2px; }
+.ivcard__meta { font-size: 11px; color: var(--ink-3); }
+.ivcard__tags { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.iv-type {
+  font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-2);
+  border: 1px solid var(--line); background: var(--panel-2); padding: 4px 10px; border-radius: 999px;
+}
+.badge--cond { --c: var(--slate); }
+
+.ivcard__content { margin: 0 0 14px; color: var(--ink); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; }
+
+.ivcard__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ivcard__flags { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.iv-flag {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--accent-text);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  padding: 4px 10px; border-radius: 999px; max-width: 100%;
+}
+.iv-flag__note { font-weight: 400; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px; }
+.iv-private {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 11px; color: var(--amber);
+  border: 1px dashed color-mix(in srgb, var(--amber) 45%, transparent);
+  padding: 4px 10px; border-radius: 999px;
+}
+.ivcard__actions { display: flex; align-items: center; gap: 2px; flex: none; opacity: 0; transition: opacity .12s; }
+.ivcard:hover .ivcard__actions, .ivcard:focus-within .ivcard__actions { opacity: 1; }
+.iv-act--edit:hover { color: var(--accent-text); }
+.iv-act--del:hover { color: var(--red); }
+
+/* 면담 모달 — 컨디션 세그먼트 · 기록자 · 비공개 메모 */
+.modal__card--iv { max-width: 620px; padding: 22px 24px; }
+.modal__card--iv #interviewForm { display: grid; gap: 15px; }
+.ivseg { display: flex; gap: 6px; }
+.ivseg__btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2);
+  padding: 10px 8px; border-radius: var(--r-sm); cursor: pointer;
+  transition: border-color .14s, color .14s, background .14s;
+}
+.ivseg__btn:hover { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); color: var(--ink); }
+.ivseg__btn.is-on {
+  color: var(--c); font-weight: 700;
+  border-color: color-mix(in srgb, var(--c) 55%, transparent);
+  background: color-mix(in srgb, var(--c) 13%, transparent);
+}
+.iv-recorder {
+  display: flex; align-items: center; font-size: 13px; color: var(--ink-2);
+  background: var(--panel-2); border: 1px dashed var(--line); border-radius: var(--r-sm);
+  padding: 10px 12px; min-height: 42px;
+}
+.fld--check-box {
+  border: 1px solid var(--line); background: var(--panel-2);
+  border-radius: var(--r-sm); padding: 12px 14px;
+}
+.fld--check-box span em { font-style: normal; color: var(--ink-3); font-size: 11px; }
+.fld--private > span { color: var(--amber); }
+.fld--private textarea {
+  border-style: dashed; border-color: color-mix(in srgb, var(--amber) 40%, var(--line));
+  background: color-mix(in srgb, var(--amber) 6%, var(--panel-2));
+}
+
+/* =========================================================
    DASHBOARD
    ========================================================= */
 .dash-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; margin-bottom: 22px; align-items: start; }
@@ -405,6 +493,9 @@ button { font-family: inherit; }
 .stat--acid { border-color: color-mix(in srgb, var(--accent) 40%, var(--line-soft)); }
 .stat--acid .stat__num { color: var(--accent-text); }
 .stat--green .stat__num { color: var(--green); }
+.stat--warn { border-color: color-mix(in srgb, var(--red) 38%, var(--line-soft)); }
+.stat--warn .stat__num { color: var(--red); }
+.stats--3 { grid-template-columns: repeat(3, 1fr); }
 
 .toolbar-row { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
 .filter { display: flex; gap: 6px; }
@@ -549,13 +640,14 @@ button { font-family: inherit; }
 .fld { display: grid; gap: 7px; }
 .fld > span { font-family: var(--mono); font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--ink-3); }
 .fld > span em { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--ink-3); opacity: .8; }
-.fld input, .fld select {
+.fld input, .fld select, .fld textarea {
   background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 11px 12px; color: var(--ink); font-size: 13px; font-family: inherit; outline: none;
   transition: border-color .14s;
 }
-.fld input:focus, .fld select:focus { border-color: var(--accent); }
-.fld input::placeholder { color: var(--ink-3); }
+.fld textarea { resize: vertical; line-height: 1.55; min-height: 44px; }
+.fld input:focus, .fld select:focus, .fld textarea:focus { border-color: var(--accent); }
+.fld input::placeholder, .fld textarea::placeholder { color: var(--ink-3); }
 .fld-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .fld-row--3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .fld--check { display: flex; flex-direction: row; align-items: center; gap: 8px; }

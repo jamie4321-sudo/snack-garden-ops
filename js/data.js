@@ -62,6 +62,24 @@ window.SCHEDULE = [
   { id:"s31", date:"2026-07-31", time:"",      title:"연차",                          category:"휴일",  done:false, assignee:"팀" },
 ];
 
+/* --- 면담 & 근무 기록 : 시트 "interviews"
+   (헤더 = id,date,time,crewId,crewName,type,condition,recorder,content,followUp,followUpNote,privateNote) ---
+   condition : 좋음 | 보통 | 우려됨    followUp : "필요" | "" */
+window.INTERVIEWS = [
+  { id:"iv1", date:"2026-07-20", time:"14:00", crewId:"c5", crewName:"정배라", type:"온보딩 면담",
+    condition:"좋음", recorder:"제이미",
+    content:"성수 OJT 첫 주 소회 공유. 업무 습득 속도 빠르고 팀 적응 원활. 발주 프로세스에 관심 많음.",
+    followUp:"", followUpNote:"", privateNote:"" },
+  { id:"iv2", date:"2026-07-18", time:"11:30", crewId:"c7", crewName:"오미라", type:"정기 면담",
+    condition:"우려됨", recorder:"제이미",
+    content:"육아휴직 복귀 시점 관련 논의. 복귀 후 근무형태(단축근무) 조정 희망.",
+    followUp:"필요", followUpNote:"인사팀과 단축근무 가능 여부 확인 후 8월 초 재면담 예정.", privateNote:"복귀 의사 확고하나 일정 유동적. 배려 필요." },
+  { id:"iv3", date:"2026-07-15", time:"16:00", crewId:"c8", crewName:"신엔조", type:"근무 관련",
+    condition:"보통", recorder:"제이미",
+    content:"반차/근태 사용 패턴 점검. 업무 몰입도 양호, 반복 업무에서 집중력 편차 있음.",
+    followUp:"필요", followUpNote:"주 1회 업무 우선순위 체크인 도입.", privateNote:"" },
+];
+
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */
 window.SUMMARY = {
   monthLabel: "2026년 7월",

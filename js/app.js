@@ -864,14 +864,14 @@
                 생략하면(크루 상세 탭 · 그룹 내 이어지는 행) 크루 칸 없이 출력. */
   function interviewBoardRow(r, crewCell) {
     var cond = condOf(r.condition);
-    var issueTag = r.type === "근무 이슈" ? '<span class="board__issue-tag" title="근무 이슈">issue</span> ' : '';
+    var issueDot = r.type === "근무 이슈" ? '<span class="board__issue-dot" title="근무 이슈"></span>' : '';
     var flags = "";
     if (r.followUp === "필요") flags += '<span class="board__flag board__flag--follow" title="' + esc(r.followUpNote || "후속 조치 필요") + '">후속</span>';
     if (r.privateNote) flags += '<span class="board__flag board__flag--private" title="비공개 메모">🔒</span>';
     return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
       + (crewCell || '')
       + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
-      + '<td class="board__type">' + issueTag + esc(r.type) + '</td>'
+      + '<td class="board__type">' + issueDot + esc(r.type) + '</td>'
       + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
       + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
       + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
@@ -1062,6 +1062,7 @@
   function condOf(k) { for (var i = 0; i < CONDITIONS.length; i++) if (CONDITIONS[i].key === k) return CONDITIONS[i]; return CONDITIONS[1]; }
   var interviewCond = "전체";
   var interviewQuery = "";
+  var ivAnchor = TODAY; // 면담 & 근무기록 목록에서 보고 있는 기준 월
 
   function fmtDotDate(iso) {
     if (!iso) return "—";
@@ -1070,8 +1071,13 @@
     return p[0] + "." + p[1] + "." + p[2] + " <small>" + WD[wd(iso)] + "</small>";
   }
 
+  function interviewsInMonth() {
+    var ym = ivAnchor.slice(0, 7);
+    return (window.INTERVIEWS || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
+  }
+
   function filteredInterviews() {
-    var list = (window.INTERVIEWS || []).slice();
+    var list = interviewsInMonth();
     list = list.filter(function (r) {
       if (interviewCond !== "전체" && r.condition !== interviewCond) return false;
       if (interviewQuery) {
@@ -1088,7 +1094,7 @@
   }
 
   function renderInterview() {
-    var all = window.INTERVIEWS || [];
+    var all = interviewsInMonth();
     var followCnt = all.filter(function (r) { return r.followUp === "필요"; }).length;
     var worryCnt = all.filter(function (r) { return r.condition === "우려됨"; }).length;
 
@@ -1098,6 +1104,15 @@
       + '<h2>면담 &amp; 근무기록</h2>'
       + '<p class="sub">크루 면담과 근무 관련 기록을 시간순으로. <span class="muted">🔒 비공개 메모는 기록자 참고용입니다.</span></p></div>'
       + '<button class="btn btn--primary" id="addInterviewBtn">+ 기록 등록</button>'
+      + '</div>';
+
+    html += '<div class="month-nav">'
+      + '<div class="month-nav__nav">'
+        + '<button class="iconbtn" data-iv-nav="-1" aria-label="이전">&larr;</button>'
+        + '<span class="month-nav__label">' + monthLabel(ivAnchor) + '</span>'
+        + '<button class="iconbtn" data-iv-nav="1" aria-label="다음">&rarr;</button>'
+      + '</div>'
+      + '<span class="chip-mono month-nav__count">' + all.length + '건</span>'
       + '</div>';
 
     html += '<div class="stats stats--3">'
@@ -1297,17 +1312,23 @@
   function attKindOf(k) { for (var i = 0; i < ATT_KINDS.length; i++) if (ATT_KINDS[i].key === k) return ATT_KINDS[i]; return ATT_KINDS[0]; }
   var attKindFilter = "전체";
   var attQuery = "";
-  var attAnchor = TODAY; // 근태 기록 목록에서 보고 있는 기준 월
+  var attAnchor = TODAY;    // 근태 기록 목록에서 보고 있는 기준 월/년
+  var attMode = "month";    // "month" | "year"
 
-  function attMonthLabel(iso) { var p = (iso || attAnchor).split("-"); return +p[0] + "년 " + +p[1] + "월"; }
+  function monthLabel(iso) { var p = iso.split("-"); return +p[0] + "년 " + +p[1] + "월"; }
+  function attScopeLabel() { return attMode === "year" ? (+attAnchor.slice(0, 4)) + "년" : monthLabel(attAnchor); }
 
-  function attendanceInMonth() {
+  function attendanceInScope() {
+    if (attMode === "year") {
+      var y = attAnchor.slice(0, 4);
+      return (window.ATTENDANCE || []).filter(function (r) { return (r.date || "").slice(0, 4) === y; });
+    }
     var ym = attAnchor.slice(0, 7);
     return (window.ATTENDANCE || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
   }
 
   function filteredAttendance() {
-    var list = attendanceInMonth();
+    var list = attendanceInScope();
     list = list.filter(function (r) {
       if (attKindFilter !== "전체" && r.kind !== attKindFilter) return false;
       if (attQuery) {
@@ -1322,17 +1343,41 @@
     });
   }
 
-  /* ---------- 근태 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ---------- */
-  function attendanceBoardRow(r, showCrew) {
+  /* ---------- 근태 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ----------
+     crewCell : 6열(전체 목록) 표에서 첫 행에만 넘기는 <td rowspan> HTML.
+                생략하면(크루 상세 탭 · 그룹 내 이어지는 행) 크루 칸 없이 출력. */
+  function attendanceBoardRow(r, crewCell) {
     var kind = attKindOf(r.kind);
     return '<tr class="board__row" data-att-id="' + esc(r.id || "") + '">'
-      + (showCrew ? '<td class="board__crew"><b>' + esc(r.crewName || "—") + '</b></td>' : '')
+      + (crewCell || '')
       + '<td class="board__date mono">' + fmtDotDate(r.date) + '</td>'
       + '<td class="board__cond"><span class="board__conddot" style="background:' + kind.c + '"></span>' + esc(r.kind) + '</td>'
       + '<td class="board__type mono">' + esc(r.time || "—") + '</td>'
       + '<td class="board__content"><span class="board__ctext">' + esc(r.reason || "—") + '</span></td>'
       + '<td class="board__recorder muted">' + esc(r.recorder || "—") + '</td>'
       + '</tr>';
+  }
+
+  /* 같은 크루의 근태 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력 */
+  function groupedAttendanceRowsHTML(rows) {
+    var order = [];
+    var map = {};
+    rows.forEach(function (r) {
+      var key = r.crewId || r.crewName || "—";
+      if (!map[key]) { map[key] = { crewName: r.crewName, rows: [] }; order.push(key); }
+      map[key].rows.push(r);
+    });
+    return order.map(function (key) {
+      var g = map[key];
+      return g.rows.map(function (r, i) {
+        if (i !== 0) return attendanceBoardRow(r);
+        var crewCell = '<td class="board__crew"' + (g.rows.length > 1 ? ' rowspan="' + g.rows.length + '"' : '') + '>'
+          + '<b>' + esc(g.crewName || "—") + '</b>'
+          + (g.rows.length > 1 ? '<span class="board__crew__n">' + g.rows.length + '건</span>' : '')
+          + '</td>';
+        return attendanceBoardRow(r, crewCell);
+      }).join("");
+    }).join("");
   }
 
   /* ---------- 크루 상세 · 근태 기록 게시판 ---------- */
@@ -1355,7 +1400,7 @@
         + '</div>';
     }
 
-    var body = rows.map(function (r) { return attendanceBoardRow(r, false); }).join("");
+    var body = rows.map(function (r) { return attendanceBoardRow(r); }).join("");
 
     return '<div class="board">' + head
       + '<div class="board__scroll"><table class="board__table"><thead><tr>'
@@ -1365,7 +1410,7 @@
   }
 
   function renderAttendance() {
-    var all = attendanceInMonth();
+    var all = attendanceInScope();
 
     var html = "";
     html += '<div class="page-head">'
@@ -1375,10 +1420,17 @@
       + '<button class="btn btn--primary" id="addAttendanceBtn">+ 근태 기록</button>'
       + '</div>';
 
-    html += '<div class="at-nav">'
-      + '<button class="iconbtn" data-at-nav="-1" aria-label="이전 달">&larr;</button>'
-      + '<span class="cal-toolbar__range">' + attMonthLabel() + '</span>'
-      + '<button class="iconbtn" data-at-nav="1" aria-label="다음 달">&rarr;</button>'
+    html += '<div class="month-nav">'
+      + '<div class="month-nav__nav">'
+        + '<button class="iconbtn" data-at-nav="-1" aria-label="이전">&larr;</button>'
+        + '<span class="month-nav__label">' + attScopeLabel() + '</span>'
+        + '<button class="iconbtn" data-at-nav="1" aria-label="다음">&rarr;</button>'
+      + '</div>'
+      + '<span class="chip-mono month-nav__count">' + all.length + '건</span>'
+      + '<div class="seg month-nav__seg">'
+        + '<button class="btn btn--sm ' + (attMode === "month" ? "is-on" : "") + '" data-at-mode="month">월간</button>'
+        + '<button class="btn btn--sm ' + (attMode === "year" ? "is-on" : "") + '" data-at-mode="year">' + attAnchor.slice(0, 4) + '년</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="stats">'
@@ -1406,7 +1458,7 @@
       + '<div class="board__scroll"><table class="board__table board__table--iv board__table--at"><thead><tr>'
       + '<th>크루</th><th>날짜</th><th>구분</th><th>시간</th><th>사유</th><th>기록자</th>'
       + '</tr></thead><tbody id="atBody">'
-      + (rows.length ? rows.map(function (r) { return attendanceBoardRow(r, true); }).join("")
+      + (rows.length ? groupedAttendanceRowsHTML(rows)
           : '<tr><td colspan="6" class="board__empty">기록이 없습니다. <b style="color:var(--accent-text)">+ 근태 기록</b>으로 첫 기록을 남겨보세요.</td></tr>')
       + '</tbody></table></div>'
       + '</div>';
@@ -1541,13 +1593,13 @@
     var el = document.getElementById("attendanceKindModal");
     if (!el) { el = buildAttendanceKindModal(); document.body.appendChild(el); }
 
-    var rows = attendanceInMonth().filter(function (r) { return r.kind === kind; })
+    var rows = attendanceInScope().filter(function (r) { return r.kind === kind; })
       .sort(function (a, b) {
         if (a.date !== b.date) return a.date < b.date ? 1 : -1;
         return (a.time || "") < (b.time || "") ? 1 : -1;
       });
 
-    el.querySelector("#akModalTitle").textContent = kind + " · " + attMonthLabel();
+    el.querySelector("#akModalTitle").textContent = kind + " · " + attScopeLabel();
     el.querySelector("#akModalCount").textContent = rows.length + "건";
     el.querySelector("#akModalBody").innerHTML = rows.length
       ? rows.map(function (r) {
@@ -1575,7 +1627,7 @@
       '<div class="modal__backdrop" data-close></div>'
       + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="근태 구분별 인원">'
       + '<div class="modal__head"><h3><span id="akModalTitle"></span> <span class="chip-mono" id="akModalCount"></span></h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
-      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<div class="board__scroll"><table class="board__table board__table--ak"><thead><tr>'
       + '<th>크루</th><th>날짜</th><th>시간</th><th>사유</th>'
       + '</tr></thead><tbody id="akModalBody"></tbody></table></div>'
       + '</div>';
@@ -1619,6 +1671,8 @@
   }
 
   function pct(n, total) { return total > 0 ? (Math.round((n / total) * 1000) / 10) : 0; }
+
+  function dashAsOfLabel() { var p = TODAY.split("-"); return "'" + p[0].slice(2) + "년 " + (+p[1]) + "월 기준"; }
 
   function renderDashboard() {
     var crew = (window.CREW || []).filter(function (c) { return c.status !== "퇴사"; });
@@ -1672,7 +1726,8 @@
       // 도넛 카드
       + '<section class="dash-card dash-card--donut">'
         + '<div class="summary__head"><h3>장애 · 비장애 현황</h3>'
-          + '<span class="chip-mono">' + crew.length + '명</span></div>'
+          + '<span class="chip-mono">' + crew.length + '명</span>'
+          + '<span class="summary__asof mono">' + dashAsOfLabel() + '</span></div>'
         + '<div class="donut-wrap">'
           + donutSVG(donutSegs, crew.length)
           + '<ul class="dleg">' + legend + '</ul>'
@@ -1728,11 +1783,21 @@
       var atKindBtn = ev.target.closest("#atKindFilter button[data-k]");
       if (atKindBtn) { attKindFilter = atKindBtn.getAttribute("data-k"); renderAttendance(); return; }
 
-      var atNavBtn = ev.target.closest(".at-nav .iconbtn[data-at-nav]");
-      if (atNavBtn) { attAnchor = addMonths(attAnchor, +atNavBtn.getAttribute("data-at-nav")); renderAttendance(); return; }
+      var atNavBtn = ev.target.closest(".month-nav .iconbtn[data-at-nav]");
+      if (atNavBtn) {
+        var atDir = +atNavBtn.getAttribute("data-at-nav");
+        attAnchor = addMonths(attAnchor, attMode === "year" ? atDir * 12 : atDir);
+        renderAttendance(); return;
+      }
+
+      var atModeBtn = ev.target.closest(".month-nav [data-at-mode]");
+      if (atModeBtn) { attMode = atModeBtn.getAttribute("data-at-mode"); renderAttendance(); return; }
 
       var atStatBtn = ev.target.closest(".stat--clickable[data-kind]");
       if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }
+
+      var ivNavBtn = ev.target.closest(".month-nav .iconbtn[data-iv-nav]");
+      if (ivNavBtn) { ivAnchor = addMonths(ivAnchor, +ivNavBtn.getAttribute("data-iv-nav")); renderInterview(); return; }
 
       var mchip = ev.target.closest(".mchip[data-id]");
       if (mchip) { var mev = findById(window.SCHEDULE, mchip.getAttribute("data-id")); if (mev) openEventModal(mev); return; }
@@ -1859,7 +1924,7 @@
         var atBody = document.getElementById("atBody");
         if (atBody) {
           var atRows = filteredAttendance();
-          atBody.innerHTML = atRows.length ? atRows.map(function (r) { return attendanceBoardRow(r, true); }).join("")
+          atBody.innerHTML = atRows.length ? groupedAttendanceRowsHTML(atRows)
             : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
         }
       }

@@ -323,7 +323,7 @@
     wrap.id = "eventModal";
     wrap.hidden = true;
     wrap.innerHTML =
-      '<div class="modal__backdrop" data-close></div>'
+      '<div class="modal__backdrop"></div>'
       + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="일정 등록">'
       + '<div class="modal__head"><h3 id="eventModalTitle">일정 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="eventForm">'
@@ -350,9 +350,7 @@
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closeEventModal();
     });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !wrap.hidden) closeEventModal();
-    });
+    // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var f = ev.target;
@@ -539,7 +537,7 @@
     wrap.id = "issueModal";
     wrap.hidden = true;
     wrap.innerHTML =
-      '<div class="modal__backdrop" data-close></div>'
+      '<div class="modal__backdrop"></div>'
       + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="이슈 등록">'
       + '<div class="modal__head"><h3 id="issueModalTitle">이슈 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="issueForm">'
@@ -557,9 +555,7 @@
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closeIssueModal();
     });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !wrap.hidden) closeIssueModal();
-    });
+    // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var f = ev.target;
@@ -610,7 +606,7 @@
     wrap.id = "pointModal";
     wrap.hidden = true;
     wrap.innerHTML =
-      '<div class="modal__backdrop" data-close></div>'
+      '<div class="modal__backdrop"></div>'
       + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="Focus Point 등록">'
       + '<div class="modal__head"><h3 id="pointModalTitle">Focus Point 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="pointForm">'
@@ -627,9 +623,7 @@
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closePointModal();
     });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !wrap.hidden) closePointModal();
-    });
+    // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var f = ev.target;
@@ -661,6 +655,7 @@
      ====================================================== */
   var crewDisFilter = "전체";
   var crewGroupFilter = "전체";
+  var crewStatusFilter = "전체";
   var crewQuery = "";
   var crewDetailId = null;
   var crewDetailTab = "basic";
@@ -692,11 +687,23 @@
     });
   }
 
+  var STATUS_LABEL = { "재직": "재직 인원", "휴직": "휴직 인원", "퇴사": "퇴사 인원" };
+
+  function crewSection(status, rows) {
+    if (!rows.length) return "";
+    return '<tr class="crew-section crew-section--' + (STATUS[status] ? STATUS[status].key : "") + '">'
+      + '<td colspan="7">' + esc(STATUS_LABEL[status] || status)
+      + ' <span class="crew-section__n">' + rows.length + '명</span></td></tr>'
+      + rows.map(crewRow).join("");
+  }
+
   function tbodyHTML() {
-    var rows = filteredCrew();
-    return rows.length
-      ? rows.map(crewRow).join("")
-      : '<tr><td colspan="7" class="muted" style="text-align:center;padding:36px">검색 결과가 없습니다</td></tr>';
+    var base = filteredCrew(); // 장애여부·그룹·검색 필터 적용 (상태는 아래서 그룹핑)
+    var order = crewStatusFilter === "전체" ? ["재직", "휴직", "퇴사"] : [crewStatusFilter];
+    var out = order.map(function (s) {
+      return crewSection(s, base.filter(function (c) { return c.status === s; }));
+    }).join("");
+    return out || '<tr><td colspan="7" class="muted" style="text-align:center;padding:36px">검색 결과가 없습니다</td></tr>';
   }
 
   function renderCrew() {
@@ -710,6 +717,9 @@
     var active = crew.filter(function (c) { return c.status === "재직"; }).length;
     var leave = crew.filter(function (c) { return c.status === "휴직"; }).length;
     var out = crew.filter(function (c) { return c.status === "퇴사"; }).length;
+    var roster = active + leave;                 // 해당 월 재직 총원 (재직 + 휴직, 퇴사 제외)
+    var mo = d(TODAY).getMonth() + 1;            // 기준 월
+    var yr = d(TODAY).getFullYear();             // 기준 연도
 
     var html = "";
     html += '<div class="page-head">'
@@ -720,16 +730,21 @@
       + '</div>';
 
     html += '<div class="stats">'
-      + statCard("acid", crew.length, "명", "Total")
-      + statCard("green", active, "명", "Active")
-      + statCard("", leave, "명", "On leave")
-      + statCard("", out, "명", "Left")
+      + statCard("acid", roster, "명", "Total", mo + "월 기준 총 인원")
+      + statCard("green", active, "명", "Active", "휴직 제외")
+      + statCard("", leave, "명", "On leave", "현재 휴직")
+      + statCard(out ? "warn" : "", out, "명", "Left", yr + "년 퇴사")
       + '</div>';
 
     html += '<div class="toolbar-row">'
-      + '<div class="filter" id="crewDisFilter">'
+      + '<div class="filter" id="crewStatusFilter">'
+      + ["전체", "재직", "휴직", "퇴사"].map(function (s) {
+          return '<button class="btn btn--sm btn--pill ' + (s === crewStatusFilter ? "is-on" : "") + '" data-s="' + s + '">' + s + '</button>';
+        }).join("")
+      + '</div>'
+      + '<div class="filter filter--xs" id="crewDisFilter">'
       + ["전체", "비장애", "장애"].map(function (f) {
-          return '<button class="btn btn--sm btn--pill ' + (f === crewDisFilter ? "is-on" : "") + '" data-f="' + f + '">' + f + '</button>';
+          return '<button class="btn btn--xs btn--pill ' + (f === crewDisFilter ? "is-on" : "") + '" data-f="' + f + '">' + f + '</button>';
         }).join("")
       + '</div>'
       + '<div class="filter filter--xs" id="crewGroupFilter">'
@@ -747,9 +762,11 @@
     view.innerHTML = html;
   }
 
-  function statCard(mod, num, unit, label) {
+  function statCard(mod, num, unit, label, sub) {
     return '<div class="stat' + (mod ? " stat--" + mod : "") + '"><div class="stat__num">' + num + '<small>' + unit + '</small></div>'
-      + '<div class="stat__label">' + label + '</div></div>';
+      + '<div class="stat__label">' + label + '</div>'
+      + (sub ? '<div class="stat__sub">' + esc(sub) + '</div>' : '')
+      + '</div>';
   }
 
   function disabilityBadge(c) {
@@ -761,7 +778,7 @@
   function crewRow(c) {
     var g = groupOf(c.group);
     var st = STATUS[c.status] || STATUS["재직"];
-    return '<tr data-id="' + esc(c.id || "") + '">'
+    return '<tr data-id="' + esc(c.id || "") + '"' + (c.status === "퇴사" ? ' class="is-left"' : "") + '>'
       + '<td><div class="crew-name">'
         + '<span><b>' + esc(c.name) + '</b>'
           + '<span class="t"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(c.group || "미지정") + '</span>'
@@ -878,7 +895,7 @@
     wrap.id = "crewModal";
     wrap.hidden = true;
     wrap.innerHTML =
-      '<div class="modal__backdrop" data-close></div>'
+      '<div class="modal__backdrop"></div>'
       + '<div class="modal__card modal__card--crew" role="dialog" aria-modal="true" aria-label="크루 등록">'
       + '<div class="modal__head"><h3 id="crewModalTitle">신규 크루 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="crewForm">'
@@ -921,9 +938,7 @@
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closeCrewModal();
     });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !wrap.hidden) closeCrewModal();
-    });
+    // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var f = ev.target;
@@ -1131,7 +1146,7 @@
     wrap.id = "interviewModal";
     wrap.hidden = true;
     wrap.innerHTML =
-      '<div class="modal__backdrop" data-close></div>'
+      '<div class="modal__backdrop"></div>'
       + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="면담 기록 등록">'
       + '<div class="modal__head"><h3 id="interviewModalTitle">면담 · 근무 기록 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="interviewForm">'
@@ -1149,7 +1164,7 @@
         + '<div class="fld"><span>크루 컨디션</span>'
           + '<input type="hidden" name="condition" value="보통">'
           + '<div class="ivseg">' + CONDITIONS.map(function (c) {
-              return '<button type="button" class="ivseg__btn" data-cond="' + c.key + '" style="--c:' + c.c + '">' + c.emoji + ' ' + c.key + '</button>';
+              return '<button type="button" class="ivseg__btn" data-cond="' + c.key + '" style="--c:' + c.c + '">' + c.key + '</button>';
             }).join("") + '</div>'
         + '</div>'
         + '<div class="fld"><span>기록자</span><div class="iv-recorder" id="ivRecorder">' + esc(CURRENT_USER) + '</div></div>'
@@ -1177,9 +1192,7 @@
         return;
       }
     });
-    document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape" && !wrap.hidden) closeInterviewModal();
-    });
+    // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector('input[name="followUp"]').addEventListener("change", function (ev) {
       wrap.querySelector("#ivFollowWrap").hidden = !ev.target.checked;
     });
@@ -1447,6 +1460,9 @@
         }
         return;
       }
+
+      var statusFilterBtn = ev.target.closest("#crewStatusFilter button[data-s]");
+      if (statusFilterBtn) { crewStatusFilter = statusFilterBtn.getAttribute("data-s"); renderCrew(); return; }
 
       var disFilterBtn = ev.target.closest("#crewDisFilter button[data-f]");
       if (disFilterBtn) { crewDisFilter = disFilterBtn.getAttribute("data-f"); renderCrew(); return; }

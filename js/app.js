@@ -1053,7 +1053,7 @@
     var crew = findById(window.CREW || [], r.crewId);
     var g = groupOf(crew ? crew.group : "");
     var cond = condOf(r.condition);
-    var initial = (r.crewName || "?").slice(0, 1);
+    var groupName = (crew && crew.group) || "";
 
     var foot = "";
     if (r.followUp === "필요") {
@@ -1065,15 +1065,15 @@
     return '<article class="ivcard" data-id="' + esc(r.id || "") + '" style="--c:' + cond.c + '">'
       + '<div class="ivcard__top">'
         + '<div class="ivcard__who">'
-          + '<span class="ivcard__avatar" style="background:' + g.bg + ';color:' + g.fg + '">' + esc(initial) + '</span>'
+          + '<span class="ivcard__dot" style="background:' + g.bg + '" title="' + esc(groupName || "미지정") + '"></span>'
           + '<div class="ivcard__id">'
             + '<b class="ivcard__name">' + esc(r.crewName || "—") + '</b>'
-            + '<span class="ivcard__meta mono">' + fmtDotDate(r.date) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.recorder || "—") + '</span>'
+            + '<span class="ivcard__meta mono">' + (groupName ? esc(groupName) + ' · ' : '') + fmtDotDate(r.date) + (r.time ? ' · ' + esc(r.time) : '') + ' · ' + esc(r.recorder || "—") + '</span>'
           + '</div>'
         + '</div>'
         + '<div class="ivcard__tags">'
           + '<span class="iv-type">' + esc(r.type) + '</span>'
-          + '<span class="badge badge--cond" style="--c:' + cond.c + '">' + cond.emoji + ' ' + esc(r.condition) + '</span>'
+          + '<span class="badge badge--cond" style="--c:' + cond.c + '">' + esc(r.condition) + '</span>'
         + '</div>'
       + '</div>'
       + '<p class="ivcard__content">' + esc(r.content || "—") + '</p>'

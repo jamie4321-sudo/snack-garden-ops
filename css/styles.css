@@ -5,6 +5,15 @@
    Buttons inspired by "100 card UI kit" (mono label · 12px · 1px border)
    ========================================================= */
 
+/* ---------------- 고딕체 : Wanted Sans (자체 호스팅) ---------------- */
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-Medium.ttf") format("truetype"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-SemiBold.ttf") format("truetype"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-ExtraBold.ttf") format("truetype"); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-Black.ttf") format("truetype"); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Wanted Sans"; src: url("../fonts/wanted-sans/WantedSans-ExtraBlack.ttf") format("truetype"); font-weight: 950; font-style: normal; font-display: swap; }
+
 :root {
   /* surfaces */
   --bg:        #0a0a0b;
@@ -78,7 +87,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: "Pretendard", system-ui, sans-serif;
+  font-family: "Wanted Sans", "Pretendard", system-ui, sans-serif;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;

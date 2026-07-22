@@ -412,9 +412,7 @@
     var cls = "day" + (isToday ? " is-today" : "") + (isSun ? " is-sun" : "") + (isHoliday ? " is-holiday" : "");
 
     var body;
-    if (isHoliday) {
-      body = '<div class="holiday-mark">' + esc(events[0].title) + '</div>';
-    } else if (!events.length) {
+    if (!events.length) {
       body = '<div class="evt__add" data-date="' + iso + '">일정 입력…</div>';
     } else {
       body = events.map(evtRow).join("") + '<div class="evt__add" data-date="' + iso + '">+ 추가</div>';

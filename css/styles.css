@@ -378,6 +378,8 @@ button { font-family: inherit; }
 .badge--active { --c: var(--green); }
 .badge--leave  { --c: var(--amber); }
 .badge--out    { --c: var(--slate); }
+.badge--dis    { --c: var(--amber); }
+.badge--nodis  { --c: var(--slate); }
 
 .tagset { display: flex; flex-wrap: wrap; gap: 5px; }
 .tag { background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-2); font-size: 11px; padding: 2px 8px; border-radius: 6px; }
@@ -389,6 +391,54 @@ button { font-family: inherit; }
 .placeholder .eyebrow { margin-bottom: 4px; }
 .placeholder h2 { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -1.5px; }
 .placeholder p { color: var(--ink-3); margin: 0; }
+.placeholder--sm { min-height: 160px; justify-items: center; text-align: center; }
+
+/* =========================================================
+   CREW DETAIL
+   ========================================================= */
+.crew-detail__banner {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  padding: 22px 24px; margin: 16px 0 20px; background: var(--card-bg);
+}
+.crew-detail__avatar {
+  width: 60px; height: 60px; border-radius: var(--r); flex: none;
+  display: grid; place-items: center; font-size: 24px; font-weight: 800;
+}
+.crew-detail__info { flex: 1; min-width: 180px; }
+.crew-detail__info h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.5px; }
+.crew-detail__info p { margin: 4px 0 0; }
+.crew-detail__tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip-tag {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-2);
+  border: 1px solid var(--line); background: var(--panel-2);
+  padding: 5px 10px; border-radius: 999px;
+}
+.crew-detail__actions { display: flex; gap: 8px; flex: none; }
+
+.crew-tabs {
+  display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 20px; padding-bottom: 1px;
+}
+.crew-tab {
+  font-family: var(--mono); font-size: 12px; font-weight: 500; white-space: nowrap;
+  color: var(--ink-3); background: none; border: none; border-bottom: 2px solid transparent;
+  padding: 10px 14px; cursor: pointer; transition: color .14s, border-color .14s;
+}
+.crew-tab:hover { color: var(--ink-2); }
+.crew-tab.is-on { color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+
+.detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-lg);
+  padding: 24px; background: var(--card-bg);
+}
+.detail-fld { display: flex; flex-direction: column; gap: 6px; }
+.detail-fld__label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); }
+.detail-fld__value {
+  font-size: 13.5px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm); padding: 10px 12px;
+}
 
 /* =========================================================
    MODAL (일정 등록)
@@ -443,6 +493,7 @@ button { font-family: inherit; }
   .summary { grid-template-columns: 1fr; }
   .week { grid-template-columns: repeat(2, 1fr); }
   .stats { grid-template-columns: repeat(2, 1fr); }
+  .detail-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .layout { grid-template-columns: 1fr; }

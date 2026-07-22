@@ -90,7 +90,24 @@
       id: r.id || "", name: r.name || "", role: r.role || "", team: r.team || "", group: r.group || "미지정",
       status: r.status || "재직", joinDate: fmtDay(r.joinDate), phone: r.phone || "",
       site: r.site || "", duties: toArr(r.duties), note: r.note || "",
+      contractType: r.contractType || "", birthDate: fmtDay(r.birthDate),
+      disability: r.disability || "비장애", disabilityType: r.disabilityType || "",
+      emergencyContact: r.emergencyContact || "", badgeNumber: r.badgeNumber || "",
+      workHours: r.workHours || "",
     };
+  }
+
+  /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
+  function tenureOf(iso) {
+    if (!iso) return "—";
+    var start = d(iso), now = d(TODAY);
+    var months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+    if (now.getDate() < start.getDate()) months--;
+    if (months < 0) months = 0;
+    var y = Math.floor(months / 12), m = months % 12;
+    if (y && m) return y + "년 " + m + "개월";
+    if (y) return y + "년";
+    return m + "개월";
   }
 
   /** 구글시트에서 크루·일정 로드 (실패 시 데모 데이터 유지)
@@ -445,8 +462,23 @@
      ====================================================== */
   var crewFilter = "전체";
   var crewQuery = "";
+  var crewDetailId = null;
+  var crewDetailTab = "basic";
   var CREW_GROUPS = ["스낵", "가든", "총무지원"];
   var CREW_STATUSES = ["재직", "휴직", "퇴사"];
+  var CREW_CONTRACTS = ["정규", "계약", "단기계약"];
+  var CREW_DISABILITY = ["비장애", "장애"];
+  var CREW_TABS = [
+    { key: "basic", label: "기본정보" },
+    { key: "interview", label: "면담기록" },
+    { key: "growth", label: "성장평가" },
+    { key: "issue", label: "이슈기록" },
+    { key: "attendance", label: "근태요약" },
+    { key: "edu", label: "교육OJT" },
+    { key: "change", label: "인사변동" },
+    { key: "ai", label: "AI 지원가이드" },
+    { key: "sensitive", label: "민감정보", locked: true },
+  ];
 
   function filteredCrew() {
     return window.CREW.filter(function (c) {
@@ -467,6 +499,12 @@
   }
 
   function renderCrew() {
+    if (crewDetailId) {
+      var detailC = findById(window.CREW, crewDetailId);
+      if (detailC) { renderCrewDetail(detailC); return; }
+      crewDetailId = null;
+    }
+
     var crew = window.CREW;
     var active = crew.filter(function (c) { return c.status === "재직"; }).length;
     var leave = crew.filter(function (c) { return c.status === "휴직"; }).length;
@@ -476,7 +514,7 @@
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Crew / Roster</p>'
       + '<h2>크루 목록</h2>'
-      + '<p class="sub">팀 크루의 현황과 담당 업무를 한눈에. <span class="muted">행을 클릭하면 수정할 수 있어요.</span></p></div>'
+      + '<p class="sub">팀 크루의 현황과 담당 업무를 한눈에. <span class="muted">행을 클릭하면 상세 정보를 볼 수 있어요.</span></p></div>'
       + '<button class="btn btn--primary" id="addCrewBtn">+ 크루 등록</button>'
       + '</div>';
 
@@ -497,7 +535,7 @@
       + '</div>';
 
     html += '<div class="table-wrap"><table class="crew-table"><thead><tr>'
-      + '<th>크루</th><th>직책</th><th>상태</th><th>입사일</th><th>근무지</th><th>담당 업무</th><th>비고</th>'
+      + '<th>크루</th><th>상태</th><th>입사일</th><th>근무지</th><th>장애유형</th><th>담당 업무</th><th>비고</th>'
       + '</tr></thead><tbody id="crewBody">' + tbodyHTML() + '</tbody></table></div>';
 
     view.innerHTML = html;
@@ -506,6 +544,12 @@
   function statCard(mod, num, unit, label) {
     return '<div class="stat' + (mod ? " stat--" + mod : "") + '"><div class="stat__num">' + num + '<small>' + unit + '</small></div>'
       + '<div class="stat__label">' + label + '</div></div>';
+  }
+
+  function disabilityBadge(c) {
+    var isDisabled = c.disability === "장애";
+    var label = isDisabled ? (c.disabilityType || "장애") : "비장애";
+    return '<span class="badge ' + (isDisabled ? "badge--dis" : "badge--nodis") + '">' + esc(label) + '</span>';
   }
 
   function crewRow(c) {
@@ -517,13 +561,74 @@
           + '<span class="t"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(c.group || "미지정") + '</span>'
         + '</span>'
       + '</div></td>'
-      + '<td>' + esc(c.role) + '</td>'
       + '<td><span class="badge badge--' + st.key + '">' + st.icon + esc(c.status) + '</span></td>'
       + '<td class="mono-cell">' + esc(c.joinDate) + '</td>'
       + '<td>' + esc(c.site) + '</td>'
+      + '<td>' + disabilityBadge(c) + '</td>'
       + '<td><div class="tagset">' + (c.duties.length ? c.duties.map(function (t) { return '<span class="tag">' + esc(t) + '</span>'; }).join("") : '<span class="muted">—</span>') + '</div></td>'
       + '<td class="muted">' + esc(c.note || "—") + '</td>'
       + '</tr>';
+  }
+
+  /* ---------- 크루 상세 페이지 ---------- */
+  function renderCrewDetail(c) {
+    var g = groupOf(c.group);
+    var initial = (c.name || "?").slice(0, 1);
+
+    var html = '<div class="crew-detail">';
+    html += '<button class="btn btn--sm" id="crewBackBtn">&larr; 목록으로</button>';
+
+    html += '<div class="crew-detail__banner">'
+      + '<div class="crew-detail__avatar" style="background:' + g.bg + ';color:' + g.fg + '">' + esc(initial) + '</div>'
+      + '<div class="crew-detail__info">'
+        + '<h2>' + esc(c.name) + '</h2>'
+        + '<p class="muted">' + esc(c.team || c.group || "—") + '</p>'
+        + '<div class="crew-detail__tags">'
+          + '<span class="chip-tag">📅 ' + esc(c.joinDate || "—") + '</span>'
+          + (c.workHours ? '<span class="chip-tag">⏱ ' + esc(c.workHours) + '</span>' : "")
+          + '<span class="chip-tag">🎖 ' + tenureOf(c.joinDate) + '</span>'
+        + '</div>'
+      + '</div>'
+      + '<div class="crew-detail__actions">'
+        + '<button class="btn" id="crewDetailEditBtn">✏️ 수정</button>'
+        + '<button class="btn btn--danger" id="crewDetailDelBtn">🗑 삭제</button>'
+      + '</div>'
+    + '</div>';
+
+    html += '<div class="crew-tabs">' + CREW_TABS.map(function (t) {
+      return '<button class="crew-tab' + (t.key === crewDetailTab ? " is-on" : "") + '" data-tab="' + t.key + '">'
+        + esc(t.label) + (t.locked ? " 🔒" : "") + '</button>';
+    }).join("") + '</div>';
+
+    html += '<div class="crew-tab-panel">' + crewTabPanel(c, crewDetailTab) + '</div>';
+    html += '</div>';
+
+    view.innerHTML = html;
+  }
+
+  function crewTabPanel(c, tab) {
+    if (tab !== "basic") {
+      return '<div class="placeholder placeholder--sm"><p class="muted">이 탭은 준비 중입니다.</p></div>';
+    }
+    return '<div class="detail-grid">'
+      + detailField("이름", c.name)
+      + detailField("소속팀", c.team || c.group)
+      + detailField("계약현황", c.contractType)
+      + detailField("업무시간", c.workHours)
+      + detailField("입사일", c.joinDate)
+      + detailField("근속", tenureOf(c.joinDate))
+      + detailField("생년월일", c.birthDate)
+      + detailField("연락처", c.phone)
+      + detailField("장애여부", c.disability)
+      + detailField("장애유형", c.disabilityType)
+      + detailField("비상연락처", c.emergencyContact)
+      + detailField("출입증번호", c.badgeNumber)
+      + detailField("상태", c.status)
+      + '</div>';
+  }
+  function detailField(label, value) {
+    return '<div class="detail-fld"><span class="detail-fld__label">' + esc(label) + '</span>'
+      + '<span class="detail-fld__value">' + esc(value || "—") + '</span></div>';
   }
 
   /* ---------- 크루 등록/수정 모달 ---------- */
@@ -541,9 +646,16 @@
     form.team.value = (prefill && prefill.team) || "";
     form.group.value = (prefill && prefill.group) || "스낵";
     form.status.value = (prefill && prefill.status) || "재직";
+    form.contractType.value = (prefill && prefill.contractType) || "정규";
+    form.workHours.value = (prefill && prefill.workHours) || "";
     form.joinDate.value = (prefill && prefill.joinDate) || "";
     form.phone.value = (prefill && prefill.phone) || "";
+    form.birthDate.value = (prefill && prefill.birthDate) || "";
+    form.emergencyContact.value = (prefill && prefill.emergencyContact) || "";
+    form.disability.value = (prefill && prefill.disability) || "비장애";
+    form.disabilityType.value = (prefill && prefill.disabilityType) || "";
     form.site.value = (prefill && prefill.site) || "";
+    form.badgeNumber.value = (prefill && prefill.badgeNumber) || "";
     form.duties.value = (prefill && prefill.duties && prefill.duties.join(", ")) || "";
     form.note.value = (prefill && prefill.note) || "";
     el.hidden = false;
@@ -574,10 +686,25 @@
         + '<label class="fld"><span>상태</span><select name="status">' + CREW_STATUSES.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("") + '</select></label>'
       + '</div>'
       + '<div class="fld-row">'
+        + '<label class="fld"><span>계약현황</span><select name="contractType">' + CREW_CONTRACTS.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("") + '</select></label>'
+        + '<label class="fld"><span>업무시간 <em>(선택)</em></span><input type="text" name="workHours" placeholder="09:00-18:00(8h)"></label>'
+      + '</div>'
+      + '<div class="fld-row">'
         + '<label class="fld"><span>입사일</span><input type="date" name="joinDate"></label>'
         + '<label class="fld"><span>연락처</span><input type="text" name="phone" placeholder="010-0000-0000"></label>'
       + '</div>'
-      + '<label class="fld"><span>근무지</span><input type="text" name="site" maxlength="30" placeholder="판교 오아시스"></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>생년월일 <em>(선택)</em></span><input type="date" name="birthDate"></label>'
+        + '<label class="fld"><span>비상연락처 <em>(선택)</em></span><input type="text" name="emergencyContact" placeholder="010-0000-0000"></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>장애여부</span><select name="disability">' + CREW_DISABILITY.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("") + '</select></label>'
+        + '<label class="fld"><span>장애유형 <em>(선택)</em></span><input type="text" name="disabilityType" placeholder="발달장애 등"></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>근무지</span><input type="text" name="site" maxlength="30" placeholder="판교 오아시스"></label>'
+        + '<label class="fld"><span>출입증번호 <em>(선택)</em></span><input type="text" name="badgeNumber" placeholder="O0000"></label>'
+      + '</div>'
       + '<label class="fld"><span>담당 업무 <em>(쉼표로 구분)</em></span><input type="text" name="duties" placeholder="발주, 온보딩"></label>'
       + '<label class="fld"><span>비고 <em>(선택)</em></span><input type="text" name="note" maxlength="60" placeholder="메모"></label>'
       + '<div class="modal__foot">'
@@ -607,17 +734,14 @@
         group: f.group.value, status: f.status.value, joinDate: f.joinDate.value,
         phone: f.phone.value.trim(), site: f.site.value.trim(),
         duties: toArr(f.duties.value), note: f.note.value.trim(),
+        contractType: f.contractType.value, workHours: f.workHours.value.trim(),
+        birthDate: f.birthDate.value, emergencyContact: f.emergencyContact.value.trim(),
+        disability: f.disability.value, disabilityType: f.disabilityType.value.trim(),
+        badgeNumber: f.badgeNumber.value.trim(),
       };
-      if (id) {
-        var idx = indexById(window.CREW, id);
-        if (idx > -1) window.CREW[idx] = c; else window.CREW.push(c);
-        saveToSheet({ type: "crew", action: "update", id: c.id, name: c.name, role: c.role, team: c.team,
-                      group: c.group, status: c.status, joinDate: c.joinDate, phone: c.phone, site: c.site, duties: c.duties, note: c.note });
-      } else {
-        window.CREW.push(c);
-        saveToSheet({ type: "crew", action: "add", id: c.id, name: c.name, role: c.role, team: c.team,
-                      group: c.group, status: c.status, joinDate: c.joinDate, phone: c.phone, site: c.site, duties: c.duties, note: c.note });
-      }
+      var idx = id ? indexById(window.CREW, id) : -1;
+      if (idx > -1) window.CREW[idx] = c; else window.CREW.push(c);
+      saveToSheet(Object.assign({ type: "crew", action: id ? "update" : "add" }, c));
       closeCrewModal();
       renderCrew();
     });
@@ -708,7 +832,28 @@
       }
 
       var crewRowEl = ev.target.closest(".crew-table tbody tr[data-id]");
-      if (crewRowEl) { var cc = findById(window.CREW, crewRowEl.getAttribute("data-id")); if (cc) openCrewModal(cc); return; }
+      if (crewRowEl) { crewDetailId = crewRowEl.getAttribute("data-id"); crewDetailTab = "basic"; renderCrew(); return; }
+
+      var crewBackBtn = ev.target.closest("#crewBackBtn");
+      if (crewBackBtn) { crewDetailId = null; renderCrew(); return; }
+
+      var crewTabBtn = ev.target.closest(".crew-tab[data-tab]");
+      if (crewTabBtn) { crewDetailTab = crewTabBtn.getAttribute("data-tab"); renderCrew(); return; }
+
+      var crewDetailEditBtn = ev.target.closest("#crewDetailEditBtn");
+      if (crewDetailEditBtn) { var cd = findById(window.CREW, crewDetailId); if (cd) openCrewModal(cd); return; }
+
+      var crewDetailDelBtn = ev.target.closest("#crewDetailDelBtn");
+      if (crewDetailDelBtn) {
+        if (confirm("이 크루 정보를 삭제할까요?")) {
+          var delId = crewDetailId;
+          window.CREW = window.CREW.filter(function (c) { return String(c.id) !== String(delId); });
+          saveToSheet({ type: "crew", action: "delete", id: delId });
+          crewDetailId = null;
+          renderCrew();
+        }
+        return;
+      }
 
       var filterBtn = ev.target.closest("#crewFilter button[data-f]");
       if (filterBtn) { crewFilter = filterBtn.getAttribute("data-f"); renderCrew(); return; }

@@ -6,17 +6,18 @@
    ========================================================= */
 
 /* --- 크루 목록 : 시트 "crew" (헤더 = 아래 key) ---
-   group : 업무 그룹 = 스낵 | 가든 | 총무지원 (아바타 색 구분) */
+   group : 업무 그룹 = 스낵 | 가든 | 총무지원 (아바타 색 구분)
+   disability : 장애여부 = 장애 | 비장애 */
 window.CREW = [
-  { id:"c1", name:"김하이든", role:"파트리더",  team:"헤이든",   group:"총무지원", status:"재직", joinDate:"2023-03-02", phone:"010-1234-5678", site:"판교 오아시스",  duties:["운영총괄","발주"],        note:"법인카드 상신 담당" },
-  { id:"c2", name:"이레오",   role:"시니어 크루", team:"레오",     group:"총무지원", status:"재직", joinDate:"2023-08-14", phone:"010-2345-6789", site:"판교 오아시스",  duties:["온보딩","일정"],          note:"31일 온보딩 진행" },
-  { id:"c3", name:"박엘리",   role:"매니저",     team:"엘리",     group:"총무지원", status:"재직", joinDate:"2022-11-01", phone:"010-3456-7890", site:"카렌 현장",     duties:["교육","경조지원"],        note:"퇴사 크루·경조 대응" },
-  { id:"c4", name:"최스칼렛", role:"크루",       team:"스칼렛",   group:"스낵",     status:"재직", joinDate:"2024-01-09", phone:"010-4567-8901", site:"판교 오아시스",  duties:["KEP검토","제안서"],       note:"Pay 제안서 1차" },
-  { id:"c5", name:"정배라",   role:"신입 크루",  team:"배라",     group:"스낵",     status:"재직", joinDate:"2026-07-20", phone:"010-5678-9012", site:"판교 오아시스",  duties:["성수 OJT"],              note:"OJT 진행 중" },
-  { id:"c6", name:"한카렌",   role:"현장 리드",  team:"카렌",     group:"가든",     status:"재직", joinDate:"2023-05-22", phone:"010-6789-0123", site:"카렌 현장",     duties:["백오피스","점검"],        note:"현장 백오피스 점검" },
-  { id:"c7", name:"오미라",   role:"크루",       team:"미라",     group:"스낵",     status:"휴직", joinDate:"2024-06-03", phone:"010-7890-1234", site:"판교 오아시스",  duties:["리더 주간보고"],          note:"육아휴직 (~2026.09)" },
-  { id:"c8", name:"신엔조",   role:"크루",       team:"엔조",     group:"가든",     status:"재직", joinDate:"2025-02-17", phone:"010-8901-2345", site:"판교 오아시스",  duties:["반차/근태"],             note:"7/24 오후 반차" },
-  { id:"c9", name:"강아라",   role:"크루",       team:"아라",     group:"스낵",     status:"퇴사", joinDate:"2022-04-11", phone:"010-9012-3456", site:"판교 오아시스",  duties:[],                        note:"2026.06 퇴사" },
+  { id:"c1", name:"김하이든", role:"파트리더",  team:"헤이든",   group:"총무지원", status:"재직", joinDate:"2023-03-02", phone:"010-1234-5678", site:"판교 오아시스",  duties:["운영총괄","발주"],        note:"법인카드 상신 담당", contractType:"정규", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"O0052", workHours:"08:00-17:00(8h)" },
+  { id:"c2", name:"이레오",   role:"시니어 크루", team:"레오",     group:"총무지원", status:"재직", joinDate:"2023-08-14", phone:"010-2345-6789", site:"판교 오아시스",  duties:["온보딩","일정"],          note:"31일 온보딩 진행", contractType:"정규", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"O0271", workHours:"08:00-17:00(8h)" },
+  { id:"c3", name:"박엘리",   role:"매니저",     team:"엘리",     group:"총무지원", status:"재직", joinDate:"2022-11-01", phone:"010-3456-7890", site:"카렌 현장",     duties:["교육","경조지원"],        note:"퇴사 크루·경조 대응", contractType:"정규", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"O0371", workHours:"07:00-16:00(8h)" },
+  { id:"c4", name:"최스칼렛", role:"크루",       team:"스칼렛",   group:"스낵",     status:"재직", joinDate:"2024-01-09", phone:"010-4567-8901", site:"판교 오아시스",  duties:["KEP검토","제안서"],       note:"Pay 제안서 1차", contractType:"계약", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"", workHours:"09:00-18:00(8h)" },
+  { id:"c5", name:"정배라",   role:"신입 크루",  team:"배라",     group:"스낵",     status:"재직", joinDate:"2026-07-20", phone:"010-5678-9012", site:"판교 오아시스",  duties:["성수 OJT"],              note:"OJT 진행 중", contractType:"단기계약", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"", workHours:"09:00-18:00(8h)" },
+  { id:"c6", name:"한카렌",   role:"현장 리드",  team:"카렌",     group:"가든",     status:"재직", joinDate:"2023-05-22", phone:"010-6789-0123", site:"카렌 현장",     duties:["백오피스","점검"],        note:"현장 백오피스 점검", contractType:"정규", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"", workHours:"07:00-16:00(8h)" },
+  { id:"c7", name:"오미라",   role:"크루",       team:"미라",     group:"스낵",     status:"휴직", joinDate:"2024-06-03", phone:"010-7890-1234", site:"판교 오아시스",  duties:["리더 주간보고"],          note:"육아휴직 (~2026.09)", contractType:"정규", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"", workHours:"09:00-18:00(8h)" },
+  { id:"c8", name:"신엔조",   role:"크루",       team:"엔조",     group:"가든",     status:"재직", joinDate:"2025-02-17", phone:"010-8901-2345", site:"판교 오아시스",  duties:["반차/근태"],             note:"7/24 오후 반차", contractType:"계약", birthDate:"1995-05-06", disability:"장애", disabilityType:"발달장애", emergencyContact:"010-0000-0000 (모)", badgeNumber:"", workHours:"07:00-16:00(8h)" },
+  { id:"c9", name:"강아라",   role:"크루",       team:"아라",     group:"스낵",     status:"퇴사", joinDate:"2022-04-11", phone:"010-9012-3456", site:"판교 오아시스",  duties:[],                        note:"2026.06 퇴사", contractType:"계약", birthDate:"", disability:"비장애", disabilityType:"", emergencyContact:"", badgeNumber:"", workHours:"09:00-18:00(8h)" },
 ];
 
 /* --- 일정 : 시트 "schedule" (헤더 = id,date,time,title,category,done,assignee,link) --- */

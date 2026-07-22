@@ -460,7 +460,8 @@
   /* ======================================================
      CREW VIEW
      ====================================================== */
-  var crewFilter = "전체";
+  var crewDisFilter = "전체";
+  var crewGroupFilter = "전체";
   var crewQuery = "";
   var crewDetailId = null;
   var crewDetailTab = "basic";
@@ -482,7 +483,8 @@
 
   function filteredCrew() {
     return window.CREW.filter(function (c) {
-      if (crewFilter !== "전체" && c.status !== crewFilter) return false;
+      if (crewDisFilter !== "전체" && c.disability !== crewDisFilter) return false;
+      if (crewGroupFilter !== "전체" && c.group !== crewGroupFilter) return false;
       if (crewQuery) {
         var hay = (c.name + c.team + c.role + c.duties.join("") + c.site).toLowerCase();
         if (hay.indexOf(crewQuery.toLowerCase()) === -1) return false;
@@ -526,9 +528,14 @@
       + '</div>';
 
     html += '<div class="toolbar-row">'
-      + '<div class="filter" id="crewFilter">'
-      + ["전체", "재직", "휴직", "퇴사"].map(function (f) {
-          return '<button class="btn btn--sm btn--pill ' + (f === crewFilter ? "is-on" : "") + '" data-f="' + f + '">' + f + '</button>';
+      + '<div class="filter" id="crewDisFilter">'
+      + ["전체", "비장애", "장애"].map(function (f) {
+          return '<button class="btn btn--sm btn--pill ' + (f === crewDisFilter ? "is-on" : "") + '" data-f="' + f + '">' + f + '</button>';
+        }).join("")
+      + '</div>'
+      + '<div class="filter filter--xs" id="crewGroupFilter">'
+      + ["전체"].concat(CREW_GROUPS).map(function (g) {
+          return '<button class="btn btn--xs btn--pill ' + (g === crewGroupFilter ? "is-on" : "") + '" data-g="' + g + '">' + g + '</button>';
         }).join("")
       + '</div>'
       + '<input class="searchbox" id="crewSearch" type="search" placeholder="이름 · 팀 · 담당업무 검색" value="' + esc(crewQuery) + '">'
@@ -855,8 +862,11 @@
         return;
       }
 
-      var filterBtn = ev.target.closest("#crewFilter button[data-f]");
-      if (filterBtn) { crewFilter = filterBtn.getAttribute("data-f"); renderCrew(); return; }
+      var disFilterBtn = ev.target.closest("#crewDisFilter button[data-f]");
+      if (disFilterBtn) { crewDisFilter = disFilterBtn.getAttribute("data-f"); renderCrew(); return; }
+
+      var groupFilterBtn = ev.target.closest("#crewGroupFilter button[data-g]");
+      if (groupFilterBtn) { crewGroupFilter = groupFilterBtn.getAttribute("data-g"); renderCrew(); return; }
     });
 
     view.addEventListener("input", function (ev) {

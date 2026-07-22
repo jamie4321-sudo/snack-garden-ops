@@ -93,12 +93,13 @@
     };
   }
 
-  /** 구글시트에서 크루·일정 로드 (실패 시 데모 데이터 유지) */
+  /** 구글시트에서 크루·일정 로드 (실패 시 데모 데이터 유지)
+   *  Apps Script /exec 응답이 브라우저·중간 캐시에 잡히는 걸 막기 위해 매번 캐시버스팅 */
   function loadData() {
     var ep = endpoint();
     if (!ep) return Promise.resolve(false);
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=all";
-    return fetch(url)
+    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=all&_ts=" + Date.now();
+    return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (d && d.crew && d.crew.length) window.CREW = d.crew.map(normCrew);

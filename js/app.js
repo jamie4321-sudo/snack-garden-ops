@@ -375,13 +375,69 @@
     var link = e.link
       ? '<a class="evt__link" href="' + esc(e.link) + '" target="_blank" rel="noopener" title="링크 열기" onclick="event.stopPropagation()">🔗</a>'
       : '';
+    var actions = '<span class="evt__actions">'
+      + '<button type="button" class="evt__act evt__act--next" data-id="' + esc(e.id || "") + '" title="다음 날로 업무 이관">&rarr;</button>'
+      + '<button type="button" class="evt__act evt__act--del" data-id="' + esc(e.id || "") + '" title="삭제">&times;</button>'
+      + '</span>';
     return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
       + (e.done
           ? '<span class="evt__check">&check;</span>'
           : '<span class="evt__cat" style="background:' + color + '"></span>')
       + '<span class="evt__body">' + lead + '<span class="evt__text">' + esc(e.title) + '</span></span>'
       + link
+      + actions
       + '</div>';
+  }
+
+  /* ---------- 일정 이관 / 빠른 삭제 (호버 버튼) ---------- */
+  function moveEventToNextDay(id) {
+    var evt = findById(window.SCHEDULE, id);
+    if (!evt) return;
+    evt.date = addDays(evt.date, 1);
+    saveToSheet({ type: "schedule", action: "update", id: evt.id, date: evt.date, time: evt.time,
+                  title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+    renderSchedule();
+  }
+  function deleteEventQuick(id) {
+    if (!confirm("이 일정을 삭제할까요?")) return;
+    window.SCHEDULE = window.SCHEDULE.filter(function (s) { return String(s.id) !== String(id); });
+    saveToSheet({ type: "schedule", action: "delete", id: id });
+    renderSchedule();
+  }
+
+  /* ---------- 일정 인라인 등록 (팝업 없이 날짜 칸에서 바로 입력) ---------- */
+  function activateQuickAdd(trigger) {
+    var iso = trigger.getAttribute("data-date");
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "evt__quickinput";
+    input.placeholder = "일정 제목 입력 후 Enter";
+    input.maxLength = 60;
+    trigger.replaceWith(input);
+    input.focus();
+
+    var done = false;
+    function commit() {
+      if (done) return;
+      done = true;
+      var title = input.value.trim();
+      if (!title) { renderSchedule(); return; }
+      var evt = { id: newId("s"), date: iso, time: "", title: title, category: "기타", done: false, assignee: "", link: "" };
+      window.SCHEDULE.push(evt);
+      saveToSheet({ type: "schedule", action: "add", id: evt.id, date: evt.date, time: evt.time,
+                    title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+      renderSchedule();
+    }
+    function cancel() {
+      if (done) return;
+      done = true;
+      renderSchedule();
+    }
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+      else if (ev.key === "Escape") { cancel(); }
+    });
+    input.addEventListener("blur", function () { commit(); });
   }
 
   /* ======================================================
@@ -623,11 +679,17 @@
       var mmore = ev.target.closest(".mchip--more[data-date]");
       if (mmore) { schedMode = "week"; schedAnchor = mmore.getAttribute("data-date"); renderSchedule(); return; }
 
+      var nextBtn = ev.target.closest(".evt__act--next[data-id]");
+      if (nextBtn) { moveEventToNextDay(nextBtn.getAttribute("data-id")); return; }
+
+      var delBtn = ev.target.closest(".evt__act--del[data-id]");
+      if (delBtn) { deleteEventQuick(delBtn.getAttribute("data-id")); return; }
+
       var evtEl = ev.target.closest(".evt[data-id]");
       if (evtEl) { var sev = findById(window.SCHEDULE, evtEl.getAttribute("data-id")); if (sev) openEventModal(sev); return; }
 
       var addDay = ev.target.closest(".evt__add[data-date]");
-      if (addDay) { openEventModal({ date: addDay.getAttribute("data-date") }); return; }
+      if (addDay) { activateQuickAdd(addDay); return; }
 
       var mcell = ev.target.closest(".mcell[data-date]");
       if (mcell) { openEventModal({ date: mcell.getAttribute("data-date") }); return; }

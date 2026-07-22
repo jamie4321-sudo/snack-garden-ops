@@ -34,18 +34,42 @@ function sheet_(name, headers) {
   return sh;
 }
 
-/** 기존(레거시) 시트에 id 컬럼이 없으면 A열에 추가하고 기존 행에 id 를 채워 넣는다. */
+/** 기존(레거시) 시트에 id 컬럼이 없으면 A열에 추가하고, 매 호출마다 비어있는 id 를 채운다.
+ *  (한 번만 실행되는 게 아니라 항상 검사 — 이후에 수동으로 행을 추가/붙여넣기 해도 자동 복구됨) */
 function ensureId_(sh) {
-  var first = sh.getRange(1, 1).getValue();
-  if (first === "id") return;
   if (sh.getLastRow() === 0) { sh.getRange(1, 1).setValue("id"); return; }
-  sh.insertColumnBefore(1);
-  sh.getRange(1, 1).setValue("id");
-  var last = sh.getLastRow();
-  for (var i = 2; i <= last; i++) {
-    var cell = sh.getRange(i, 1);
-    if (!cell.getValue()) cell.setValue(Utilities.getUuid());
+
+  // 과거 마이그레이션 과정에서 생긴, 데이터 없는 빈 헤더 컬럼 정리
+  var lastCol = sh.getLastColumn();
+  var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var c = headers.length; c >= 1; c--) {
+    if (headers[c - 1] === "") {
+      var last0 = sh.getLastRow();
+      var hasData = last0 > 1 && sh.getRange(2, c, last0 - 1, 1).getValues().some(function (row) { return row[0] !== ""; });
+      if (!hasData) sh.deleteColumn(c);
+    }
   }
+
+  if (sh.getRange(1, 1).getValue() !== "id") {
+    sh.insertColumnBefore(1);
+    sh.getRange(1, 1).setValue("id");
+  }
+
+  // "id" 라는 이름의 컬럼이 A열 말고 또 있으면(과거 중복 삽입 버그로 생김) 제거
+  var lastCol2 = sh.getLastColumn();
+  for (var c2 = lastCol2; c2 >= 2; c2--) {
+    if (sh.getRange(1, c2).getValue() === "id") sh.deleteColumn(c2);
+  }
+
+  var last = sh.getLastRow();
+  if (last < 2) return;
+  var idRange = sh.getRange(2, 1, last - 1, 1);
+  var ids = idRange.getValues();
+  var changed = false;
+  for (var i = 0; i < ids.length; i++) {
+    if (!ids[i][0]) { ids[i][0] = Utilities.getUuid(); changed = true; }
+  }
+  if (changed) idRange.setValues(ids);
 }
 
 function rows_(name) {
@@ -55,7 +79,7 @@ function rows_(name) {
   var head = values.shift();
   return values.map(function (r) {
     var o = {};
-    head.forEach(function (h, i) { o[h] = r[i]; });
+    head.forEach(function (h, i) { if (h) o[h] = r[i]; }); // 빈 헤더는 무시
     return o;
   });
 }
@@ -83,17 +107,42 @@ function mapSchedule_(list) {
   return list.map(function (r) {
     r.done = (r.done === true || String(r.done).toLowerCase() === "true" || r.done === "완료" || r.done === "y");
     r.date = fmtDate_(r.date);
-    r.time = r.time ? String(r.time).slice(0, 5) : "";
+    r.time = fmtTime_(r.time);
     return r;
   });
 }
 
+function isDateLike_(v) { return Object.prototype.toString.call(v) === "[object Date]"; }
+
+/** 날짜를 YYYY-MM-DD 로 정규화. 실제 Date 객체, "YYYY-MM-DD..." 문자열,
+ *  혹은 (원인 불명으로) 이미 Date.toString() 형태로 뭉개진 문자열까지 모두 방어적으로 처리. */
 function fmtDate_(v) {
-  if (v instanceof Date) {
+  if (!v && v !== 0) return "";
+  if (isDateLike_(v)) {
     var m = ("0" + (v.getMonth() + 1)).slice(-2), day = ("0" + v.getDate()).slice(-2);
     return v.getFullYear() + "-" + m + "-" + day;
   }
-  return String(v);
+  var s = String(v);
+  var iso = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  var parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.getFullYear() + "-" + ("0" + (parsed.getMonth() + 1)).slice(-2) + "-" + ("0" + parsed.getDate()).slice(-2);
+  }
+  return s;
+}
+
+/** 시간을 HH:MM 으로 정규화. Date 객체(시간만 입력된 셀은 1899-12-30 기준 Date 로 내려옴)와
+ *  이미 문자열로 뭉개진 값 모두에서 HH:MM 패턴을 추출한다. */
+function fmtTime_(v) {
+  if (!v) return "";
+  if (isDateLike_(v)) {
+    return ("0" + v.getHours()).slice(-2) + ":" + ("0" + v.getMinutes()).slice(-2);
+  }
+  var s = String(v);
+  var hm = s.match(/(\d{1,2}):(\d{2})/);
+  if (hm) return ("0" + hm[1]).slice(-2) + ":" + hm[2];
+  return s.slice(0, 5);
 }
 
 /** 저장/수정/삭제: POST body(JSON) { type:"crew"|"schedule", action:"add"|"update"|"delete", ... } */

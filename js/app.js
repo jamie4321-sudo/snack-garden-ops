@@ -859,21 +859,45 @@
       + '<span class="detail-fld__value">' + esc(value || "—") + '</span></div>';
   }
 
-  /* ---------- 면담 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ---------- */
-  function interviewBoardRow(r, showCrew) {
+  /* ---------- 면담 기록 게시판 행 (크루 상세 탭 · 전체 목록 공용) ----------
+     crewCell : 6열(전체 목록) 표에서 첫 행에만 넘기는 <td rowspan> HTML.
+                생략하면(크루 상세 탭 · 그룹 내 이어지는 행) 크루 칸 없이 출력. */
+  function interviewBoardRow(r, crewCell) {
     var cond = condOf(r.condition);
     var issueTag = r.type === "근무 이슈" ? '<span class="board__issue-tag" title="근무 이슈">issue</span> ' : '';
     var flags = "";
     if (r.followUp === "필요") flags += '<span class="board__flag board__flag--follow" title="' + esc(r.followUpNote || "후속 조치 필요") + '">후속</span>';
     if (r.privateNote) flags += '<span class="board__flag board__flag--private" title="비공개 메모">🔒</span>';
     return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
-      + (showCrew ? '<td class="board__crew"><b>' + esc(r.crewName || "—") + '</b></td>' : '')
+      + (crewCell || '')
       + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
       + '<td class="board__type">' + issueTag + esc(r.type) + '</td>'
       + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
       + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
       + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
       + '</tr>';
+  }
+
+  /* 같은 크루의 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력 */
+  function groupedInterviewRowsHTML(rows) {
+    var order = [];
+    var map = {};
+    rows.forEach(function (r) {
+      var key = r.crewId || r.crewName || "—";
+      if (!map[key]) { map[key] = { crewName: r.crewName, rows: [] }; order.push(key); }
+      map[key].rows.push(r);
+    });
+    return order.map(function (key) {
+      var g = map[key];
+      return g.rows.map(function (r, i) {
+        if (i !== 0) return interviewBoardRow(r);
+        var crewCell = '<td class="board__crew"' + (g.rows.length > 1 ? ' rowspan="' + g.rows.length + '"' : '') + '>'
+          + '<b>' + esc(g.crewName || "—") + '</b>'
+          + (g.rows.length > 1 ? '<span class="board__crew__n">' + g.rows.length + '건</span>' : '')
+          + '</td>';
+        return interviewBoardRow(r, crewCell);
+      }).join("");
+    }).join("");
   }
 
   /* ---------- 크루 상세 · 면담기록 게시판 ---------- */
@@ -896,7 +920,7 @@
         + '</div>';
     }
 
-    var body = rows.map(function (r) { return interviewBoardRow(r, false); }).join("");
+    var body = rows.map(function (r) { return interviewBoardRow(r); }).join("");
 
     return '<div class="board">' + head
       + '<div class="board__scroll"><table class="board__table"><thead><tr>'
@@ -1096,7 +1120,7 @@
       + '<div class="board__scroll"><table class="board__table board__table--iv"><thead><tr>'
       + '<th>크루</th><th>날짜</th><th>유형</th><th>컨디션</th><th>내용</th><th>표시</th>'
       + '</tr></thead><tbody id="ivBody">'
-      + (rows.length ? rows.map(function (r) { return interviewBoardRow(r, true); }).join("")
+      + (rows.length ? groupedInterviewRowsHTML(rows)
           : '<tr><td colspan="6" class="board__empty">기록이 없습니다. <b style="color:var(--accent-text)">+ 기록 등록</b>으로 첫 면담을 남겨보세요.</td></tr>')
       + '</tbody></table></div>'
       + '</div>';
@@ -1826,7 +1850,7 @@
         var body = document.getElementById("ivBody");
         if (body) {
           var rows = filteredInterviews();
-          body.innerHTML = rows.length ? rows.map(function (r) { return interviewBoardRow(r, true); }).join("")
+          body.innerHTML = rows.length ? groupedInterviewRowsHTML(rows)
             : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
         }
       }

@@ -446,6 +446,38 @@ button { font-family: inherit; }
   background: color-mix(in srgb, var(--amber) 6%, var(--panel-2));
 }
 
+/* ---------- 크루 상세 · 면담기록 게시판 ---------- */
+.board { border: 1px solid var(--line-soft); border-radius: var(--r-lg); background: var(--card-bg); overflow: hidden; }
+.board__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 20px; border-bottom: 1px solid var(--line-soft); }
+.board__title { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -.2px; display: flex; align-items: center; gap: 8px; }
+.board__scroll { overflow-x: auto; }
+.board__table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.board__table th {
+  text-align: left; padding: 11px 20px; color: var(--ink-3);
+  font-family: var(--mono); font-weight: 500; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
+  border-bottom: 1px solid var(--line); background: var(--panel); white-space: nowrap;
+}
+.board__table th:nth-child(1) { width: 132px; }
+.board__table th:nth-child(2) { width: 96px; }
+.board__table th:nth-child(3) { width: 92px; }
+.board__table th:nth-child(5) { width: 88px; text-align: right; }
+.board__table td { padding: 14px 20px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.board__table tbody tr:last-child td { border-bottom: none; }
+.board__row { cursor: pointer; transition: background .12s; }
+.board__row:hover { background: var(--panel-2); }
+.board__date { white-space: nowrap; color: var(--ink-2); font-size: 12px; }
+.board__date small { color: var(--ink-3); margin-left: 3px; }
+.board__time { color: var(--ink-3); }
+.board__type { white-space: nowrap; color: var(--ink); font-family: var(--mono); font-size: 12px; }
+.board__cond { white-space: nowrap; color: var(--ink); }
+.board__conddot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.board__ctext { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.board__flags { white-space: nowrap; text-align: right; }
+.board__flag { display: inline-flex; align-items: center; font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; border-radius: 999px; margin-left: 4px; }
+.board__flag--follow { color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.board__flag--private { color: var(--amber); border: 1px dashed color-mix(in srgb, var(--amber) 45%, transparent); }
+.board__empty { padding: 44px 20px; text-align: center; color: var(--ink-2); line-height: 1.8; }
+
 /* =========================================================
    DASHBOARD
    ========================================================= */

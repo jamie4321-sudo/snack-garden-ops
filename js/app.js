@@ -192,7 +192,7 @@
 
     html += '<div class="summary">'
       + '<div class="summary__col">'
-      + '<div class="summary__head"><h3>이달의 사업 · 이슈</h3><span class="chip-mono">' + esc(s.monthLabel) + '</span>'
+      + '<div class="summary__head"><h3>이달의 사업 · 이슈</h3><span class="chip-mono">' + esc((String(s.monthLabel || "").split(" ")[0]) || (d(TODAY).getFullYear() + "년")) + '</span>'
         + '<button type="button" class="issue-add" id="addIssueBtn" title="이슈 추가">+</button>'
       + '</div>'
       + '<ul>' + (s.issues.length ? s.issues.map(function (it) {
@@ -830,6 +830,7 @@
   }
 
   function crewTabPanel(c, tab) {
+    if (tab === "interview") return crewInterviewBoard(c);
     if (tab !== "basic") {
       return '<div class="placeholder placeholder--sm"><p class="muted">이 탭은 준비 중입니다.</p></div>';
     }
@@ -852,6 +853,47 @@
   function detailField(label, value) {
     return '<div class="detail-fld"><span class="detail-fld__label">' + esc(label) + '</span>'
       + '<span class="detail-fld__value">' + esc(value || "—") + '</span></div>';
+  }
+
+  /* ---------- 크루 상세 · 면담기록 게시판 ---------- */
+  function crewInterviewBoard(c) {
+    var rows = (window.INTERVIEWS || []).filter(function (r) {
+      return String(r.crewId) === String(c.id) || (r.crewName && r.crewName === c.name);
+    }).sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.time || "") < (b.time || "") ? 1 : -1;
+    });
+
+    var head = '<div class="board__head">'
+      + '<h3 class="board__title">면담 기록 <span class="chip-mono">' + rows.length + '건</span></h3>'
+      + '<button type="button" class="btn btn--sm btn--primary" id="crewAddInterviewBtn">+ 면담 기록</button>'
+      + '</div>';
+
+    if (!rows.length) {
+      return '<div class="board">' + head
+        + '<div class="board__empty">아직 등록된 면담 기록이 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 면담 기록</b>으로 첫 기록을 남겨보세요.</span></div>'
+        + '</div>';
+    }
+
+    var body = rows.map(function (r) {
+      var cond = condOf(r.condition);
+      var flags = "";
+      if (r.followUp === "필요") flags += '<span class="board__flag board__flag--follow" title="' + esc(r.followUpNote || "후속 조치 필요") + '">후속</span>';
+      if (r.privateNote) flags += '<span class="board__flag board__flag--private" title="비공개 메모">🔒</span>';
+      return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
+        + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
+        + '<td class="board__type">' + esc(r.type) + '</td>'
+        + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
+        + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
+        + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
+        + '</tr>';
+    }).join("");
+
+    return '<div class="board">' + head
+      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<th>날짜</th><th>유형</th><th>컨디션</th><th>내용</th><th>표시</th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+      + '</div>';
   }
 
   /* ---------- 크루 등록/수정 모달 ---------- */
@@ -1091,7 +1133,12 @@
     if (!confirm("이 기록을 삭제할까요?")) return;
     window.INTERVIEWS = (window.INTERVIEWS || []).filter(function (r) { return String(r.id) !== String(id); });
     saveToSheet({ type: "interview", action: "delete", id: id });
-    renderInterview();
+    rerenderAfterInterview();
+  }
+
+  /* 면담 저장/삭제 후: 크루 상세를 보고 있으면 상세로, 아니면 면담 목록으로 갱신 */
+  function rerenderAfterInterview() {
+    if (crewDetailId) renderCrew(); else renderInterview();
   }
 
   /* ---------- 면담 기록 등록/수정 모달 ---------- */
@@ -1231,7 +1278,7 @@
         content: rec.content, followUp: rec.followUp, followUpNote: rec.followUpNote, privateNote: rec.privateNote
       });
       closeInterviewModal();
-      renderInterview();
+      rerenderAfterInterview();
     });
     wrap.querySelector("#interviewDelBtn").addEventListener("click", function () {
       var id = wrap.querySelector("form").dataset.id;
@@ -1240,7 +1287,7 @@
       window.INTERVIEWS = (window.INTERVIEWS || []).filter(function (r) { return String(r.id) !== String(id); });
       saveToSheet({ type: "interview", action: "delete", id: id });
       closeInterviewModal();
-      renderInterview();
+      rerenderAfterInterview();
     });
     return wrap;
   }
@@ -1452,6 +1499,15 @@
 
       var crewTabBtn = ev.target.closest(".crew-tab[data-tab]");
       if (crewTabBtn) { crewDetailTab = crewTabBtn.getAttribute("data-tab"); renderCrew(); return; }
+
+      if (ev.target.closest("#crewAddInterviewBtn")) {
+        var addC = findById(window.CREW, crewDetailId);
+        openInterviewModal(addC ? { crewId: addC.id } : null);
+        return;
+      }
+
+      var boardRow = ev.target.closest(".board__row[data-iv-id]");
+      if (boardRow) { var bIv = findById(window.INTERVIEWS || [], boardRow.getAttribute("data-iv-id")); if (bIv) openInterviewModal(bIv); return; }
 
       var crewDetailEditBtn = ev.target.closest("#crewDetailEditBtn");
       if (crewDetailEditBtn) { var cd = findById(window.CREW, crewDetailId); if (cd) openCrewModal(cd); return; }

@@ -4,7 +4,7 @@
 (function () {
   "use strict";
 
-  var TODAY = "2026-07-22"; // 데모 기준일 (실서비스에선 new Date())
+  var TODAY = isoOf(new Date()); // 오늘 날짜 (기기의 실제 날짜 기준)
 
   var view = document.getElementById("view");
   var viewTitle = document.getElementById("viewTitle");

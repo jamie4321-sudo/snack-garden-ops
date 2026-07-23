@@ -11,6 +11,12 @@
  *  - "interviews"  : id | date | time | crewId | crewName | type | condition | recorder | content | followUp | followUpNote | privateNote
  *  - "attendance"  : id | date | time | crewId | crewName | kind | reason | recorder  (kind = 지각|조퇴)
  *
+ * 면담일지(별도 스프레드시트 "2026 면담일지_DS", 장애크루 개인별 탭) — 읽기 전용, ?action=journal
+ *   ⚠️ 여러 명이 함께 쓰는 실사용 시트입니다. getRange().getValues() 로만 읽고,
+ *      절대 setValue/appendRow/deleteRow 등 쓰기 동작을 추가하지 마세요.
+ *   JOURNAL_SHEET_ID 로 그 시트를 열어, 탭들 중 JOURNAL_SKIP_TABS 에 없는 탭을 모두 크루 탭으로
+ *   보고 "일자" 헤더가 있는 행을 찾아 그 아래 데이터를 그대로 읽어온다.
+ *
  * 읽기/쓰기 모두 "컬럼 순서"가 아니라 "헤더 이름"으로 매칭합니다.
  * (실제 시트의 컬럼 순서가 달라도, 컬럼이 중간에 추가/삭제돼도 안전하게 동작)
  *
@@ -32,7 +38,17 @@ var POINT_FIELDS = ["id","text"];
 var INTERVIEW_FIELDS = ["id","date","time","crewId","crewName","type","condition","recorder","content","followUp","followUpNote","privateNote"];
 var ATTENDANCE_FIELDS = ["id","date","time","crewId","crewName","kind","reason","recorder"];
 
-var SHEET_ID = ""; // 비우면 이 스크립트에 연결된 시트를 사용
+// 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
+// getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
+var SHEET_ID = "1NG8IozqEbilXBEFLjZZANJf1tQlL5wVzP29xg_Z9W6M";
+
+// 면담일지는 운영 데이터와 별도의 스프레드시트("2026 면담일지_DS")에 있다.
+var JOURNAL_SHEET_ID = "1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc";
+// 면담일지 탭이 아닌 탭(그 시트 안의 빈 운영 데이터 탭 + 안내/템플릿 탭 + 설문 응답 탭)은 건너뛴다
+var JOURNAL_SKIP_TABS = [
+  "crew", "schedule", "issues", "points", "interviews", "attendance",
+  "카테고리", "작성 예시", "NEW 면담일지 가이드라인", "설문지 응답 시트1"
+];
 
 function ss_() { return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet(); }
 
@@ -151,6 +167,8 @@ function doGet(e) {
   if (action === "points")   return json_(rows_("points", POINT_FIELDS));
   if (action === "interviews") return json_(mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)));
   if (action === "attendance") return json_(mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)));
+  if (action === "journal")    return json_(getJournalData_());
+  if (action === "debug")      return json_(getDebugInfo_());
   return json_({
     crew: rows_("crew", CREW_FIELDS),
     schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)),
@@ -185,6 +203,71 @@ function mapAttendance_(list) {
     r.time = fmtTime_(r.time);
     return r;
   });
+}
+
+/** 진단용: ?action=debug — SHEET_ID 스프레드시트의 실제 제목·탭 목록·각 탭 행 수를 그대로 보여준다. */
+function getDebugInfo_() {
+  var info = { sheetId: SHEET_ID };
+  try {
+    var ss = ss_();
+    info.sheetTitle = ss.getName();
+    info.actualUrl = ss.getUrl();
+    info.tabs = ss.getSheets().map(function (sh) {
+      return { name: sh.getName(), lastRow: sh.getLastRow(), lastCol: sh.getLastColumn() };
+    });
+  } catch (err) {
+    info.error = String(err);
+  }
+  return info;
+}
+
+/** 면담일지 탭: 탭마다(=크루 한 명) "일자" 헤더가 있는 행/열을 찾아 그 아래 데이터를
+ *  그대로 읽어온다. 날짜 정규화·최신순 정렬 등은 프론트엔드에서 처리한다(시트 표기가
+ *  "2025", "08-05"처럼 불규칙해서 서버에서 섣불리 파싱하지 않고 원본 그대로 내려준다). */
+function getJournalData_() {
+  var ss;
+  try { ss = SpreadsheetApp.openById(JOURNAL_SHEET_ID); } catch (err) { return { tabs: [], error: String(err) }; }
+  var tabs = [];
+  var skipped = [];
+  ss.getSheets().forEach(function (sh) {
+    var name = sh.getName();
+    if (JOURNAL_SKIP_TABS.indexOf(name) > -1) return;
+    var parsed = readJournalSheet_(sh);
+    if (!parsed.rows.length) { skipped.push({ name: name, preview: parsed.preview }); return; }
+    tabs.push({ name: name, gid: sh.getSheetId(), rows: parsed.rows });
+  });
+  return { tabs: tabs, sheetTitle: ss.getName(), skippedNoData: skipped };
+}
+
+/** "일자" 헤더 셀을 찾을 때까지 처음 15행 x 6열을 훑는다(행뿐 아니라 열 오프셋도 대비). */
+function readJournalSheet_(sh) {
+  var lastRow = sh.getLastRow();
+  var lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return { rows: [], preview: [] };
+  var scanRows = Math.min(lastRow, 15);
+  var scanCols = Math.min(lastCol, 6);
+  var preview = sh.getRange(1, 1, scanRows, scanCols).getValues();
+
+  var headerRow = -1, headerCol = -1;
+  for (var i = 0; i < preview.length && headerRow === -1; i++) {
+    for (var j = 0; j < preview[i].length; j++) {
+      if (String(preview[i][j]).trim() === "일자") { headerRow = i; headerCol = j; break; }
+    }
+  }
+  if (headerRow === -1) return { rows: [], preview: preview };
+
+  var values = sh.getRange(1, 1, lastRow, lastCol).getValues();
+  var headers = values[headerRow].slice(headerCol).map(function (h) { return String(h).trim(); });
+  var out = [];
+  for (var r = headerRow + 1; r < values.length; r++) {
+    var row = values[r].slice(headerCol);
+    var hasData = row.some(function (v) { return String(v).trim() !== ""; });
+    if (!hasData) continue;
+    var obj = {};
+    headers.forEach(function (h, ci) { if (h) obj[h] = row[ci]; });
+    out.push(obj);
+  }
+  return { rows: out, preview: preview };
 }
 
 function isDateLike_(v) { return Object.prototype.toString.call(v) === "[object Date]"; }

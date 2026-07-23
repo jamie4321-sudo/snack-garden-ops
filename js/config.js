@@ -9,5 +9,6 @@
    ========================================================= */
 window.CONFIG = {
   endpoint: "https://script.google.com/macros/s/AKfycbxNV7X2fDwkEB3yXnbrXfkm6y-0kChB0uLzMBUx2jKEfG61QcJXDVujQiSN8V4eOYHX/exec",
-  pin: "4231" // 접속 화면 4자리 비밀번호 (정적 사이트라 완전한 보안은 아님)
+  pin: "4231", // 접속 화면 4자리 비밀번호 (정적 사이트라 완전한 보안은 아님)
+  journalSheetUrl: "https://docs.google.com/spreadsheets/d/1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc/edit"
 };

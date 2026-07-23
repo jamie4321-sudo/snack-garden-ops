@@ -878,12 +878,14 @@
       + '</tr>';
   }
 
-  /* 같은 크루의 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력 */
+  /* 같은 크루의 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력
+     이름(crewName) 기준으로 묶는다 — crewId는 과거 데이터에서 값이 비어있거나
+     레코드마다 다르게 저장된 경우가 있어 그룹핑 기준으로 신뢰할 수 없다. */
   function groupedInterviewRowsHTML(rows) {
     var order = [];
     var map = {};
     rows.forEach(function (r) {
-      var key = r.crewId || r.crewName || "—";
+      var key = (r.crewName && r.crewName.trim()) || r.crewId || "—";
       if (!map[key]) { map[key] = { crewName: r.crewName, rows: [] }; order.push(key); }
       map[key].rows.push(r);
     });
@@ -1368,12 +1370,13 @@
       + '</tr>';
   }
 
-  /* 같은 크루의 근태 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력 */
+  /* 같은 크루의 근태 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력
+     이름(crewName) 기준으로 묶는다 — crewId는 신뢰할 수 없는 경우가 있다. */
   function groupedAttendanceRowsHTML(rows) {
     var order = [];
     var map = {};
     rows.forEach(function (r) {
-      var key = r.crewId || r.crewName || "—";
+      var key = (r.crewName && r.crewName.trim()) || r.crewId || "—";
       if (!map[key]) { map[key] = { crewName: r.crewName, rows: [] }; order.push(key); }
       map[key].rows.push(r);
     });
@@ -1647,6 +1650,212 @@
   }
 
   /* ======================================================
+     JOURNAL · 면담일지 검토 (외부 구글시트, 읽기 전용)
+     ====================================================== */
+  var journalQuery = "";
+  var pad2j = function (n) { return ("0" + n).slice(-2); };
+
+  function crewNickname(name) {
+    if (!name) return "";
+    var i = name.indexOf("(");
+    return (i > -1 ? name.slice(0, i) : name).trim();
+  }
+
+  /** 시트의 불규칙한 날짜 표기("2025", "08-05", "2025-08-06")를 보정한다.
+   *  연도만 있는 행은 이후 "월-일"행의 연도로 이어받는다. */
+  function normalizeJournalRows(rawRows) {
+    var currentYear = null;
+    var out = [];
+    rawRows.forEach(function (r) {
+      var raw = String(r["일자"] || "").trim();
+      var full = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      var yearOnly = raw.match(/^(\d{4})$/);
+      var mmdd = raw.match(/^(\d{1,2})-(\d{1,2})$/);
+      var dateIso = "";
+      if (full) { currentYear = full[1]; dateIso = full[1] + "-" + pad2j(+full[2]) + "-" + pad2j(+full[3]); }
+      else if (mmdd && currentYear) { dateIso = currentYear + "-" + pad2j(+mmdd[1]) + "-" + pad2j(+mmdd[2]); }
+      else if (yearOnly) { currentYear = yearOnly[1]; }
+
+      var content = String(r["내용"] || "").trim();
+      if (!content) return; // 날짜만 있고 내용 없는 구분행은 제외
+      out.push({
+        date: dateIso, dateRaw: raw,
+        category: String(r["구분"] || "").trim(),
+        subCategory: String(r["세부 구분"] || "").trim(),
+        content: content,
+        author: String(r["면담자/작성자"] || "").trim(),
+        cumCount: r["누적 횟수"] || ""
+      });
+    });
+    // 시트에 적힌 순서(오래된 → 최근)를 뒤집어 최근이 먼저 오게 하고,
+    // 날짜를 파싱할 수 있는 항목은 그 날짜 기준으로 다시 정렬한다.
+    out.reverse();
+    out.sort(function (a, b) {
+      if (a.date && b.date) return a.date < b.date ? 1 : (a.date > b.date ? -1 : 0);
+      if (a.date && !b.date) return -1;
+      if (!a.date && b.date) return 1;
+      return 0;
+    });
+    return out;
+  }
+
+  /** window.JOURNAL(원본 탭 목록)을 CREW 명단과 이름으로 매칭해 크루별 그룹으로 만든다. */
+  function journalGroups() {
+    var tabs = (window.JOURNAL && window.JOURNAL.tabs) || [];
+    var nickToCrew = {};
+    (window.CREW || []).forEach(function (c) { nickToCrew[crewNickname(c.name)] = c; });
+
+    var groups = tabs.map(function (t) {
+      var crew = nickToCrew[t.name.trim()];
+      if (!crew) { console.warn("[면담일지] 크루 매칭 실패:", t.name); return null; }
+      var rows = normalizeJournalRows(t.rows);
+      if (!rows.length) return null;
+      return { crew: crew, gid: t.gid, rows: rows };
+    }).filter(Boolean);
+
+    groups.sort(function (a, b) {
+      var da = a.rows[0].date, db = b.rows[0].date;
+      if (da && db) return da < db ? 1 : (da > db ? -1 : 0);
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      return 0;
+    });
+    return groups;
+  }
+
+  function filteredJournalGroups() {
+    var groups = journalGroups();
+    if (!journalQuery) return groups;
+    var q = journalQuery.toLowerCase();
+    return groups.filter(function (g) {
+      if (g.crew.name.toLowerCase().indexOf(q) > -1) return true;
+      return g.rows.some(function (r) { return r.content.toLowerCase().indexOf(q) > -1 || (r.author || "").toLowerCase().indexOf(q) > -1; });
+    });
+  }
+
+  function journalGidUrl(gid) {
+    var base = ((window.CONFIG && window.CONFIG.journalSheetUrl) || "").replace(/#.*$/, "");
+    return base + "#gid=" + gid;
+  }
+
+  function journalCard(g) {
+    var color = groupOf(g.crew.group);
+    var latest = g.rows[0];
+    var preview = latest.content.length > 150 ? latest.content.slice(0, 150) + "…" : latest.content;
+    return '<article class="jcard" data-name="' + esc(g.crew.name) + '">'
+      + '<div class="jcard__top">'
+        + '<div class="jcard__who">'
+          + '<span class="jcard__dot" style="background:' + color.bg + '"></span>'
+          + '<div class="jcard__id">'
+            + '<b class="jcard__name">' + esc(g.crew.name) + '</b>'
+            + '<span class="jcard__meta mono">전체 ' + g.rows.length + '건' + (latest.date ? ' · 최근 ' + fmtDotDate(latest.date) : latest.dateRaw ? ' · 최근 ' + esc(latest.dateRaw) : '') + '</span>'
+          + '</div>'
+        + '</div>'
+        + '<a class="jcard__link" href="' + esc(journalGidUrl(g.gid)) + '" target="_blank" rel="noopener" title="시트에서 보기" onclick="event.stopPropagation()">🔗</a>'
+      + '</div>'
+      + (latest.category ? '<span class="jcard__cat">' + esc(latest.category) + '</span>' : '')
+      + '<p class="jcard__preview">' + esc(preview) + '</p>'
+      + '<div class="jcard__foot"><span class="muted">' + esc(latest.author || "—") + '</span></div>'
+      + '</article>';
+  }
+
+  function renderJournal() {
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Crew / Journal</p>'
+      + '<h2>면담일지 검토</h2>'
+      + '<p class="sub">장애크루 면담일지 시트의 최근 기록을 크루별로 모아봅니다.</p></div>'
+      + '<a class="btn" href="' + esc((window.CONFIG && window.CONFIG.journalSheetUrl) || "#") + '" target="_blank" rel="noopener">시트 전체 보기 ↗</a>'
+      + '</div>';
+
+    if (!isLive()) {
+      html += '<div class="placeholder placeholder--sm"><p class="muted">데모 모드에서는 면담일지를 불러올 수 없습니다.</p></div>';
+      view.innerHTML = html;
+      return;
+    }
+
+    if (!window.JOURNAL) {
+      html += '<div class="loading-screen"><div class="loading-spinner"></div><p class="loading-text">면담일지를 불러오는 중…</p></div>';
+      view.innerHTML = html;
+      loadJournalOnce().then(renderJournal);
+      return;
+    }
+
+    html += '<div class="toolbar-row">'
+      + '<input class="searchbox" id="journalSearch" type="search" placeholder="크루 · 내용 검색" value="' + esc(journalQuery) + '">'
+      + '</div>';
+
+    var groups = filteredJournalGroups();
+    html += '<div class="jlist" id="journalList">'
+      + (groups.length ? groups.map(journalCard).join("")
+          : '<div class="placeholder placeholder--sm"><p class="muted">' + (journalQuery ? "검색 결과가 없습니다." : "일치하는 면담일지를 찾지 못했습니다.") + '</p></div>')
+      + '</div>';
+
+    view.innerHTML = html;
+  }
+
+  function loadJournalOnce() {
+    if (window.JOURNAL) return Promise.resolve(window.JOURNAL);
+    var ep = endpoint();
+    if (!ep) { window.JOURNAL = { tabs: [] }; return Promise.resolve(window.JOURNAL); }
+    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=journal&_ts=" + Date.now();
+    return fetch(url, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { window.JOURNAL = (d && d.tabs) ? d : { tabs: [] }; return window.JOURNAL; })
+      .catch(function (e) { console.warn("[면담일지 로드 실패]", e); window.JOURNAL = { tabs: [] }; return window.JOURNAL; });
+  }
+
+  /* ---------- 면담일지 상세 팝업 (게시판 형식, 읽기 전용) ---------- */
+  function openJournalDetailModal(crewName) {
+    var g = journalGroups().filter(function (x) { return x.crew.name === crewName; })[0];
+    if (!g) return;
+    var el = document.getElementById("journalDetailModal");
+    if (!el) { el = buildJournalDetailModal(); document.body.appendChild(el); }
+
+    el.querySelector("#jdModalTitle").textContent = g.crew.name;
+    el.querySelector("#jdModalCount").textContent = g.rows.length + "건";
+    el.querySelector("#jdModalLink").href = journalGidUrl(g.gid);
+    el.querySelector("#jdModalBody").innerHTML = g.rows.map(function (r) {
+      return '<tr>'
+        + '<td class="board__date mono">' + (r.date ? fmtDotDate(r.date) : esc(r.dateRaw || "—")) + '</td>'
+        + '<td class="board__type mono">' + esc(r.category || "—") + '</td>'
+        + '<td class="board__content"><span class="jd-content">' + esc(r.content) + '</span></td>'
+        + '<td class="board__recorder muted">' + esc(r.author || "—") + '</td>'
+        + '</tr>';
+    }).join("");
+
+    el.hidden = false;
+  }
+  function closeJournalDetailModal() {
+    var el = document.getElementById("journalDetailModal");
+    if (el) el.hidden = true;
+  }
+  function buildJournalDetailModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "journalDetailModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="면담일지 전체 이력">'
+      + '<div class="modal__head">'
+        + '<h3><span id="jdModalTitle"></span> <span class="chip-mono" id="jdModalCount"></span></h3>'
+        + '<div class="modal__head-actions">'
+          + '<a class="btn btn--sm" id="jdModalLink" target="_blank" rel="noopener">시트에서 보기 ↗</a>'
+          + '<button type="button" class="modal__x" data-close aria-label="닫기">×</button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="board__scroll jd-scroll"><table class="board__table board__table--jd"><thead><tr>'
+      + '<th>일자</th><th>구분</th><th>내용</th><th>작성자</th>'
+      + '</tr></thead><tbody id="jdModalBody"></tbody></table></div>'
+      + '</div>';
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) closeJournalDetailModal();
+    });
+    return wrap;
+  }
+
+  /* ======================================================
      DASHBOARD (placeholder)
      ====================================================== */
   /* 장애유형 팔레트 (감각적 · 애시드 라임 기준 조화) */
@@ -1761,6 +1970,7 @@
     crew:        { title: "CREW", render: renderCrew },
     interview:   { title: "INTERVIEW", render: renderInterview },
     attendance:  { title: "ATTENDANCE", render: renderAttendance },
+    journal:     { title: "JOURNAL", render: renderJournal },
     schedule:    { title: "SCHEDULE", render: renderSchedule },
   };
 
@@ -1814,6 +2024,9 @@
 
       var ivModeBtn = ev.target.closest(".month-nav [data-iv-mode]");
       if (ivModeBtn) { ivMode = ivModeBtn.getAttribute("data-iv-mode"); renderInterview(); return; }
+
+      var jcard = ev.target.closest(".jcard[data-name]");
+      if (jcard) { openJournalDetailModal(jcard.getAttribute("data-name")); return; }
 
       var mchip = ev.target.closest(".mchip[data-id]");
       if (mchip) { var mev = findById(window.SCHEDULE, mchip.getAttribute("data-id")); if (mev) openEventModal(mev); return; }
@@ -1942,6 +2155,15 @@
           var atRows = filteredAttendance();
           atBody.innerHTML = atRows.length ? groupedAttendanceRowsHTML(atRows)
             : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
+        }
+      }
+      if (ev.target.id === "journalSearch") {
+        journalQuery = ev.target.value;
+        var jList = document.getElementById("journalList");
+        if (jList) {
+          var jGroups = filteredJournalGroups();
+          jList.innerHTML = jGroups.length ? jGroups.map(journalCard).join("")
+            : '<div class="placeholder placeholder--sm"><p class="muted">검색 결과가 없습니다.</p></div>';
         }
       }
     });

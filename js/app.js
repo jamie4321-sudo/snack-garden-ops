@@ -1837,7 +1837,7 @@
     wrap.hidden = true;
     wrap.innerHTML =
       '<div class="modal__backdrop" data-close></div>'
-      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="면담일지 전체 이력">'
+      + '<div class="modal__card modal__card--jd" role="dialog" aria-modal="true" aria-label="면담일지 전체 이력">'
       + '<div class="modal__head">'
         + '<h3><span id="jdModalTitle"></span> <span class="chip-mono" id="jdModalCount"></span></h3>'
         + '<div class="modal__head-actions">'

@@ -871,7 +871,7 @@
     return '<tr class="board__row" data-iv-id="' + esc(r.id || "") + '">'
       + (crewCell || '')
       + '<td class="board__date mono">' + fmtDotDate(r.date) + (r.time ? '<span class="board__time"> · ' + esc(r.time) + '</span>' : '') + '</td>'
-      + '<td class="board__type">' + issueDot + esc(r.type) + '</td>'
+      + '<td class="board__type">' + esc(r.type) + issueDot + '</td>'
       + '<td class="board__cond"><span class="board__conddot" style="background:' + cond.c + '"></span>' + esc(r.condition) + '</td>'
       + '<td class="board__content"><span class="board__ctext">' + esc(r.content || "—") + '</span></td>'
       + '<td class="board__flags">' + (flags || '<span class="muted">—</span>') + '</td>'
@@ -1062,7 +1062,10 @@
   function condOf(k) { for (var i = 0; i < CONDITIONS.length; i++) if (CONDITIONS[i].key === k) return CONDITIONS[i]; return CONDITIONS[1]; }
   var interviewCond = "전체";
   var interviewQuery = "";
-  var ivAnchor = TODAY; // 면담 & 근무기록 목록에서 보고 있는 기준 월
+  var ivAnchor = TODAY;   // 면담 & 근무기록 목록에서 보고 있는 기준 월/년
+  var ivMode = "month";   // "month" | "year"
+
+  function ivScopeLabel() { return ivMode === "year" ? (+ivAnchor.slice(0, 4)) + "년" : monthLabel(ivAnchor); }
 
   function fmtDotDate(iso) {
     if (!iso) return "—";
@@ -1071,13 +1074,17 @@
     return p[0] + "." + p[1] + "." + p[2] + " <small>" + WD[wd(iso)] + "</small>";
   }
 
-  function interviewsInMonth() {
+  function interviewsInScope() {
+    if (ivMode === "year") {
+      var y = ivAnchor.slice(0, 4);
+      return (window.INTERVIEWS || []).filter(function (r) { return (r.date || "").slice(0, 4) === y; });
+    }
     var ym = ivAnchor.slice(0, 7);
     return (window.INTERVIEWS || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
   }
 
   function filteredInterviews() {
-    var list = interviewsInMonth();
+    var list = interviewsInScope();
     list = list.filter(function (r) {
       if (interviewCond !== "전체" && r.condition !== interviewCond) return false;
       if (interviewQuery) {
@@ -1094,7 +1101,7 @@
   }
 
   function renderInterview() {
-    var all = interviewsInMonth();
+    var all = interviewsInScope();
     var followCnt = all.filter(function (r) { return r.followUp === "필요"; }).length;
     var worryCnt = all.filter(function (r) { return r.condition === "우려됨"; }).length;
 
@@ -1109,10 +1116,13 @@
     html += '<div class="month-nav">'
       + '<div class="month-nav__nav">'
         + '<button class="iconbtn" data-iv-nav="-1" aria-label="이전">&larr;</button>'
-        + '<span class="month-nav__label">' + monthLabel(ivAnchor) + '</span>'
+        + '<span class="month-nav__label">' + ivScopeLabel() + '</span>'
         + '<button class="iconbtn" data-iv-nav="1" aria-label="다음">&rarr;</button>'
       + '</div>'
-      + '<span class="chip-mono month-nav__count">' + all.length + '건</span>'
+      + '<div class="seg month-nav__seg">'
+        + '<button class="btn btn--sm ' + (ivMode === "month" ? "is-on" : "") + '" data-iv-mode="month">월간</button>'
+        + '<button class="btn btn--sm ' + (ivMode === "year" ? "is-on" : "") + '" data-iv-mode="year">' + ivAnchor.slice(0, 4) + '년</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="stats stats--3">'
@@ -1426,7 +1436,6 @@
         + '<span class="month-nav__label">' + attScopeLabel() + '</span>'
         + '<button class="iconbtn" data-at-nav="1" aria-label="다음">&rarr;</button>'
       + '</div>'
-      + '<span class="chip-mono month-nav__count">' + all.length + '건</span>'
       + '<div class="seg month-nav__seg">'
         + '<button class="btn btn--sm ' + (attMode === "month" ? "is-on" : "") + '" data-at-mode="month">월간</button>'
         + '<button class="btn btn--sm ' + (attMode === "year" ? "is-on" : "") + '" data-at-mode="year">' + attAnchor.slice(0, 4) + '년</button>'
@@ -1797,7 +1806,14 @@
       if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }
 
       var ivNavBtn = ev.target.closest(".month-nav .iconbtn[data-iv-nav]");
-      if (ivNavBtn) { ivAnchor = addMonths(ivAnchor, +ivNavBtn.getAttribute("data-iv-nav")); renderInterview(); return; }
+      if (ivNavBtn) {
+        var ivDir = +ivNavBtn.getAttribute("data-iv-nav");
+        ivAnchor = addMonths(ivAnchor, ivMode === "year" ? ivDir * 12 : ivDir);
+        renderInterview(); return;
+      }
+
+      var ivModeBtn = ev.target.closest(".month-nav [data-iv-mode]");
+      if (ivModeBtn) { ivMode = ivModeBtn.getAttribute("data-iv-mode"); renderInterview(); return; }
 
       var mchip = ev.target.closest(".mchip[data-id]");
       if (mchip) { var mev = findById(window.SCHEDULE, mchip.getAttribute("data-id")); if (mev) openEventModal(mev); return; }

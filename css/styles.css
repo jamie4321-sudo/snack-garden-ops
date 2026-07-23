@@ -433,7 +433,7 @@ button { font-family: inherit; }
 .board__flags { white-space: nowrap; text-align: right; }
 .board__issue-dot {
   display: inline-block; width: 5px; height: 5px; border-radius: 50%;
-  background: var(--red); margin-right: 6px; vertical-align: middle;
+  background: var(--red); margin-left: 6px; vertical-align: middle;
 }
 .board__flag { display: inline-flex; align-items: center; font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; border-radius: 999px; margin-left: 4px; }
 .board__flag--follow { color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
@@ -457,7 +457,7 @@ button { font-family: inherit; }
 .dash-card .summary__head { margin-bottom: 20px; }
 
 .donut-wrap { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; flex: 1; }
-.donut { width: 144px; height: 144px; flex: none; }
+.donut { width: 190px; height: 190px; flex: none; }
 .donut circle { transition: stroke-dasharray .5s cubic-bezier(.2,.9,.3,1), stroke-dashoffset .5s cubic-bezier(.2,.9,.3,1); }
 .donut__num { font-family: var(--mono); font-weight: 800; font-size: 30px; letter-spacing: -1px; fill: var(--ink); }
 .donut__unit { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; fill: var(--ink-3); }

@@ -1973,12 +1973,58 @@
     updateModeBadge();
     var initial = location.hash.slice(1) || "schedule";
     if (isLive()) {
-      view.innerHTML = '<div class="placeholder"><p class="eyebrow">Loading</p>'
-        + '<h2 class="muted">구글시트에서 불러오는 중…</h2></div>';
+      view.innerHTML = '<div class="loading-screen"><div class="loading-spinner"></div>'
+        + '<p class="loading-text">구글시트에서 불러오는 중…</p></div>';
       loadData().then(function () { go(initial); });
     } else {
       go(initial);
     }
   }
-  boot();
+
+  /* ---------- lock : 접속 시 4자리 비밀번호 확인 ---------- */
+  function unlock() {
+    try { localStorage.setItem("sg-auth", "ok"); } catch (e) {}
+    document.documentElement.setAttribute("data-authed", "1");
+    boot();
+  }
+
+  function wireLock() {
+    var dots = document.getElementById("lockDots");
+    var dotEls = dots.querySelectorAll(".lock__dot");
+    var input = document.getElementById("lockInput");
+    var err = document.getElementById("lockError");
+
+    function paintDots(len) {
+      Array.prototype.forEach.call(dotEls, function (d, i) { d.classList.toggle("is-filled", i < len); });
+    }
+    function shake() {
+      dots.classList.add("is-shake");
+      setTimeout(function () { dots.classList.remove("is-shake"); }, 400);
+    }
+
+    input.addEventListener("input", function () {
+      input.value = input.value.replace(/\D/g, "").slice(0, 4);
+      err.hidden = true;
+      paintDots(input.value.length);
+      if (input.value.length === 4) {
+        var pin = (window.CONFIG && window.CONFIG.pin) || "";
+        if (pin && input.value === pin) {
+          unlock();
+        } else {
+          err.hidden = false;
+          shake();
+          setTimeout(function () { input.value = ""; paintDots(0); input.focus(); }, 300);
+        }
+      }
+    });
+    dots.addEventListener("click", function () { input.focus(); });
+    setTimeout(function () { input.focus(); }, 60);
+  }
+
+  var alreadyAuthed = document.documentElement.getAttribute("data-authed") === "1";
+  if (alreadyAuthed) {
+    boot();
+  } else {
+    wireLock();
+  }
 })();

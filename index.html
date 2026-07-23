@@ -8,7 +8,7 @@
 
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
-  <link rel="stylesheet" href="./css/styles.css?v=27" />
+  <link rel="stylesheet" href="./css/styles.css?v=28" />
   <script>
     // 페인트 전에 저장된 테마 적용 (깜빡임 방지)
     (function () {
@@ -17,9 +17,29 @@
         if (t === "light") document.documentElement.setAttribute("data-theme", "light");
       } catch (e) {}
     })();
+    // 페인트 전에 저장된 인증 상태 적용 (깜빡임 방지)
+    (function () {
+      try {
+        if (localStorage.getItem("sg-auth") === "ok") document.documentElement.setAttribute("data-authed", "1");
+      } catch (e) {}
+    })();
   </script>
 </head>
 <body>
+
+  <!-- ============ LOCK SCREEN ============ -->
+  <div class="lock" id="lockScreen">
+    <div class="lock__card">
+      <div class="lock__brand">SNACK<em>&amp;</em>GARDEN</div>
+      <p class="lock__label">비밀번호 4자리를 입력하세요</p>
+      <div class="lock__dots" id="lockDots">
+        <span class="lock__dot"></span><span class="lock__dot"></span><span class="lock__dot"></span><span class="lock__dot"></span>
+        <input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="lockInput" class="lock__input" autocomplete="off" aria-label="비밀번호 4자리" />
+      </div>
+      <p class="lock__error" id="lockError" hidden>비밀번호가 올바르지 않습니다</p>
+    </div>
+  </div>
+
   <div class="layout">
 
     <!-- ============ SIDEBAR ============ -->
@@ -77,8 +97,8 @@
 
   </div>
 
-  <script src="./js/config.js?v=27" defer></script>
-  <script src="./js/data.js?v=27" defer></script>
-  <script src="./js/app.js?v=27" defer></script>
+  <script src="./js/config.js?v=28" defer></script>
+  <script src="./js/data.js?v=28" defer></script>
+  <script src="./js/app.js?v=28" defer></script>
 </body>
 </html>

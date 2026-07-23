@@ -104,7 +104,49 @@ button { font-family: inherit; }
 
 .mono { font-family: var(--mono); font-feature-settings: "tnum"; }
 
-.layout { display: grid; grid-template-columns: var(--side-w) 1fr; min-height: 100vh; }
+.layout { display: none; grid-template-columns: var(--side-w) 1fr; min-height: 100vh; }
+html[data-authed="1"] .layout { display: grid; }
+html[data-authed="1"] .lock { display: none; }
+
+/* ---------------- LOCK SCREEN ---------------- */
+.lock {
+  position: fixed; inset: 0; z-index: 999; display: flex;
+  align-items: center; justify-content: center; background: var(--bg);
+}
+.lock__card { text-align: center; padding: 40px; width: min(320px, 86vw); }
+.lock__brand { font-weight: 800; font-size: 21px; letter-spacing: -.5px; margin-bottom: 32px; color: var(--ink); }
+.lock__brand em { color: var(--accent-text); font-style: normal; margin: 0 1px; }
+.lock__label { color: var(--ink-3); font-size: 13px; margin: 0 0 22px; }
+.lock__dots { position: relative; display: flex; gap: 16px; justify-content: center; }
+.lock__dots.is-shake { animation: lockShake .4s; }
+.lock__dot {
+  width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line);
+  transition: background .12s, border-color .12s, transform .12s;
+}
+.lock__dot.is-filled { background: var(--accent); border-color: var(--accent); transform: scale(1.08); }
+.lock__input {
+  position: absolute; inset: -14px 0 auto 0; height: 44px; width: 100%;
+  opacity: 0; border: none; outline: none; padding: 0; cursor: default;
+}
+.lock__error { color: var(--red); font-size: 12px; margin: 18px 0 0; min-height: 15px; }
+.lock__error[hidden] { display: none; }
+@keyframes lockShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+/* ---------------- LOADING ---------------- */
+.loading-screen { display: grid; place-content: center; justify-items: center; gap: 16px; min-height: 60vh; }
+.loading-spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid var(--line-soft); border-top-color: var(--accent);
+  animation: loadingSpin .8s linear infinite;
+}
+.loading-text { color: var(--ink-3); font-family: var(--mono); font-size: 12px; letter-spacing: .5px; }
+@keyframes loadingSpin { to { transform: rotate(360deg); } }
 
 /* ---------------- SIDEBAR ---------------- */
 .side {

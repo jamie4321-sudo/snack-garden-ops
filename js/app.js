@@ -855,17 +855,31 @@
   }
 
   /* ======================================================
-     WORK REPORT · 업무 보고 (보고 완료된 상위리더 보고 사항, 월별 누적)
+     WORK REPORT · 업무 보고 (보고 완료된 상위리더 보고 사항, 월별/연별 조회)
      ====================================================== */
+  var wrAnchor = TODAY;   // 업무 보고에서 보고 있는 기준 월/년
+  var wrMode = "month";   // "month" | "year"
+
   function monthLabelFromKey(key) {
     if (!key) return "날짜 미상";
     var p = key.split("-");
     return +p[0] + "년 " + +p[1] + "월";
   }
+  function wrScopeLabel() { return wrMode === "year" ? (+wrAnchor.slice(0, 4)) + "년" : monthLabel(wrAnchor); }
 
-  function completedReportsByMonth() {
+  function completedReportsInScope() {
+    var all = (window.SUMMARY.reports || []).filter(function (rp) { return rp.done; });
+    if (wrMode === "year") {
+      var y = wrAnchor.slice(0, 4);
+      return all.filter(function (rp) { return (rp.reportedAt || "").slice(0, 4) === y; });
+    }
+    var ym = wrAnchor.slice(0, 7);
+    return all.filter(function (rp) { return (rp.reportedAt || "").slice(0, 7) === ym; });
+  }
+
+  function groupReportsByMonth(list) {
     var byMonth = {};
-    (window.SUMMARY.reports || []).filter(function (rp) { return rp.done; }).forEach(function (rp) {
+    list.forEach(function (rp) {
       var m = (rp.reportedAt || "").slice(0, 7);
       if (!byMonth[m]) byMonth[m] = [];
       byMonth[m].push(rp);
@@ -874,7 +888,7 @@
   }
 
   function renderWorkReport() {
-    var byMonth = completedReportsByMonth();
+    var byMonth = groupReportsByMonth(completedReportsInScope());
     var months = Object.keys(byMonth).sort().reverse();
 
     var html = "";
@@ -882,6 +896,18 @@
       + '<div><p class="eyebrow">Operation / Work Report</p>'
       + '<h2>업무 보고</h2>'
       + '<p class="sub">상위리더에게 보고 완료한 사항이 월별로 쌓입니다.</p></div>'
+      + '</div>';
+
+    html += '<div class="month-nav">'
+      + '<div class="month-nav__nav">'
+        + '<button class="iconbtn" data-wr-nav="-1" aria-label="이전">&larr;</button>'
+        + '<span class="month-nav__label">' + wrScopeLabel() + '</span>'
+        + '<button class="iconbtn" data-wr-nav="1" aria-label="다음">&rarr;</button>'
+      + '</div>'
+      + '<div class="seg month-nav__seg">'
+        + '<button class="btn btn--sm ' + (wrMode === "month" ? "is-on" : "") + '" data-wr-mode="month">월간</button>'
+        + '<button class="btn btn--sm ' + (wrMode === "year" ? "is-on" : "") + '" data-wr-mode="year">' + wrAnchor.slice(0, 4) + '년</button>'
+      + '</div>'
       + '</div>';
 
     html += months.length
@@ -892,7 +918,7 @@
             + '<ul class="wr-list">' + items.map(workReportRow).join("") + '</ul>'
             + '</div>';
         }).join("")
-      : '<div class="note-empty">아직 보고 완료된 사항이 없습니다. 일정 관리의 상위리더 보고 사항에서 ✓ 를 눌러 완료 처리해보세요.</div>';
+      : '<div class="note-empty">해당 기간에 보고 완료된 사항이 없습니다.</div>';
 
     view.innerHTML = html;
   }
@@ -2736,6 +2762,16 @@
 
       var wrDelBtn = ev.target.closest(".wr-act--del[data-id]");
       if (wrDelBtn) { deleteWorkReportQuick(wrDelBtn.getAttribute("data-id")); return; }
+
+      var wrNavBtn = ev.target.closest(".month-nav .iconbtn[data-wr-nav]");
+      if (wrNavBtn) {
+        var wrDir = +wrNavBtn.getAttribute("data-wr-nav");
+        wrAnchor = addMonths(wrAnchor, wrMode === "year" ? wrDir * 12 : wrDir);
+        renderWorkReport(); return;
+      }
+
+      var wrModeBtn = ev.target.closest(".month-nav [data-wr-mode]");
+      if (wrModeBtn) { wrMode = wrModeBtn.getAttribute("data-wr-mode"); renderWorkReport(); return; }
 
       var reportUrgentBtn = ev.target.closest(".report-urgent-toggle[data-id]");
       if (reportUrgentBtn) { toggleReportUrgent(reportUrgentBtn.getAttribute("data-id")); return; }

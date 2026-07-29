@@ -1058,13 +1058,21 @@
     return '<span class="badge ' + (isDisabled ? "badge--dis" : "badge--nodis") + '">' + esc(label) + '</span>';
   }
 
+  /** 입사 12주(84일) 이내 재직 크루는 수습 기간으로 간주 */
+  function isProbation(c) {
+    if (!c.joinDate || c.status !== "재직") return false;
+    var days = daysBetweenISO(c.joinDate, TODAY);
+    return days >= 0 && days < 84;
+  }
+
   function crewRow(c) {
     var g = groupOf(c.group);
     var st = STATUS[c.status] || STATUS["재직"];
+    var probationBadge = isProbation(c) ? ' <span class="badge--probation">수습</span>' : '';
     return '<tr data-id="' + esc(c.id || "") + '"' + (c.status === "퇴사" ? ' class="is-left"' : "") + '>'
       + '<td><div class="crew-name">'
         + '<span><b>' + esc(c.name) + '</b>'
-          + '<span class="t"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(c.group || "미지정") + '</span>'
+          + '<span class="t"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(c.group || "미지정") + probationBadge + '</span>'
         + '</span>'
       + '</div></td>'
       + '<td><span class="badge badge--' + st.key + '">' + st.icon + esc(c.status) + '</span></td>'

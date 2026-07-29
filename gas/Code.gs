@@ -35,7 +35,7 @@ var CREW_FIELDS = [
 var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link","alarm","alarmTime"];
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
-var REPORT_FIELDS = ["id","text","link","urgent"];
+var REPORT_FIELDS = ["id","text","link","urgent","done","reportedAt"];
 var INTERVIEW_FIELDS = ["id","date","time","crewId","crewName","type","condition","recorder","content","followUp","followUpNote","privateNote"];
 var ATTENDANCE_FIELDS = ["id","date","time","crewId","crewName","kind","reason","recorder"];
 var NOTE_FIELDS = ["id","date","time","part","text","author"];
@@ -208,6 +208,8 @@ function mapInterviews_(list) {
 function mapReports_(list) {
   return list.map(function (r) {
     r.urgent = (r.urgent === true || r.urgent === "긴급" || String(r.urgent).toLowerCase() === "true");
+    r.done = (r.done === true || r.done === "완료" || String(r.done).toLowerCase() === "true");
+    r.reportedAt = r.reportedAt ? fmtDate_(r.reportedAt) : "";
     return r;
   });
 }
@@ -526,7 +528,10 @@ function handleReport_(action, data) {
 
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
-    upsertRowByHeader_(sh, id, { id: id, text: data.text || "", link: data.link || "", urgent: data.urgent ? "긴급" : "" });
+    upsertRowByHeader_(sh, id, {
+      id: id, text: data.text || "", link: data.link || "", urgent: data.urgent ? "긴급" : "",
+      done: data.done ? "완료" : "", reportedAt: data.reportedAt || ""
+    });
     return json_({ ok: true, id: id });
   }
 

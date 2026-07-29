@@ -168,6 +168,14 @@
     };
   }
 
+  /** 보고 사항 저장 payload — 필드 하나만 바뀌어도 항상 전체 필드를 함께 보내 시트에서 값이 비는 걸 방지 */
+  function reportPayload_(rp, action) {
+    return {
+      type: "report", action: action, id: rp.id, text: rp.text, link: rp.link,
+      urgent: rp.urgent, done: rp.done, reportedAt: rp.reportedAt || "",
+    };
+  }
+
   function updateModeBadge() {
     var foot = document.querySelector(".side__foot");
     if (!foot) return;
@@ -265,10 +273,11 @@
       html += monthGridHtml(schedAnchor);
     }
 
+    var pendingReports = (s.reports || []).filter(function (rp) { return !rp.done; });
     html += '<div class="summary summary--report">'
       + '<div class="summary__col">'
       + '<div class="summary__head"><h3>상위리더 보고 사항</h3></div>'
-      + '<ul>' + (s.reports || []).map(function (rp, idx) {
+      + '<ul>' + pendingReports.map(function (rp, idx) {
           var body = esc(rp.text);
           var link = rp.link ? ' <a class="link-chip" href="' + esc(rp.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
           var urgentBtn = '<button type="button" class="report-urgent-toggle' + (rp.urgent ? " is-urgent" : "") + '" data-id="' + esc(rp.id || "") + '" title="' + (rp.urgent ? "긴급 해제" : "긴급으로 표시") + '">●</button>';
@@ -277,11 +286,12 @@
             + urgentBtn
             + '<span class="issue-text">' + body + '</span>' + link
             + '<span class="evt__actions">'
+              + '<button type="button" class="evt__act report-act--done" data-id="' + esc(rp.id || "") + '" title="보고 완료">✓</button>'
               + '<button type="button" class="evt__act report-act--edit" data-id="' + esc(rp.id || "") + '" title="수정">✎</button>'
               + '<button type="button" class="evt__act evt__act--del report-act--del" data-id="' + esc(rp.id || "") + '" title="삭제">&times;</button>'
             + '</span>'
           + '</li>';
-        }).join("") + '<li class="report-add-row" data-report-add="1">' + ((s.reports || []).length ? "+ 추가" : "보고 사항 입력…") + '</li>' + '</ul>'
+        }).join("") + '<li class="report-add-row" data-report-add="1">' + (pendingReports.length ? "+ 추가" : "보고 사항 입력…") + '</li>' + '</ul>'
       + '</div>'
       + '</div>';
 
@@ -535,8 +545,29 @@
     var rp = findById(window.SUMMARY.reports || [], id);
     if (!rp) return;
     rp.urgent = !rp.urgent;
-    saveToSheet({ type: "report", action: "update", id: rp.id, text: rp.text, link: rp.link, urgent: rp.urgent });
+    saveToSheet(reportPayload_(rp, "update"));
     renderSchedule();
+  }
+  function completeReportQuick(id) {
+    var rp = findById(window.SUMMARY.reports || [], id);
+    if (!rp) return;
+    rp.done = true;
+    rp.reportedAt = TODAY;
+    saveToSheet(reportPayload_(rp, "update"));
+    renderSchedule();
+  }
+  function uncompleteReportQuick(id) {
+    var rp = findById(window.SUMMARY.reports || [], id);
+    if (!rp) return;
+    rp.done = false;
+    saveToSheet(reportPayload_(rp, "update"));
+    renderWorkReport();
+  }
+  function deleteWorkReportQuick(id) {
+    if (!confirm("이 보고 완료 항목을 삭제할까요?")) return;
+    window.SUMMARY.reports = (window.SUMMARY.reports || []).filter(function (rp) { return String(rp.id) !== String(id); });
+    saveToSheet({ type: "report", action: "delete", id: id });
+    renderWorkReport();
   }
 
   /* ---------- 보고 사항 인라인 등록 (팝업 없이 목록 하단에서 바로 입력) ---------- */
@@ -556,9 +587,9 @@
       var text = input.value.trim();
       if (!text) { renderSchedule(); return; }
       if (!Array.isArray(window.SUMMARY.reports)) window.SUMMARY.reports = [];
-      var rp = { id: newId("r"), text: text, link: "", urgent: false };
+      var rp = { id: newId("r"), text: text, link: "", urgent: false, done: false, reportedAt: "" };
       window.SUMMARY.reports.push(rp);
-      saveToSheet({ type: "report", action: "add", id: rp.id, text: rp.text, link: rp.link, urgent: rp.urgent });
+      saveToSheet(reportPayload_(rp, "add"));
       renderSchedule();
     }
     function cancel() {
@@ -799,10 +830,15 @@
       if (!Array.isArray(window.SUMMARY.reports)) window.SUMMARY.reports = [];
       var id = f.dataset.id;
       var existing = id ? findById(window.SUMMARY.reports, id) : null;
-      var rp = { id: id || newId("r"), text: text, link: f.link.value.trim(), urgent: existing ? !!existing.urgent : false };
+      var rp = {
+        id: id || newId("r"), text: text, link: f.link.value.trim(),
+        urgent: existing ? !!existing.urgent : false,
+        done: existing ? !!existing.done : false,
+        reportedAt: existing ? (existing.reportedAt || "") : "",
+      };
       var idx = id ? indexById(window.SUMMARY.reports, id) : -1;
       if (idx > -1) window.SUMMARY.reports[idx] = rp; else window.SUMMARY.reports.push(rp);
-      saveToSheet({ type: "report", action: id ? "update" : "add", id: rp.id, text: rp.text, link: rp.link, urgent: rp.urgent });
+      saveToSheet(reportPayload_(rp, id ? "update" : "add"));
       closeReportModal();
       renderSchedule();
     });
@@ -816,6 +852,61 @@
       renderSchedule();
     });
     return wrap;
+  }
+
+  /* ======================================================
+     WORK REPORT · 업무 보고 (보고 완료된 상위리더 보고 사항, 월별 누적)
+     ====================================================== */
+  function monthLabelFromKey(key) {
+    if (!key) return "날짜 미상";
+    var p = key.split("-");
+    return +p[0] + "년 " + +p[1] + "월";
+  }
+
+  function completedReportsByMonth() {
+    var byMonth = {};
+    (window.SUMMARY.reports || []).filter(function (rp) { return rp.done; }).forEach(function (rp) {
+      var m = (rp.reportedAt || "").slice(0, 7);
+      if (!byMonth[m]) byMonth[m] = [];
+      byMonth[m].push(rp);
+    });
+    return byMonth;
+  }
+
+  function renderWorkReport() {
+    var byMonth = completedReportsByMonth();
+    var months = Object.keys(byMonth).sort().reverse();
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Operation / Work Report</p>'
+      + '<h2>업무 보고</h2>'
+      + '<p class="sub">상위리더에게 보고 완료한 사항이 월별로 쌓입니다.</p></div>'
+      + '</div>';
+
+    html += months.length
+      ? months.map(function (m) {
+          var items = byMonth[m].sort(function (a, b) { return (b.reportedAt || "").localeCompare(a.reportedAt || ""); });
+          return '<div class="wr-month">'
+            + '<h3 class="wr-month__title">' + monthLabelFromKey(m) + ' <span class="chip-mono">' + items.length + '건</span></h3>'
+            + '<ul class="wr-list">' + items.map(workReportRow).join("") + '</ul>'
+            + '</div>';
+        }).join("")
+      : '<div class="note-empty">아직 보고 완료된 사항이 없습니다. 일정 관리의 상위리더 보고 사항에서 ✓ 를 눌러 완료 처리해보세요.</div>';
+
+    view.innerHTML = html;
+  }
+
+  function workReportRow(rp) {
+    var link = rp.link ? ' <a class="link-chip" href="' + esc(rp.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
+    return '<li data-id="' + esc(rp.id || "") + '">'
+      + '<span class="wr-date">' + esc((rp.reportedAt || "").slice(5)) + '</span>'
+      + '<span class="issue-text">' + esc(rp.text) + '</span>' + link
+      + '<span class="evt__actions">'
+        + '<button type="button" class="evt__act wr-act--undo" data-id="' + esc(rp.id || "") + '" title="완료 취소">↺</button>'
+        + '<button type="button" class="evt__act evt__act--del wr-act--del" data-id="' + esc(rp.id || "") + '" title="삭제">&times;</button>'
+      + '</span>'
+      + '</li>';
   }
 
   /* ======================================================
@@ -2552,6 +2643,7 @@
     schedule:    { title: "SCHEDULE", render: renderSchedule },
     note:        { title: "NOTE", render: renderNote },
     notify:      { title: "NOTIFY", render: renderNotify },
+    workreport:  { title: "WORK REPORT", render: renderWorkReport },
   };
 
   function go(name) {
@@ -2635,6 +2727,15 @@
 
       var reportDelBtn = ev.target.closest(".report-act--del[data-id]");
       if (reportDelBtn) { deleteReportQuick(reportDelBtn.getAttribute("data-id")); return; }
+
+      var reportDoneBtn = ev.target.closest(".report-act--done[data-id]");
+      if (reportDoneBtn) { completeReportQuick(reportDoneBtn.getAttribute("data-id")); return; }
+
+      var wrUndoBtn = ev.target.closest(".wr-act--undo[data-id]");
+      if (wrUndoBtn) { uncompleteReportQuick(wrUndoBtn.getAttribute("data-id")); return; }
+
+      var wrDelBtn = ev.target.closest(".wr-act--del[data-id]");
+      if (wrDelBtn) { deleteWorkReportQuick(wrDelBtn.getAttribute("data-id")); return; }
 
       var reportUrgentBtn = ev.target.closest(".report-urgent-toggle[data-id]");
       if (reportUrgentBtn) { toggleReportUrgent(reportUrgentBtn.getAttribute("data-id")); return; }

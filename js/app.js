@@ -258,11 +258,12 @@
     html += '<div class="summary summary--report">'
       + '<div class="summary__col">'
       + '<div class="summary__head"><h3>상위리더 보고 사항</h3></div>'
-      + '<ul>' + (s.reports || []).map(function (rp) {
+      + '<ul>' + (s.reports || []).map(function (rp, idx) {
           var body = esc(rp.text);
           var link = rp.link ? ' <a class="link-chip" href="' + esc(rp.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
           var urgentBtn = '<button type="button" class="report-urgent-toggle' + (rp.urgent ? " is-urgent" : "") + '" data-id="' + esc(rp.id || "") + '" title="' + (rp.urgent ? "긴급 해제" : "긴급으로 표시") + '">●</button>';
           return '<li data-id="' + esc(rp.id || "") + '" class="' + (rp.urgent ? "is-urgent" : "") + '">'
+            + '<span class="report-num">' + (idx + 1) + '</span>'
             + urgentBtn
             + '<span class="issue-text">' + body + '</span>' + link
             + '<span class="evt__actions">'

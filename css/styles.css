@@ -285,6 +285,10 @@ html[data-authed="1"] .lock { display: none; }
 .summary--report { grid-template-columns: 1fr; margin-bottom: 0; margin-top: 22px; }
 .summary--report li { align-items: center; }
 .summary--report li::before { display: none; }
+.report-num {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex: none;
+  min-width: 14px; text-align: right;
+}
 .report-urgent-toggle {
   width: 9px; height: 9px; border-radius: 50%; flex: none; padding: 0;
   border: 1.5px solid var(--line); background: transparent; cursor: pointer;

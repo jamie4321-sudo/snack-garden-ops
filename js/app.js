@@ -145,6 +145,7 @@
         if (d && d.reports) window.SUMMARY.reports = d.reports;
         if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
         if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
+        if (d && d.notes) window.NOTES = d.notes;
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -1790,6 +1791,190 @@
   }
 
   /* ======================================================
+     NOTE · 노트 기록 (파트별 빠른 메모)
+     ====================================================== */
+  var NOTE_PARTS = ["스낵", "가든", "총무지원"];
+  var noteFilter = "전체";
+  var noteQuickPart = "전체";
+
+  function noteInScope() {
+    var list = (window.NOTES || []).slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      if ((a.time || "") !== (b.time || "")) return (a.time || "") < (b.time || "") ? 1 : -1;
+      return String(b.id).localeCompare(String(a.id));
+    });
+    if (noteFilter === "전체") return list;
+    return list.filter(function (n) { return n.part === noteFilter; });
+  }
+
+  function renderNote() {
+    var rows = noteInScope();
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Operation / Note</p>'
+      + '<h2>노트 기록</h2>'
+      + '<p class="sub">갑자기 떠오른 메모를 파트별로 바로 남겨두세요.</p></div>'
+      + '</div>';
+
+    html += '<div class="note-quickadd">'
+      + '<textarea id="noteQuickText" rows="3" placeholder="지금 남기고 싶은 메모를 적어주세요…"></textarea>'
+      + '<div class="note-quickadd__foot">'
+        + '<div class="seg" id="noteQuickPart">' + ["전체"].concat(NOTE_PARTS).map(function (p) {
+            return '<button type="button" class="btn btn--sm btn--pill' + (p === noteQuickPart ? " is-on" : "") + '" data-note-quick-part="' + p + '">' + p + '</button>';
+          }).join("") + '</div>'
+        + '<span class="note-quickadd__hint">Ctrl+Enter 로 저장</span>'
+        + '<button type="button" class="btn btn--primary btn--sm" id="noteQuickSaveBtn">저장</button>'
+      + '</div>'
+      + '</div>';
+
+    html += '<div class="toolbar-row">'
+      + '<div class="filter" id="noteFilter">' + ["전체"].concat(NOTE_PARTS).map(function (p) {
+          return '<button class="btn btn--sm btn--pill ' + (p === noteFilter ? "is-on" : "") + '" data-note-filter="' + p + '">' + p + '</button>';
+        }).join("") + '</div>'
+      + '</div>';
+
+    html += rows.length
+      ? '<div class="note-grid">' + rows.map(noteCard).join("") + '</div>'
+      : '<div class="board__empty note-empty">아직 남긴 메모가 없습니다. 위 칸에 바로 적어보세요.</div>';
+
+    view.innerHTML = html;
+
+    var qta = document.getElementById("noteQuickText");
+    if (qta) {
+      qta.addEventListener("keydown", function (ev) {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") { ev.preventDefault(); commitNoteQuickAdd(); }
+      });
+    }
+  }
+
+  function noteCard(n) {
+    var color = groupOf(n.part).bg;
+    return '<div class="note-card" data-id="' + esc(n.id || "") + '">'
+      + '<div class="note-card__top">'
+        + '<span class="note-card__part"><i class="note-card__dot" style="background:' + color + '"></i>' + esc(n.part || "전체") + '</span>'
+        + '<span class="note-card__time">' + fmtDotDate(n.date) + (n.time ? ' ' + esc(n.time) : '') + '</span>'
+      + '</div>'
+      + '<p class="note-card__text">' + esc(n.text) + '</p>'
+      + '<div class="note-card__actions">'
+        + '<button type="button" class="evt__act note-act--edit" data-id="' + esc(n.id || "") + '" title="수정">✎</button>'
+        + '<button type="button" class="evt__act evt__act--del note-act--del" data-id="' + esc(n.id || "") + '" title="삭제">&times;</button>'
+      + '</div>'
+      + '</div>';
+  }
+
+  function commitNoteQuickAdd() {
+    var ta = document.getElementById("noteQuickText");
+    if (!ta) return;
+    var text = ta.value.trim();
+    if (!text) { ta.focus(); return; }
+    var now = new Date();
+    var note = {
+      id: newId("nt"), date: TODAY, time: pad2(now.getHours()) + ":" + pad2(now.getMinutes()),
+      part: noteQuickPart, text: text, author: CURRENT_USER,
+    };
+    if (!window.NOTES) window.NOTES = [];
+    window.NOTES.push(note);
+    saveToSheet({ type: "note", action: "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author });
+    renderNote();
+  }
+
+  function deleteNoteQuick(id) {
+    if (!confirm("이 메모를 삭제할까요?")) return;
+    window.NOTES = (window.NOTES || []).filter(function (n) { return String(n.id) !== String(id); });
+    saveToSheet({ type: "note", action: "delete", id: id });
+    renderNote();
+  }
+
+  /* ---------- 노트 수정 모달 ---------- */
+  function openNoteModal(prefill) {
+    var el = document.getElementById("noteModal");
+    if (!el) { el = buildNoteModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    form.dataset.id = (prefill && prefill.id) || "";
+    form.text.value = (prefill && prefill.text) || "";
+    var part = (prefill && prefill.part) || "전체";
+    form.part.value = part;
+    Array.prototype.forEach.call(el.querySelectorAll("#noteModalPart [data-part]"), function (b) {
+      b.classList.toggle("is-on", b.getAttribute("data-part") === part);
+    });
+    el.hidden = false;
+    setTimeout(function () { form.text.focus(); }, 30);
+  }
+  function closeNoteModal() {
+    var el = document.getElementById("noteModal");
+    if (el) el.hidden = true;
+  }
+  function buildNoteModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "noteModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="노트 수정">'
+      + '<div class="modal__head"><h3>노트 수정</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="noteForm">'
+      + '<input type="hidden" name="part" value="전체">'
+      + '<div class="fld"><span>파트</span><div class="seg" id="noteModalPart">' + ["전체"].concat(NOTE_PARTS).map(function (p) {
+          return '<button type="button" class="btn btn--sm btn--pill" data-part="' + p + '">' + p + '</button>';
+        }).join("") + '</div></div>'
+      + '<label class="fld"><span>내용</span><textarea name="text" rows="4" maxlength="500" required placeholder="메모 내용을 입력하세요…"></textarea></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="noteDelBtn">삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { closeNoteModal(); return; }
+      var segBtn = ev.target.closest("#noteModalPart [data-part]");
+      if (segBtn) {
+        var form = wrap.querySelector("form");
+        form.part.value = segBtn.getAttribute("data-part");
+        Array.prototype.forEach.call(wrap.querySelectorAll("#noteModalPart [data-part]"), function (b) { b.classList.toggle("is-on", b === segBtn); });
+        return;
+      }
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var text = f.text.value.trim();
+      if (!text) return;
+      var id = f.dataset.id;
+      var existing = id ? findById(window.NOTES || [], id) : null;
+      var note = {
+        id: id || newId("nt"),
+        date: existing ? existing.date : TODAY,
+        time: existing ? existing.time : "",
+        part: f.part.value || "전체",
+        text: text,
+        author: existing ? existing.author : CURRENT_USER,
+      };
+      if (!window.NOTES) window.NOTES = [];
+      var idx = id ? indexById(window.NOTES, id) : -1;
+      if (idx > -1) window.NOTES[idx] = note; else window.NOTES.push(note);
+      saveToSheet({ type: "note", action: id ? "update" : "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author });
+      closeNoteModal();
+      renderNote();
+    });
+    wrap.querySelector("#noteDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 메모를 삭제할까요?")) return;
+      window.NOTES = (window.NOTES || []).filter(function (n) { return String(n.id) !== String(id); });
+      saveToSheet({ type: "note", action: "delete", id: id });
+      closeNoteModal();
+      renderNote();
+    });
+    return wrap;
+  }
+
+  /* ======================================================
      JOURNAL · 면담일지 검토 (외부 구글시트, 읽기 전용)
      ====================================================== */
   var journalQuery = "";
@@ -2112,6 +2297,7 @@
     attendance:  { title: "ATTENDANCE", render: renderAttendance },
     journal:     { title: "JOURNAL", render: renderJournal },
     schedule:    { title: "SCHEDULE", render: renderSchedule },
+    note:        { title: "NOTE", render: renderNote },
   };
 
   function go(name) {
@@ -2201,6 +2387,26 @@
 
       var reportAdd = ev.target.closest(".report-add-row[data-report-add]");
       if (reportAdd) { activateReportQuickAdd(reportAdd); return; }
+
+      if (ev.target.closest("#noteQuickSaveBtn")) { commitNoteQuickAdd(); return; }
+
+      var noteQuickPartBtn = ev.target.closest("#noteQuickPart [data-note-quick-part]");
+      if (noteQuickPartBtn) {
+        noteQuickPart = noteQuickPartBtn.getAttribute("data-note-quick-part");
+        Array.prototype.forEach.call(view.querySelectorAll("#noteQuickPart [data-note-quick-part]"), function (b) {
+          b.classList.toggle("is-on", b === noteQuickPartBtn);
+        });
+        return;
+      }
+
+      var noteFilterBtn = ev.target.closest("#noteFilter [data-note-filter]");
+      if (noteFilterBtn) { noteFilter = noteFilterBtn.getAttribute("data-note-filter"); renderNote(); return; }
+
+      var noteEditBtn = ev.target.closest(".note-act--edit[data-id]");
+      if (noteEditBtn) { var nev = findById(window.NOTES || [], noteEditBtn.getAttribute("data-id")); if (nev) openNoteModal(nev); return; }
+
+      var noteDelBtn = ev.target.closest(".note-act--del[data-id]");
+      if (noteDelBtn) { deleteNoteQuick(noteDelBtn.getAttribute("data-id")); return; }
 
       var nextBtn = ev.target.closest(".evt__act--next[data-id]");
       if (nextBtn) { moveEventToNextDay(nextBtn.getAttribute("data-id")); return; }

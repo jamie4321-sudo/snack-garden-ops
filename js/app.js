@@ -482,7 +482,7 @@
   function evtRow(e) {
     var color = CATCOLOR[e.category] || "#cbd5e1";
     var alarmMark = e.alarm ? '<span class="evt__alarm-mark" title="알림 ' + esc(e.alarmTime || e.time || "") + '">🔔</span>' : '';
-    var lead = e.time ? '<span class="evt__time">' + esc(e.time) + '</span>' + alarmMark : (alarmMark ? '<span class="evt__time">' + alarmMark + '</span>' : '');
+    var lead = (e.time || alarmMark) ? '<span class="evt__time">' + (e.time ? esc(e.time) : '') + alarmMark + '</span>' : '';
     var link = e.link
       ? '<a class="evt__link" href="' + esc(e.link) + '" target="_blank" rel="noopener" title="링크 열기" onclick="event.stopPropagation()">🔗</a>'
       : '';

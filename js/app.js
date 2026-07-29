@@ -142,6 +142,7 @@
         if (d && d.schedule && d.schedule.length) window.SCHEDULE = d.schedule;
         if (d && d.issues) window.SUMMARY.issues = d.issues;
         if (d && d.points) window.SUMMARY.points = d.points;
+        if (d && d.reports) window.SUMMARY.reports = d.reports;
         if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
         if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
         return true;
@@ -253,6 +254,25 @@
     } else {
       html += monthGridHtml(schedAnchor);
     }
+
+    html += '<div class="summary summary--report">'
+      + '<div class="summary__col">'
+      + '<div class="summary__head"><h3>상위리더 보고 사항</h3></div>'
+      + '<ul>' + (s.reports || []).map(function (rp) {
+          var body = esc(rp.text);
+          var link = rp.link ? ' <a class="link-chip" href="' + esc(rp.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
+          var urgentBtn = '<button type="button" class="report-urgent-toggle' + (rp.urgent ? " is-urgent" : "") + '" data-id="' + esc(rp.id || "") + '" title="' + (rp.urgent ? "긴급 해제" : "긴급으로 표시") + '">●</button>';
+          return '<li data-id="' + esc(rp.id || "") + '" class="' + (rp.urgent ? "is-urgent" : "") + '">'
+            + urgentBtn
+            + '<span class="issue-text">' + body + '</span>' + link
+            + '<span class="evt__actions">'
+              + '<button type="button" class="evt__act report-act--edit" data-id="' + esc(rp.id || "") + '" title="수정">✎</button>'
+              + '<button type="button" class="evt__act evt__act--del report-act--del" data-id="' + esc(rp.id || "") + '" title="삭제">&times;</button>'
+            + '</span>'
+          + '</li>';
+        }).join("") + '<li class="report-add-row" data-report-add="1">' + ((s.reports || []).length ? "+ 추가" : "보고 사항 입력…") + '</li>' + '</ul>'
+      + '</div>'
+      + '</div>';
 
     view.innerHTML = html;
   }
@@ -482,6 +502,53 @@
     saveToSheet({ type: "point", action: "delete", id: id });
     renderSchedule();
   }
+  function deleteReportQuick(id) {
+    if (!confirm("이 보고 사항을 삭제할까요?")) return;
+    window.SUMMARY.reports = (window.SUMMARY.reports || []).filter(function (rp) { return String(rp.id) !== String(id); });
+    saveToSheet({ type: "report", action: "delete", id: id });
+    renderSchedule();
+  }
+  function toggleReportUrgent(id) {
+    var rp = findById(window.SUMMARY.reports || [], id);
+    if (!rp) return;
+    rp.urgent = !rp.urgent;
+    saveToSheet({ type: "report", action: "update", id: rp.id, text: rp.text, link: rp.link, urgent: rp.urgent });
+    renderSchedule();
+  }
+
+  /* ---------- 보고 사항 인라인 등록 (팝업 없이 목록 하단에서 바로 입력) ---------- */
+  function activateReportQuickAdd(trigger) {
+    var input = document.createElement("input");
+    input.type = "text";
+    input.className = "evt__quickinput";
+    input.placeholder = "보고 사항 입력 후 Enter";
+    input.maxLength = 120;
+    trigger.replaceWith(input);
+    input.focus();
+
+    var done = false;
+    function commit() {
+      if (done) return;
+      done = true;
+      var text = input.value.trim();
+      if (!text) { renderSchedule(); return; }
+      if (!Array.isArray(window.SUMMARY.reports)) window.SUMMARY.reports = [];
+      var rp = { id: newId("r"), text: text, link: "", urgent: false };
+      window.SUMMARY.reports.push(rp);
+      saveToSheet({ type: "report", action: "add", id: rp.id, text: rp.text, link: rp.link, urgent: rp.urgent });
+      renderSchedule();
+    }
+    function cancel() {
+      if (done) return;
+      done = true;
+      renderSchedule();
+    }
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+      else if (ev.key === "Escape") { cancel(); }
+    });
+    input.addEventListener("blur", function () { commit(); });
+  }
 
   /* ---------- 일정 인라인 등록 (팝업 없이 날짜 칸에서 바로 입력) ---------- */
   function activateQuickAdd(trigger) {
@@ -652,6 +719,78 @@
       window.SUMMARY.points = (window.SUMMARY.points || []).filter(function (p) { return String(p.id) !== String(id); });
       saveToSheet({ type: "point", action: "delete", id: id });
       closePointModal();
+      renderSchedule();
+    });
+    return wrap;
+  }
+
+  /* ---------- 상위리더 보고 사항 등록/수정 모달 ---------- */
+  function openReportModal(prefill) {
+    var el = document.getElementById("reportModal");
+    if (!el) { el = buildReportModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#reportModalTitle").textContent = editing ? "보고 사항 수정" : "보고 사항 등록";
+    el.querySelector("#reportDelBtn").hidden = !editing;
+    form.text.value = (prefill && prefill.text) || "";
+    form.link.value = (prefill && prefill.link) || "";
+    el.hidden = false;
+    setTimeout(function () { form.text.focus(); }, 30);
+  }
+  function closeReportModal() {
+    var el = document.getElementById("reportModal");
+    if (el) el.hidden = true;
+  }
+
+  function buildReportModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "reportModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="보고 사항 등록">'
+      + '<div class="modal__head"><h3 id="reportModalTitle">보고 사항 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="reportForm">'
+      + '<label class="fld"><span>내용</span><input type="text" name="text" maxlength="120" required placeholder="예) 8월 온보딩 계획 공유 필요"></label>'
+      + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="reportDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) closeReportModal();
+    });
+    // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var text = f.text.value.trim();
+      if (!text) return;
+      if (!Array.isArray(window.SUMMARY.reports)) window.SUMMARY.reports = [];
+      var id = f.dataset.id;
+      var existing = id ? findById(window.SUMMARY.reports, id) : null;
+      var rp = { id: id || newId("r"), text: text, link: f.link.value.trim(), urgent: existing ? !!existing.urgent : false };
+      var idx = id ? indexById(window.SUMMARY.reports, id) : -1;
+      if (idx > -1) window.SUMMARY.reports[idx] = rp; else window.SUMMARY.reports.push(rp);
+      saveToSheet({ type: "report", action: id ? "update" : "add", id: rp.id, text: rp.text, link: rp.link, urgent: rp.urgent });
+      closeReportModal();
+      renderSchedule();
+    });
+    wrap.querySelector("#reportDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 보고 사항을 삭제할까요?")) return;
+      window.SUMMARY.reports = (window.SUMMARY.reports || []).filter(function (rp) { return String(rp.id) !== String(id); });
+      saveToSheet({ type: "report", action: "delete", id: id });
+      closeReportModal();
       renderSchedule();
     });
     return wrap;
@@ -2049,6 +2188,18 @@
 
       var pointDelBtn = ev.target.closest(".point-act--del[data-id]");
       if (pointDelBtn) { deletePointQuick(pointDelBtn.getAttribute("data-id")); return; }
+
+      var reportEditBtn = ev.target.closest(".report-act--edit[data-id]");
+      if (reportEditBtn) { var rev = findById(window.SUMMARY.reports || [], reportEditBtn.getAttribute("data-id")); if (rev) openReportModal(rev); return; }
+
+      var reportDelBtn = ev.target.closest(".report-act--del[data-id]");
+      if (reportDelBtn) { deleteReportQuick(reportDelBtn.getAttribute("data-id")); return; }
+
+      var reportUrgentBtn = ev.target.closest(".report-urgent-toggle[data-id]");
+      if (reportUrgentBtn) { toggleReportUrgent(reportUrgentBtn.getAttribute("data-id")); return; }
+
+      var reportAdd = ev.target.closest(".report-add-row[data-report-add]");
+      if (reportAdd) { activateReportQuickAdd(reportAdd); return; }
 
       var nextBtn = ev.target.closest(".evt__act--next[data-id]");
       if (nextBtn) { moveEventToNextDay(nextBtn.getAttribute("data-id")); return; }

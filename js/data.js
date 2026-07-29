@@ -95,4 +95,5 @@ window.SUMMARY = {
     { id: "i2", text: "헤이든 — 안내 사항", link: "https://docs.google.com/document/d/EXAMPLE_DOC_ID/edit" },
   ],
   points: [],
+  reports: [],
 };

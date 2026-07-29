@@ -35,6 +35,7 @@ var CREW_FIELDS = [
 var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link"];
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
+var REPORT_FIELDS = ["id","text","link","urgent"];
 var INTERVIEW_FIELDS = ["id","date","time","crewId","crewName","type","condition","recorder","content","followUp","followUpNote","privateNote"];
 var ATTENDANCE_FIELDS = ["id","date","time","crewId","crewName","kind","reason","recorder"];
 
@@ -46,7 +47,7 @@ var SHEET_ID = "1NG8IozqEbilXBEFLjZZANJf1tQlL5wVzP29xg_Z9W6M";
 var JOURNAL_SHEET_ID = "1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc";
 // 면담일지 탭이 아닌 탭(그 시트 안의 빈 운영 데이터 탭 + 안내/템플릿 탭 + 설문 응답 탭)은 건너뛴다
 var JOURNAL_SKIP_TABS = [
-  "crew", "schedule", "issues", "points", "interviews", "attendance",
+  "crew", "schedule", "issues", "points", "reports", "interviews", "attendance",
   "카테고리", "작성 예시", "NEW 면담일지 가이드라인", "설문지 응답 시트1"
 ];
 
@@ -165,6 +166,7 @@ function doGet(e) {
   if (action === "schedule") return json_(mapSchedule_(rows_("schedule", SCH_FIELDS)));
   if (action === "issues")   return json_(rows_("issues", ISSUE_FIELDS));
   if (action === "points")   return json_(rows_("points", POINT_FIELDS));
+  if (action === "reports")  return json_(mapReports_(rows_("reports", REPORT_FIELDS)));
   if (action === "interviews") return json_(mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)));
   if (action === "attendance") return json_(mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)));
   if (action === "journal")    return json_(getJournalData_());
@@ -174,6 +176,7 @@ function doGet(e) {
     schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)),
     issues: rows_("issues", ISSUE_FIELDS),
     points: rows_("points", POINT_FIELDS),
+    reports: mapReports_(rows_("reports", REPORT_FIELDS)),
     interviews: mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)),
     attendance: mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS))
   });
@@ -193,6 +196,13 @@ function mapInterviews_(list) {
     r.date = fmtDate_(r.date);
     r.time = fmtTime_(r.time);
     r.followUp = (r.followUp === true || r.followUp === "필요" || String(r.followUp).toLowerCase() === "true") ? "필요" : "";
+    return r;
+  });
+}
+
+function mapReports_(list) {
+  return list.map(function (r) {
+    r.urgent = (r.urgent === true || r.urgent === "긴급" || String(r.urgent).toLowerCase() === "true");
     return r;
   });
 }
@@ -313,6 +323,7 @@ function doPost(e) {
   if (data.type === "schedule") return handleSchedule_(action, data);
   if (data.type === "issue")    return handleIssue_(action, data);
   if (data.type === "point")    return handlePoint_(action, data);
+  if (data.type === "report")   return handleReport_(action, data);
   if (data.type === "interview") return handleInterview_(action, data);
   if (data.type === "attendance") return handleAttendance_(action, data);
   return json_({ ok: false, error: "unknown type" });
@@ -456,6 +467,25 @@ function handlePoint_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, { id: id, text: data.text || "" });
+    return json_({ ok: true, id: id });
+  }
+
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+
+  return json_({ ok: false, error: "unknown action" });
+}
+
+function handleReport_(action, data) {
+  var sh = sheet_("reports", REPORT_FIELDS);
+
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, { id: id, text: data.text || "", link: data.link || "", urgent: data.urgent ? "긴급" : "" });
     return json_({ ok: true, id: id });
   }
 

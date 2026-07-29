@@ -32,7 +32,7 @@ var CREW_FIELDS = [
   "id","name","role","team","group","status","joinDate","phone","site","duties","note",
   "contractType","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
 ];
-var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link"];
+var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link","alarm","alarmTime"];
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
 var REPORT_FIELDS = ["id","text","link","urgent"];
@@ -188,8 +188,10 @@ function doGet(e) {
 function mapSchedule_(list) {
   return list.map(function (r) {
     r.done = (r.done === true || String(r.done).toLowerCase() === "true" || r.done === "완료" || r.done === "y");
+    r.alarm = (r.alarm === true || String(r.alarm).toLowerCase() === "true" || r.alarm === "켜짐" || r.alarm === "y");
     r.date = fmtDate_(r.date);
     r.time = fmtTime_(r.time);
+    r.alarmTime = r.alarmTime ? fmtTime_(r.alarmTime) : "";
     return r;
   });
 }
@@ -375,7 +377,8 @@ function handleCrew_(action, data) {
 function scheduleValuesObj_(data) {
   return {
     id: data.id, date: data.date || "", time: data.time || "", title: data.title || "",
-    category: data.category || "", done: data.done ? "완료" : "", assignee: data.assignee || "", link: data.link || ""
+    category: data.category || "", done: data.done ? "완료" : "", assignee: data.assignee || "", link: data.link || "",
+    alarm: data.alarm ? "켜짐" : "", alarmTime: data.alarmTime || ""
   };
 }
 

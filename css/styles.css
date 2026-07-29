@@ -360,6 +360,7 @@ html[data-authed="1"] .lock { display: none; }
 }
 .evt__toggle:hover { border-color: var(--accent) !important; transform: scale(1.12); }
 .evt.is-done .evt__toggle { background: var(--accent); border-color: var(--accent) !important; color: var(--accent-ink); }
+.evt__alarm-mark { font-size: 8px; margin-left: 3px; opacity: .8; vertical-align: 1px; }
 .evt__link {
   flex: none; margin-top: -1px; width: 20px; height: 20px; border-radius: 6px;
   display: grid; place-items: center; font-size: 11px; line-height: 1;
@@ -752,6 +753,55 @@ html[data-authed="1"] .lock { display: none; }
 .note-card__actions { margin-left: auto; display: flex; gap: 1px; flex: none; opacity: 0; transition: opacity .12s; }
 .note-card:hover .note-card__actions { opacity: 1; }
 .note-empty { padding: 40px 0; text-align: center; color: var(--ink-3); font-size: 13px; }
+
+/* =========================================================
+   NOTIFY · 알림 설정
+   ========================================================= */
+.notify-card {
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card-bg);
+  padding: 16px 20px; margin-bottom: 16px;
+}
+.notify-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--card-bg);
+}
+.notify-row + .notify-row { margin-top: 10px; }
+.notify-row--setting { border: none; background: none; padding: 6px 0; }
+.notify-row__label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.notify-row__label .muted { font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
+.notify-row__icon { font-size: 16px; flex: none; }
+.notify-row__name { font-weight: 700; font-size: 13px; flex: none; }
+.notify-row__meta { font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); margin-left: auto; }
+.notify-row__badge {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-2); flex: none;
+}
+.notify-row__badge.is-today { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-text); }
+.notify-upcoming { display: grid; gap: 10px; margin-top: 14px; }
+.notify-preview { margin-top: 20px; }
+
+/* 온/오프 스위치 */
+.switch {
+  position: relative; width: 38px; height: 22px; flex: none; padding: 0;
+  border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px; cursor: pointer;
+  transition: background .14s, border-color .14s;
+}
+.switch__knob {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--ink-3); transition: transform .14s, background .14s;
+}
+.switch.is-on { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); }
+.switch.is-on .switch__knob { transform: translateX(16px); background: var(--accent); }
+
+/* 축하 팝업 */
+.celeb-card { max-width: 420px; }
+.celeb-list { display: grid; gap: 10px; margin: 4px 0 20px; }
+.celeb-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--panel-2);
+}
+.celeb-item__icon { font-size: 22px; flex: none; }
+.celeb-item__text { font-size: 13.5px; font-weight: 600; color: var(--ink); }
 
 /* =========================================================
    MODAL (일정 등록)

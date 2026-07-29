@@ -159,6 +159,15 @@
       .catch(function (e) { console.warn("[시트 저장 실패]", e); });
   }
 
+  /** 일정 저장 payload — 필드 하나만 바뀌어도 항상 전체 필드를 함께 보내 시트에서 값이 비는 걸 방지 */
+  function schedulePayload_(evt, action) {
+    return {
+      type: "schedule", action: action, id: evt.id, date: evt.date, time: evt.time, title: evt.title,
+      category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link,
+      alarm: evt.alarm, alarmTime: evt.alarmTime || "",
+    };
+  }
+
   function updateModeBadge() {
     var foot = document.querySelector(".side__foot");
     if (!foot) return;
@@ -340,6 +349,10 @@
     form.assignee.value = (prefill && prefill.assignee) || "";
     form.link.value = (prefill && prefill.link) || "";
     form.done.checked = !!(prefill && prefill.done);
+    var alarmOn = !!(prefill && prefill.alarm);
+    form.alarm.checked = alarmOn;
+    form.alarmTime.value = (prefill && prefill.alarmTime) || (prefill && prefill.time) || "";
+    el.querySelector("#eventAlarmWrap").hidden = !alarmOn;
     el.hidden = false;
     setTimeout(function () { form.title.focus(); }, 30);
   }
@@ -368,7 +381,11 @@
       + '<label class="fld"><span>제목</span><input type="text" name="title" maxlength="60" required placeholder="일정 제목"></label>'
       + '<label class="fld"><span>담당 <em>(선택)</em></span><input type="text" name="assignee" maxlength="20" placeholder="담당자 / 팀"></label>'
       + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
-      + '<label class="fld fld--check"><input type="checkbox" name="done"><span>완료 처리</span></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld fld--check"><input type="checkbox" name="done"><span>완료 처리</span></label>'
+        + '<label class="fld fld--check"><input type="checkbox" name="alarm"><span>🔔 알림 설정</span></label>'
+      + '</div>'
+      + '<label class="fld" id="eventAlarmWrap" hidden><span>알림 시간</span><input type="time" name="alarmTime"></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="eventDelBtn" hidden>삭제</button>'
         + '<div class="modal__spacer"></div>'
@@ -380,6 +397,11 @@
 
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closeEventModal();
+    });
+    wrap.querySelector('input[name="alarm"]').addEventListener("change", function (ev) {
+      var f = wrap.querySelector("form");
+      wrap.querySelector("#eventAlarmWrap").hidden = !ev.target.checked;
+      if (ev.target.checked && !f.alarmTime.value) f.alarmTime.value = f.time.value || "09:00";
     });
     // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
@@ -397,16 +419,16 @@
         done: f.done.checked,
         assignee: f.assignee.value.trim(),
         link: f.link.value.trim(),
+        alarm: f.alarm.checked,
+        alarmTime: f.alarm.checked ? (f.alarmTime.value || f.time.value || "") : "",
       };
       if (id) {
         var idx = indexById(window.SCHEDULE, id);
         if (idx > -1) window.SCHEDULE[idx] = evt; else window.SCHEDULE.push(evt);
-        saveToSheet({ type: "schedule", action: "update", id: evt.id, date: evt.date, time: evt.time,
-                      title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+        saveToSheet(schedulePayload_(evt, "update"));
       } else {
         window.SCHEDULE.push(evt);
-        saveToSheet({ type: "schedule", action: "add", id: evt.id, date: evt.date, time: evt.time,
-                      title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+        saveToSheet(schedulePayload_(evt, "add"));
       }
       closeEventModal();
       renderSchedule();
@@ -449,7 +471,8 @@
 
   function evtRow(e) {
     var color = CATCOLOR[e.category] || "#cbd5e1";
-    var lead = e.time ? '<span class="evt__time">' + esc(e.time) + '</span>' : '';
+    var alarmMark = e.alarm ? '<span class="evt__alarm-mark" title="알림 ' + esc(e.alarmTime || e.time || "") + '">🔔</span>' : '';
+    var lead = e.time ? '<span class="evt__time">' + esc(e.time) + '</span>' + alarmMark : (alarmMark ? '<span class="evt__time">' + alarmMark + '</span>' : '');
     var link = e.link
       ? '<a class="evt__link" href="' + esc(e.link) + '" target="_blank" rel="noopener" title="링크 열기" onclick="event.stopPropagation()">🔗</a>'
       : '';
@@ -474,16 +497,14 @@
     var evt = findById(window.SCHEDULE, id);
     if (!evt) return;
     evt.date = addDays(evt.date, 1);
-    saveToSheet({ type: "schedule", action: "update", id: evt.id, date: evt.date, time: evt.time,
-                  title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+    saveToSheet(schedulePayload_(evt, "update"));
     renderSchedule();
   }
   function toggleEventDone(id) {
     var evt = findById(window.SCHEDULE, id);
     if (!evt) return;
     evt.done = !evt.done;
-    saveToSheet({ type: "schedule", action: "update", id: evt.id, date: evt.date, time: evt.time,
-                  title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+    saveToSheet(schedulePayload_(evt, "update"));
     renderSchedule();
   }
   function deleteEventQuick(id) {
@@ -569,10 +590,9 @@
       done = true;
       var title = input.value.trim();
       if (!title) { renderSchedule(); return; }
-      var evt = { id: newId("s"), date: iso, time: "", title: title, category: "기타", done: false, assignee: "", link: "" };
+      var evt = { id: newId("s"), date: iso, time: "", title: title, category: "기타", done: false, assignee: "", link: "", alarm: false, alarmTime: "" };
       window.SCHEDULE.push(evt);
-      saveToSheet({ type: "schedule", action: "add", id: evt.id, date: evt.date, time: evt.time,
-                    title: evt.title, category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link });
+      saveToSheet(schedulePayload_(evt, "add"));
       renderSchedule();
     }
     function cancel() {
@@ -1975,6 +1995,239 @@
   }
 
   /* ======================================================
+     NOTIFY · 알림 설정 (생일 · 입사 기념일 축하 팝업)
+     ====================================================== */
+  var NOTIFY_KEY = "sg-notify-settings";
+  var NOTIFY_SHOWN_KEY = "sg-notify-shown";
+  var NOTIFY_TIMINGS = [
+    { key: "0", label: "당일" },
+    { key: "1", label: "1일 전" },
+    { key: "3", label: "3일 전" },
+    { key: "7", label: "1주일 전" },
+  ];
+  var notifyScope = "week"; // "week" | "month" — 다가오는 축하 미리보기 범위
+
+  function loadNotifySettings() {
+    var base = { birthday: true, anniversary: true, timing: "0" };
+    try {
+      var raw = localStorage.getItem(NOTIFY_KEY);
+      if (raw) return Object.assign(base, JSON.parse(raw));
+    } catch (e) {}
+    return base;
+  }
+  function saveNotifySettings(s) {
+    try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+
+  /** "MM-DD" 를 기준으로, 오늘 이후(오늘 포함) 가장 가까운 다음 발생일(YYYY-MM-DD)을 구한다. */
+  function nextOccurrence(mmdd, todayIso) {
+    if (!mmdd) return null;
+    var ty = +todayIso.slice(0, 4);
+    var cand = ty + "-" + mmdd;
+    if (cand < todayIso) cand = (ty + 1) + "-" + mmdd;
+    return cand;
+  }
+  function daysBetweenISO(a, b) { return Math.round((d(b) - d(a)) / 86400000); }
+
+  /** scopeDays 이내에 다가오는 생일 · 입사기념일 목록 (설정 on/off 와 무관하게, 미리보기용) */
+  function upcomingCelebrations(scopeDays) {
+    var out = [];
+    (window.CREW || []).forEach(function (c) {
+      if (c.status === "퇴사") return;
+      if (c.birthDate) {
+        var occ = nextOccurrence(c.birthDate.slice(5), TODAY);
+        var days = daysBetweenISO(TODAY, occ);
+        if (days <= scopeDays) out.push({ crew: c, type: "birthday", occursOn: occ, daysUntil: days });
+      }
+      if (c.joinDate) {
+        var occ2 = nextOccurrence(c.joinDate.slice(5), TODAY);
+        var years = +occ2.slice(0, 4) - +c.joinDate.slice(0, 4);
+        var days2 = daysBetweenISO(TODAY, occ2);
+        if (years > 0 && days2 <= scopeDays) out.push({ crew: c, type: "anniversary", years: years, occursOn: occ2, daysUntil: days2 });
+      }
+    });
+    out.sort(function (a, b) { return a.daysUntil - b.daysUntil; });
+    return out;
+  }
+
+  /** 설정된 알림 시점(당일/N일 전)에 정확히 해당하는, 오늘 팝업으로 띄울 목록 */
+  function todaysCelebrations(settings) {
+    var offset = +settings.timing || 0;
+    var out = [];
+    (window.CREW || []).forEach(function (c) {
+      if (c.status === "퇴사") return;
+      if (settings.birthday && c.birthDate) {
+        var occ = nextOccurrence(c.birthDate.slice(5), TODAY);
+        if (daysBetweenISO(TODAY, occ) === offset) out.push({ crew: c, type: "birthday", occursOn: occ, daysUntil: offset });
+      }
+      if (settings.anniversary && c.joinDate) {
+        var occ2 = nextOccurrence(c.joinDate.slice(5), TODAY);
+        var years = +occ2.slice(0, 4) - +c.joinDate.slice(0, 4);
+        if (years > 0 && daysBetweenISO(TODAY, occ2) === offset) out.push({ crew: c, type: "anniversary", years: years, occursOn: occ2, daysUntil: offset });
+      }
+    });
+    return out;
+  }
+
+  function celebMessage(item) {
+    var n = item.daysUntil || 0;
+    var when = n === 0 ? "오늘은" : n === 1 ? "내일은" : n + "일 후엔";
+    return item.type === "birthday"
+      ? when + " " + esc(item.crew.name) + "님의 생일이에요!"
+      : when + " " + esc(item.crew.name) + "님의 입사 " + item.years + "주년이에요!";
+  }
+
+  /** 팝업(하루 한 번, 설정된 알림 시점에 해당하는 축하가 있을 때만) */
+  function checkCelebrationPopup() {
+    var settings = loadNotifySettings();
+    if (!settings.birthday && !settings.anniversary) return;
+    var shownFor = "";
+    try { shownFor = localStorage.getItem(NOTIFY_SHOWN_KEY) || ""; } catch (e) {}
+    if (shownFor === TODAY) return;
+    var list = todaysCelebrations(settings);
+    if (!list.length) return;
+    try { localStorage.setItem(NOTIFY_SHOWN_KEY, TODAY); } catch (e) {}
+    openCelebrationModal(list);
+  }
+
+  function openCelebrationModal(list) {
+    var el = document.getElementById("celebModal");
+    if (el) el.remove();
+    el = document.createElement("div");
+    el.className = "modal";
+    el.id = "celebModal";
+    el.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card celeb-card" role="dialog" aria-modal="true" aria-label="축하 알림">'
+      + '<div class="modal__head"><h3>🎉 오늘의 축하 소식</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<div class="celeb-list">' + list.map(function (item) {
+          return '<div class="celeb-item">'
+            + '<span class="celeb-item__icon">' + (item.type === "birthday" ? "🎂" : "🎉") + '</span>'
+            + '<span class="celeb-item__text">' + celebMessage(item) + '</span>'
+          + '</div>';
+        }).join("") + '</div>'
+      + '<div class="modal__foot"><div class="modal__spacer"></div><button type="button" class="btn btn--primary" data-close>축하해요!</button></div>'
+      + '</div>';
+    el.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) el.remove();
+    });
+    document.body.appendChild(el);
+  }
+
+  function renderNotify() {
+    var settings = loadNotifySettings();
+    var scopeDays = notifyScope === "week" ? 7 : 30;
+    var upcoming = upcomingCelebrations(scopeDays);
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Operation / Notify</p>'
+      + '<h2>알림 설정</h2>'
+      + '<p class="sub">크루의 생일 · 입사 기념일을 놓치지 않도록 축하 알림을 관리하세요.</p></div>'
+      + '</div>';
+
+    html += '<div class="notify-card">'
+      + '<div class="notify-row notify-row--setting">'
+        + '<div class="notify-row__label"><b>생일 알림</b><span class="muted">크루 생일에 축하 팝업을 띄워요</span></div>'
+        + '<button type="button" class="switch' + (settings.birthday ? " is-on" : "") + '" role="switch" aria-checked="' + (settings.birthday ? "true" : "false") + '" data-notify-toggle="birthday"><span class="switch__knob"></span></button>'
+      + '</div>'
+      + '<div class="notify-row notify-row--setting">'
+        + '<div class="notify-row__label"><b>입사 기념일 알림</b><span class="muted">크루 입사 기념일에 축하 팝업을 띄워요</span></div>'
+        + '<button type="button" class="switch' + (settings.anniversary ? " is-on" : "") + '" role="switch" aria-checked="' + (settings.anniversary ? "true" : "false") + '" data-notify-toggle="anniversary"><span class="switch__knob"></span></button>'
+      + '</div>'
+      + '</div>';
+
+    html += '<div class="notify-card">'
+      + '<div class="notify-row__label" style="margin-bottom:12px"><b>알림 시점</b><span class="muted">구글 캘린더처럼, 당일 또는 며칠 전에 미리 알려드려요</span></div>'
+      + '<div class="seg" id="notifyTiming">' + NOTIFY_TIMINGS.map(function (t) {
+          return '<button type="button" class="btn btn--sm btn--pill' + (t.key === settings.timing ? " is-on" : "") + '" data-notify-timing="' + t.key + '">' + t.label + '</button>';
+        }).join("") + '</div>'
+      + '</div>';
+
+    html += '<div class="page-head" style="margin-top:8px">'
+      + '<div><h3 style="margin:0 0 4px;font-size:18px;">다가오는 축하</h3><p class="sub" style="margin:0">설정과 무관하게, 앞으로 다가오는 생일 · 기념일을 미리 볼 수 있어요.</p></div>'
+      + '<div class="seg">'
+        + '<button class="btn btn--sm btn--pill' + (notifyScope === "week" ? " is-on" : "") + '" data-notify-scope="week">이번 주</button>'
+        + '<button class="btn btn--sm btn--pill' + (notifyScope === "month" ? " is-on" : "") + '" data-notify-scope="month">이번 달</button>'
+      + '</div>'
+      + '</div>';
+
+    html += upcoming.length
+      ? '<div class="notify-upcoming">' + upcoming.map(notifyRow).join("") + '</div>'
+      : '<div class="note-empty">해당 기간에 예정된 생일 · 기념일이 없습니다.</div>';
+
+    html += '<div class="notify-preview"><button type="button" class="btn" id="notifyPreviewBtn">🎉 축하 팝업 미리보기</button></div>';
+
+    view.innerHTML = html;
+  }
+
+  function notifyRow(item) {
+    var g = groupOf(item.crew.group);
+    var badge = item.daysUntil === 0 ? "오늘" : "D-" + item.daysUntil;
+    var metaLabel = item.type === "birthday"
+      ? fmtDotDate(item.occursOn) + " · 생일"
+      : fmtDotDate(item.occursOn) + " · 입사 " + item.years + "주년";
+    return '<div class="notify-row">'
+      + '<span class="notify-row__icon">' + (item.type === "birthday" ? "🎂" : "🎉") + '</span>'
+      + '<i class="gdot" style="background:' + g.bg + '"></i>'
+      + '<span class="notify-row__name">' + esc(item.crew.name) + '</span>'
+      + '<span class="notify-row__meta">' + metaLabel + '</span>'
+      + '<span class="notify-row__badge' + (item.daysUntil === 0 ? " is-today" : "") + '">' + badge + '</span>'
+      + '</div>';
+  }
+
+  /* ---------- 일정 알림 (컴퓨터 시간 기준 실시간 감시) ---------- */
+  var ALARM_FIRED_KEY = "sg-alarm-fired";
+
+  function loadFiredAlarms() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(ALARM_FIRED_KEY) || "null");
+      if (raw && raw.date === TODAY) return raw;
+    } catch (e) {}
+    return { date: TODAY, ids: [] };
+  }
+  function markAlarmFired(id) {
+    var f = loadFiredAlarms();
+    f.ids.push(id);
+    try { localStorage.setItem(ALARM_FIRED_KEY, JSON.stringify(f)); } catch (e) {}
+  }
+
+  function checkEventAlarms() {
+    var now = new Date();
+    var hhmm = pad2(now.getHours()) + ":" + pad2(now.getMinutes());
+    var fired = loadFiredAlarms();
+    (window.SCHEDULE || []).forEach(function (e) {
+      if (!e.alarm || !e.alarmTime || e.date !== TODAY) return;
+      if (e.alarmTime !== hhmm) return;
+      if (fired.ids.indexOf(e.id) > -1) return;
+      markAlarmFired(e.id);
+      openEventAlarmModal(e);
+    });
+  }
+
+  function openEventAlarmModal(e) {
+    var el = document.getElementById("alarmModal");
+    if (el) el.remove();
+    el = document.createElement("div");
+    el.className = "modal";
+    el.id = "alarmModal";
+    el.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card celeb-card" role="dialog" aria-modal="true" aria-label="일정 알림">'
+      + '<div class="modal__head"><h3>🔔 일정 알림</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<div class="celeb-list"><div class="celeb-item">'
+        + '<span class="celeb-item__icon">⏰</span>'
+        + '<span class="celeb-item__text">' + esc(e.alarmTime) + ' · ' + esc(e.title) + (e.assignee ? ' <span class="muted">(' + esc(e.assignee) + ')</span>' : '') + '</span>'
+      + '</div></div>'
+      + '<div class="modal__foot"><div class="modal__spacer"></div><button type="button" class="btn btn--primary" data-close>확인</button></div>'
+      + '</div>';
+    el.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) el.remove();
+    });
+    document.body.appendChild(el);
+  }
+
+  /* ======================================================
      JOURNAL · 면담일지 검토 (외부 구글시트, 읽기 전용)
      ====================================================== */
   var journalQuery = "";
@@ -2298,6 +2551,7 @@
     journal:     { title: "JOURNAL", render: renderJournal },
     schedule:    { title: "SCHEDULE", render: renderSchedule },
     note:        { title: "NOTE", render: renderNote },
+    notify:      { title: "NOTIFY", render: renderNotify },
   };
 
   function go(name) {
@@ -2407,6 +2661,36 @@
 
       var noteDelBtn = ev.target.closest(".note-act--del[data-id]");
       if (noteDelBtn) { deleteNoteQuick(noteDelBtn.getAttribute("data-id")); return; }
+
+      var notifyToggleBtn = ev.target.closest(".switch[data-notify-toggle]");
+      if (notifyToggleBtn) {
+        var s = loadNotifySettings();
+        var key = notifyToggleBtn.getAttribute("data-notify-toggle");
+        s[key] = !s[key];
+        saveNotifySettings(s);
+        renderNotify();
+        return;
+      }
+
+      var notifyTimingBtn = ev.target.closest("#notifyTiming [data-notify-timing]");
+      if (notifyTimingBtn) {
+        var s2 = loadNotifySettings();
+        s2.timing = notifyTimingBtn.getAttribute("data-notify-timing");
+        saveNotifySettings(s2);
+        renderNotify();
+        return;
+      }
+
+      var notifyScopeBtn = ev.target.closest("[data-notify-scope]");
+      if (notifyScopeBtn) { notifyScope = notifyScopeBtn.getAttribute("data-notify-scope"); renderNotify(); return; }
+
+      if (ev.target.closest("#notifyPreviewBtn")) {
+        var previewList = todaysCelebrations(Object.assign({}, loadNotifySettings(), { birthday: true, anniversary: true }));
+        if (!previewList.length) previewList = upcomingCelebrations(365).slice(0, 3);
+        if (!previewList.length) { alert("미리 볼 생일 · 기념일 정보가 없습니다."); return; }
+        openCelebrationModal(previewList);
+        return;
+      }
 
       var nextBtn = ev.target.closest(".evt__act--next[data-id]");
       if (nextBtn) { moveEventToNextDay(nextBtn.getAttribute("data-id")); return; }
@@ -2555,10 +2839,13 @@
     if (isLive()) {
       view.innerHTML = '<div class="loading-screen"><div class="loading-spinner"></div>'
         + '<p class="loading-text">구글시트에서 불러오는 중…</p></div>';
-      loadData().then(function () { go(initial); });
+      loadData().then(function () { go(initial); checkCelebrationPopup(); checkEventAlarms(); });
     } else {
       go(initial);
+      checkCelebrationPopup();
+      checkEventAlarms();
     }
+    setInterval(checkEventAlarms, 20000);
   }
 
   /* ---------- lock : 접속 시 4자리 비밀번호 확인 ---------- */

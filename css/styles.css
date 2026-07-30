@@ -1021,31 +1021,24 @@ html[data-authed="1"] .lock { display: none; }
 .ob-ref__note { color: var(--ink-2); font-size: 12px; line-height: 1.6; margin: 0; }
 .ob-ref__note b { color: var(--ink); }
 
-/* 온보딩 카드 그리드 */
-.ob-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+/* 온보딩 게시판(표) */
 .ob-empty { border: 1px dashed var(--line); border-radius: var(--r); }
-.ob-card {
-  border: 1px solid var(--line-soft); border-radius: var(--r); background: var(--card-bg);
-  padding: 18px; cursor: pointer; transition: border-color .14s, transform .1s, box-shadow .14s;
-}
-.ob-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
-.ob-card__head { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
-.ob-avatar { width: 38px; height: 38px; border-radius: 11px; display: grid; place-content: center; font-weight: 800; font-size: 15px; flex: none; }
-.ob-card__id { flex: 1; min-width: 0; }
-.ob-card__id b { display: block; font-size: 15px; color: var(--ink); }
-.ob-card__group { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+.board__table--ob th:nth-child(1) { width: 120px; }
+.board__table--ob th:nth-child(2) { width: 160px; }
+.board__table--ob th:nth-child(3) { width: 220px; }
+.board__table--ob th:nth-child(5) { width: 140px; }
+.ob-card__group { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
 .ob-card__dis { color: var(--amber); font-weight: 600; }
-.ob-card__meta { font-size: 12px; color: var(--ink-2); font-family: var(--mono); margin-bottom: 12px; }
-.ob-card__dday { color: var(--accent-text); font-weight: 700; }
-.ob-card__dday--done { color: var(--ink-3); }
+.ob-dday { color: var(--accent-text); font-weight: 700; }
+.ob-dday--done { color: var(--ink-3); }
 .ob-progress { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
 .ob-progress__bar { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #60a5fa)); transition: width .3s ease; }
 .ob-progress--lg { height: 11px; }
-.ob-card__foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-.ob-card__pct { font-size: 12px; color: var(--ink-2); }
-.ob-card__pct b { color: var(--accent-text); font-family: var(--mono); }
-.ob-card__link { text-decoration: none; font-size: 15px; opacity: .8; }
-.ob-card__link:hover { opacity: 1; }
+.ob-row-progress { display: flex; align-items: center; gap: 10px; }
+.ob-row-progress .ob-progress { flex: 1; min-width: 70px; max-width: 130px; }
+.ob-row-progress__txt { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-family: var(--mono); }
+.ob-card__link { text-decoration: none; font-size: 11px; font-family: var(--mono); color: var(--ink-3); margin-left: 8px; text-decoration: underline; }
+.ob-card__link:hover { color: var(--accent-text); }
 
 /* 온보딩 모달 */
 .modal__card--ob { max-width: 720px; width: 92vw; max-height: 88vh; display: flex; flex-direction: column; }

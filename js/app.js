@@ -2942,7 +2942,9 @@
       return html;
     }
 
-    html += '<div class="ob-grid">' + recs.map(onboardCard).join("") + '</div>';
+    html += '<div class="board"><div class="board__scroll"><table class="board__table board__table--ob"><thead><tr>'
+      + '<th>크루</th><th>그룹</th><th>입사 · 경과</th><th>진행률</th><th>상태</th>'
+      + '</tr></thead><tbody>' + recs.map(onboardRow).join("") + '</tbody></table></div></div>';
     return html;
   }
 
@@ -2973,7 +2975,7 @@
     return '<div class="ob-ref__body">' + proc + jobs + dis + '</div>';
   }
 
-  function onboardCard(rec) {
+  function onboardRow(rec) {
     var crew = findById(window.CREW || [], rec.crewId) || { name: rec.crewName, group: "" };
     var g = groupOf(crew.group);
     var stats = onboardStats(rec, crew);
@@ -2982,32 +2984,25 @@
     var joined = rec.date || crew.joinDate || "";
     var dayN = dayCountFrom(joined);
     var left = probationLeft(joined);
-    var initial = (crew.name || "?").slice(0, 1);
 
     var meta = [];
     if (joined) meta.push("입사 " + fmtShortDot(joined));
     if (dayN != null && dayN > 0) meta.push(dayN + "일차");
-    if (left != null && left > 0) meta.push('<span class="ob-card__dday">수습 D-' + left + '</span>');
-    else if (left != null && left <= 0) meta.push('<span class="ob-card__dday ob-card__dday--done">수습 종료</span>');
+    if (left != null && left > 0) meta.push('<span class="ob-dday">수습 D-' + left + '</span>');
+    else if (left != null && left <= 0) meta.push('<span class="ob-dday ob-dday--done">수습 종료</span>');
 
     var disTag = crew.disability === "장애" ? ' <span class="ob-card__dis">장애 · 5단계</span>' : '';
 
-    return '<div class="ob-card" data-ob-id="' + esc(rec.id) + '">'
-      + '<div class="ob-card__head">'
-        + '<span class="ob-avatar" style="background:' + g.bg + ';color:' + g.fg + '">' + esc(initial) + '</span>'
-        + '<div class="ob-card__id">'
-          + '<b>' + esc(crew.name || rec.crewName) + '</b>'
-          + '<span class="ob-card__group"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(crew.group || "—") + disTag + '</span>'
-        + '</div>'
-        + '<span class="edu-badge" style="--c:' + sc.c + '">' + esc(st) + '</span>'
-      + '</div>'
-      + '<div class="ob-card__meta">' + (meta.join(" · ") || "입사일 미입력") + '</div>'
-      + '<div class="ob-progress"><div class="ob-progress__bar" style="width:' + stats.pct + '%"></div></div>'
-      + '<div class="ob-card__foot">'
-        + '<span class="ob-card__pct">독립수행 이상 <b>' + stats.achieved + '</b>/' + stats.total + ' · ' + stats.pct + '%</span>'
-        + (rec.link ? '<a class="ob-card__link" href="' + esc(rec.link) + '" target="_blank" rel="noopener" title="드라이브 열기" onclick="event.stopPropagation()">📁</a>' : '')
-      + '</div>'
-      + '</div>';
+    return '<tr class="board__row" data-ob-id="' + esc(rec.id) + '">'
+      + '<td><b>' + esc(crew.name || rec.crewName) + '</b></td>'
+      + '<td><span class="ob-card__group"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(crew.group || "—") + disTag + '</span></td>'
+      + '<td class="mono-cell">' + (meta.join(" · ") || "입사일 미입력") + '</td>'
+      + '<td><div class="ob-row-progress"><div class="ob-progress"><div class="ob-progress__bar" style="width:' + stats.pct + '%"></div></div>'
+        + '<span class="ob-row-progress__txt">' + stats.achieved + '/' + stats.total + ' · ' + stats.pct + '%</span></div></td>'
+      + '<td><span class="edu-badge" style="--c:' + sc.c + '">' + esc(st) + '</span>'
+        + (rec.link ? ' <a class="ob-card__link" href="' + esc(rec.link) + '" target="_blank" rel="noopener" title="드라이브 열기" onclick="event.stopPropagation()">Drive</a>' : '')
+      + '</td>'
+      + '</tr>';
   }
 
   function fmtShortDot(iso) {
@@ -3530,7 +3525,7 @@
         renderEducation(); return;
       }
 
-      var obCardEl = ev.target.closest(".ob-card[data-ob-id]");
+      var obCardEl = ev.target.closest(".board__row[data-ob-id]");
       if (obCardEl) {
         var obRec = findById(window.EDUCATION || [], obCardEl.getAttribute("data-ob-id"));
         if (obRec) openOnboardModal(obRec, false);

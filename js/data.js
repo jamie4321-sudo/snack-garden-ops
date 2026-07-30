@@ -94,6 +94,35 @@ window.NOTES = [
   { id:"nt2", date:"2026-07-22", time:"09:05", part:"스낵", text:"성수 OJT 배라 명찰 아직 미발급, 뱃지번호 확인 필요", author:"제이미" },
 ];
 
+/* --- 교육 관리 : 시트 "education"
+   (헤더 = id,category,title,crewId,crewName,date,dueDate,status,provider,hours,note)
+   category : OJT온보딩 | 법정의무교육 | 정기교육
+   status   : 예정 | 진행중 | 완료
+   crewName : 개인명 또는 "전체 크루"(crewId 는 비움) --- */
+window.EDUCATION = [
+  // OJT 온보딩
+  { id:"ed1", category:"OJT온보딩", title:"성수 현장 OJT (1주차)", crewId:"c5", crewName:"정배라",
+    date:"2026-07-20", dueDate:"", status:"진행중", provider:"레오", hours:"주 5일", note:"발주 프로세스 집중 습득" },
+  { id:"ed2", category:"OJT온보딩", title:"신규 입사자 온보딩 오리엔테이션", crewId:"c5", crewName:"정배라",
+    date:"2026-07-31", dueDate:"", status:"예정", provider:"레오", hours:"3시간", note:"7/31 온보딩 미팅" },
+
+  // 법정의무교육 (연 1회 이수 의무)
+  { id:"ed3", category:"법정의무교육", title:"직장 내 성희롱 예방교육", crewId:"", crewName:"전체 크루",
+    date:"2026-03-12", dueDate:"2026-12-31", status:"완료", provider:"사내 (엘리)", hours:"1시간", note:"전 직원 이수 완료" },
+  { id:"ed4", category:"법정의무교육", title:"개인정보보호 교육", crewId:"", crewName:"전체 크루",
+    date:"", dueDate:"2026-12-31", status:"예정", provider:"온라인 이러닝", hours:"1시간", note:"하반기 진행 예정" },
+  { id:"ed5", category:"법정의무교육", title:"장애인 인식개선 교육", crewId:"", crewName:"전체 크루",
+    date:"2026-06-18", dueDate:"2026-08-31", status:"진행중", provider:"외부 강사", hours:"1시간", note:"일부 크루 미이수 — 8월 보충" },
+  { id:"ed6", category:"법정의무교육", title:"산업안전보건 교육 (분기)", crewId:"", crewName:"전체 크루",
+    date:"", dueDate:"2026-09-30", status:"예정", provider:"안전관리자", hours:"3시간", note:"3분기 정기 실시" },
+
+  // 정기 교육
+  { id:"ed7", category:"정기교육", title:"매니저 대응 교육 · 퇴사/경조 발생 시", crewId:"c3", crewName:"박엘리",
+    date:"2026-07-22", dueDate:"", status:"예정", provider:"내부", hours:"1시간", note:"퇴사·경조 대응 프로세스" },
+  { id:"ed8", category:"정기교육", title:"CS 응대 역량 강화", crewId:"", crewName:"스낵 파트",
+    date:"2026-05-14", dueDate:"", status:"완료", provider:"외부 강사", hours:"2시간", note:"" },
+];
+
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */
 window.SUMMARY = {
   monthLabel: "2026년 7월",

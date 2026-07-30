@@ -116,6 +116,16 @@
     };
   }
 
+  function normEducation(r) {
+    return {
+      id: r.id || "", category: r.category || "정기교육", title: r.title || "",
+      crewId: r.crewId || "", crewName: r.crewName || "전체 크루",
+      date: fmtDay(r.date), dueDate: fmtDay(r.dueDate),
+      status: r.status || "예정", provider: r.provider || "", hours: r.hours || "", note: r.note || "",
+      link: r.link || "", checklist: r.checklist || "{}",
+    };
+  }
+
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
     if (!iso) return "—";
@@ -145,6 +155,7 @@
         if (d && d.reports) window.SUMMARY.reports = d.reports;
         if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
         if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
+        if (d && d.education) window.EDUCATION = d.education.map(normEducation);
         if (d && d.notes) window.NOTES = d.notes;
         return true;
       })
@@ -2666,6 +2677,772 @@
   }
 
   /* ======================================================
+     EDUCATION · 교육 관리 (OJT온보딩 · 법정의무교육 · 정기교육)
+     ====================================================== */
+  var EDU_SECTIONS = [
+    { key: "onboarding", label: "OJT 온보딩",   cat: "OJT온보딩",   c: "#b39dff" },
+    { key: "legal",      label: "법정의무교육", cat: "법정의무교육", c: "#ff5a52" },
+    { key: "regular",    label: "정기 교육",    cat: "정기교육",     c: "#60a5fa" },
+  ];
+  function eduSectionOf(k) { for (var i = 0; i < EDU_SECTIONS.length; i++) if (EDU_SECTIONS[i].key === k) return EDU_SECTIONS[i]; return EDU_SECTIONS[0]; }
+  var eduSection = "onboarding";
+  var eduQuery = "";
+  var eduRefOpen = false; // 표준 프로세스 참고 패널
+  var eduPeriodMode = "all"; // "all" | "month" | "year" — 월별/연별 검색
+  var eduAnchor = TODAY;     // 기간 검색 기준 월/년
+
+  // 정기 교육 참석 서명 웹 (edu-sign)
+  var EDU_SIGN_URL = "https://jamie4321-sudo.github.io/edu-sign/";
+
+  // 법정/정기 교육 상태 (수동 지정)
+  var EDU_STATUS = [
+    { key: "예정",   c: "var(--slate)" },
+    { key: "진행중", c: "var(--amber)" },
+    { key: "완료",   c: "var(--green)" },
+  ];
+  function eduStatusOf(k) { for (var i = 0; i < EDU_STATUS.length; i++) if (EDU_STATUS[i].key === k) return EDU_STATUS[i]; return EDU_STATUS[0]; }
+
+  // 온보딩 드라이브 루트 (크루별 하위 폴더 링크를 붙여 관리)
+  var ONBOARD_DRIVE_ROOT = "https://drive.google.com/drive/folders/1imSrDwPWdnItj3mXmrO2p9SL1_YTaDVW?usp=drive_link";
+
+  /* ---- 온보딩 체크리스트 정의 ---- */
+  var ONBOARD_STATUS = [
+    { key: "none",     label: "미교육",       c: "var(--slate)" },
+    { key: "learning", label: "교육중",       c: "var(--amber)" },
+    { key: "support",  label: "지원필요",     c: "var(--red)" },
+    { key: "indep",    label: "독립수행가능", c: "#60a5fa" },
+    { key: "done",     label: "완료",         c: "var(--green)" },
+  ];
+  function onboardStatusOf(k) { for (var i = 0; i < ONBOARD_STATUS.length; i++) if (ONBOARD_STATUS[i].key === k) return ONBOARD_STATUS[i]; return ONBOARD_STATUS[0]; }
+  // "혼자 수행 가능" 이상을 온보딩 달성으로 간주
+  function onboardAchieved(k) { return k === "indep" || k === "done"; }
+
+  // 파트별 직무 교육 순서
+  var ONBOARD_JOB = {
+    "스낵":    ["진열 기준", "수량 확인", "유통기한·위생관리", "재고 및 발주 흐름", "오아시스·라면존 스팟별 업무", "설비 기본관리", "현장 이슈 보고"],
+    "가든":    ["관리구역 파악", "식물 기본관리", "관수 기준", "고사엽 제거·클렌징", "작업도구 사용", "중량물 및 안전교육", "병충해·누수·시설 이슈 보고", "담당 스팟 관리"],
+    "총무지원": ["담당 업무 및 서비스 범위", "요청 접수 방법", "업무별 처리 기준", "사내 보안·개인정보 기준", "장비·자산관리", "처리 결과 기록 및 보고"],
+  };
+  function onboardAreas(crew) {
+    var group = (crew && crew.group) || "";
+    var job = ONBOARD_JOB[group] || ["직무 기본 이해", "핵심 업무 시연", "보조 수행", "직접 수행"];
+    return [
+      { key: "prep",    title: "① 입사 준비",     items: ["입사일·근무시간·직무 확인", "계정·업무 이메일 발급", "유니폼·출입권한 준비", "OJT 일정 안내"] },
+      { key: "basic",   title: "② 기본 교육",     items: ["회사·조직 소개", "직장생활 기본 에티켓", "장애·비장애 크루 협업 방식", "메신저 사용 방법", "개인정보·보안 기본"] },
+      { key: "job",     title: "③ 직무 교육 · " + (group || "공통"), items: job },
+      { key: "safety",  title: "④ 안전 · 위생",   items: ["안전 수칙", "위생 기준", "중량물·설비 안전"] },
+      { key: "perform", title: "⑤ 업무 수행 확인", items: ["매뉴얼 기준 수행 확인", "작업 속도·정확도 확인", "의사소통 확인", "단독 업무 수행"] },
+      { key: "adapt",   title: "⑥ 초기 적응 확인", items: ["업무 적응도 확인", "동료 관계 확인", "근무환경·어려운 점 확인", "온보딩 완료 체크리스트 확인"] },
+    ];
+  }
+  // 장애 크루 5단계 교육 방식
+  var ONBOARD_DIS_STEPS = ["설명", "시범", "함께 수행", "혼자 수행", "피드백"];
+  // 표준 9단계 온보딩 프로세스 (참고용)
+  var ONBOARD_PROCESS = [
+    ["1. 입사 확정",      "입사 1~2주 전", "입사일·근무시간·직무 확인 / 인사정보 확인 / 현장 배치 계획 수립", "팀장·인사"],
+    ["2. 입사 전 준비",   "입사 전",       "계정 발급 확인 / 유니폼·출입권한 준비 / 교육 담당자 지정 / OJT 일정 안내", "팀장·파트리더"],
+    ["3. 첫 출근 안내",   "Day 1",         "회사·조직 소개 / 담당 업무 안내 / 근무·휴게·기본 규칙 / 백오피스·면담실 안내", "파트리더"],
+    ["4. 공통 기본교육",  "Day 1~3",       "에티켓 / 장애·비장애 협업 / 안전·위생 / 메신저 / 개인정보·보안", "파트리더·담당자"],
+    ["5. 직무 OJT",       "1주차",         "선임 동행 → 시연 → 보조 수행 → 직접 수행 순으로 교육", "교육 담당자"],
+    ["6. 업무 체크",      "1~2주차",       "매뉴얼 기준 수행 확인 / 속도·정확도·안전·소통 확인 / 재교육", "파트리더"],
+    ["7. 독립 업무 전환", "2~4주차",       "담당 스팟·업무 배정 / 단독 수행 / 필요 시 선임 보완 지원", "파트리더"],
+    ["8. 초기 적응 확인", "1개월 내",      "업무 적응도 / 동료 관계 / 근무환경 / 추가 교육·업무 조정", "팀장·파트리더"],
+    ["9. 온보딩 완료",    "1개월 전후",    "체크리스트 완료 확인 / 미완료 교육 재진행 / 성장·교육 방향 설정", "팀장·파트리더"],
+  ];
+
+  function parseChecklist(raw) {
+    if (!raw) return {};
+    if (typeof raw === "object") return raw;
+    try { return JSON.parse(raw) || {}; } catch (e) { return {}; }
+  }
+  function onboardStats(rec, crew) {
+    var areas = onboardAreas(crew);
+    var cl = parseChecklist(rec.checklist);
+    var total = 0, achieved = 0, touched = 0;
+    areas.forEach(function (a) {
+      a.items.forEach(function (_, i) {
+        total++;
+        var s = cl[a.key + ":" + i] || "none";
+        if (s !== "none") touched++;
+        if (onboardAchieved(s)) achieved++;
+      });
+    });
+    return { total: total, achieved: achieved, touched: touched, pct: total ? Math.round(achieved / total * 100) : 0 };
+  }
+  function deriveOnboardStatus(stats) {
+    if (stats.total && stats.achieved === stats.total) return "완료";
+    if (stats.touched > 0) return "진행중";
+    return "예정";
+  }
+  // 입사 후 일차(1일차부터) / 수습 종료까지 남은 일수
+  function dayCountFrom(iso) { return iso ? daysBetweenISO(iso, TODAY) + 1 : null; }
+  function probationLeft(iso) { return iso ? 84 - daysBetweenISO(iso, TODAY) : null; }
+
+  function eduPayload(rec, action) {
+    return {
+      type: "education", action: action, id: rec.id, category: rec.category, title: rec.title,
+      crewId: rec.crewId, crewName: rec.crewName, date: rec.date, dueDate: rec.dueDate,
+      status: rec.status, provider: rec.provider, hours: rec.hours, note: rec.note,
+      link: rec.link || "",
+      checklist: typeof rec.checklist === "string" ? rec.checklist : JSON.stringify(rec.checklist || {}),
+    };
+  }
+
+  /* 수습 크루(입사 84일 이내 재직)를 온보딩에 자동 편입 — 실시일 = 입사일.
+     한 번 생성되면 시트에 저장되어 수습 종료 후에도 '완료' 기록으로 보존된다. */
+  function ensureOnboardingRecords() {
+    var list = window.EDUCATION || (window.EDUCATION = []);
+    (window.CREW || []).forEach(function (c) {
+      if (!isProbation(c)) return;
+      var has = list.some(function (r) { return r.category === "OJT온보딩" && String(r.crewId) === String(c.id); });
+      if (has) return;
+      var rec = {
+        id: "ob-" + c.id, category: "OJT온보딩", title: c.name + " 온보딩",
+        crewId: c.id, crewName: c.name, date: c.joinDate || "", dueDate: "",
+        status: "진행중", provider: "", hours: "", note: "", link: "", checklist: "{}",
+      };
+      list.push(rec);
+      saveToSheet(eduPayload(rec, "add"));
+    });
+  }
+
+  /* ---------- 이수기한 임박/초과 (법정·정기) ---------- */
+  function eduDueSoon(r) {
+    if (!r.dueDate || r.status === "완료") return false;
+    return daysBetweenISO(TODAY, r.dueDate) <= 30;
+  }
+  function eduOverdue(r) {
+    if (!r.dueDate || r.status === "완료") return false;
+    return daysBetweenISO(TODAY, r.dueDate) < 0;
+  }
+  function eduDueCell(r) {
+    if (!r.dueDate) return '<span class="muted">—</span>';
+    var over = eduOverdue(r), soon = eduDueSoon(r);
+    var cls = over ? " edu-due--over" : (soon ? " edu-due--soon" : "");
+    var flag = over ? ' <b>초과</b>' : (soon ? ' <b>임박</b>' : '');
+    return '<span class="edu-due mono' + cls + '">' + fmtDotDate(r.dueDate) + flag + '</span>';
+  }
+
+  function catRecords(cat) {
+    return (window.EDUCATION || []).filter(function (r) { return r.category === cat; });
+  }
+
+  /* ---- 월별 / 연별 기간 검색 ---- */
+  function eduInPeriod(iso) {
+    if (eduPeriodMode === "all") return true;
+    if (!iso) return false;
+    if (eduPeriodMode === "year") return iso.slice(0, 4) === eduAnchor.slice(0, 4);
+    return iso.slice(0, 7) === eduAnchor.slice(0, 7);
+  }
+  function eduPeriodLabel() {
+    if (eduPeriodMode === "year") return (+eduAnchor.slice(0, 4)) + "년";
+    if (eduPeriodMode === "month") return monthLabel(eduAnchor);
+    return "전체 기간";
+  }
+  function eduPeriodControlHTML(hint) {
+    var showNav = eduPeriodMode !== "all";
+    return '<div class="edu-period" id="eduPeriod">'
+      + '<div class="seg edu-period__seg">'
+        + '<button class="btn btn--sm' + (eduPeriodMode === "all" ? " is-on" : "") + '" data-edu-period="all">전체</button>'
+        + '<button class="btn btn--sm' + (eduPeriodMode === "month" ? " is-on" : "") + '" data-edu-period="month">월별</button>'
+        + '<button class="btn btn--sm' + (eduPeriodMode === "year" ? " is-on" : "") + '" data-edu-period="year">연별</button>'
+      + '</div>'
+      + (showNav
+          ? '<div class="edu-period__nav">'
+            + '<button class="iconbtn iconbtn--sm" data-edu-pnav="-1" aria-label="이전">&larr;</button>'
+            + '<span class="edu-period__label mono">' + eduPeriodLabel() + '</span>'
+            + '<button class="iconbtn iconbtn--sm" data-edu-pnav="1" aria-label="다음">&rarr;</button>'
+            + (hint ? '<span class="edu-period__hint">' + esc(hint) + '</span>' : '')
+          + '</div>'
+          : '')
+      + '</div>';
+  }
+
+  /* ======================================================
+     교육 뷰 — 섹션 라우팅
+     ====================================================== */
+  function renderEducation() {
+    ensureOnboardingRecords();
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Crew / Education</p>'
+      + '<h2>교육 관련</h2>'
+      + '<p class="sub">OJT 온보딩 · 법정의무교육 · 정기 교육을 구분해 관리합니다.</p></div>'
+      + eduHeadActions()
+      + '</div>';
+
+    // 섹션 탭
+    html += '<div class="edu-tabs" id="eduTabs">' + EDU_SECTIONS.map(function (s) {
+        var n = catRecords(s.cat).length;
+        return '<button class="edu-tab' + (eduSection === s.key ? " is-on" : "") + '" data-edu-section="' + s.key + '" style="--c:' + s.c + '">'
+          + '<i class="edu-cat__dot" style="background:' + s.c + '"></i>' + esc(s.label)
+          + '<span class="edu-tab__count">' + n + '</span>'
+          + '</button>';
+      }).join("") + '</div>';
+
+    html += (eduSection === "onboarding") ? onboardingSectionHTML() : tableSectionHTML(eduSectionOf(eduSection).cat);
+
+    view.innerHTML = html;
+  }
+
+  function eduHeadActions() {
+    if (eduSection === "onboarding") {
+      return '<div class="page-head__actions">'
+        + '<a class="btn btn--ghost" href="' + ONBOARD_DRIVE_ROOT + '" target="_blank" rel="noopener">📁 온보딩 드라이브</a>'
+        + '<button class="btn btn--primary" id="addOnboardBtn">+ 온보딩 추가</button>'
+        + '</div>';
+    }
+    if (eduSection === "regular") {
+      return '<div class="page-head__actions">'
+        + '<a class="btn btn--ghost" href="' + EDU_SIGN_URL + '" target="_blank" rel="noopener">✍️ 교육 서명 관리</a>'
+        + '<button class="btn btn--primary" id="addEducationBtn">+ 교육 등록</button>'
+        + '</div>';
+    }
+    return '<button class="btn btn--primary" id="addEducationBtn">+ 교육 등록</button>';
+  }
+
+  /* ---------- 온보딩 섹션 ---------- */
+  function onboardingSectionHTML() {
+    var recs = catRecords("OJT온보딩").filter(function (r) { return eduInPeriod(r.date); }).sort(function (a, b) {
+      return (a.date || "") < (b.date || "") ? 1 : -1; // 최근 입사 우선
+    });
+    var probCount = (window.CREW || []).filter(isProbation).length;
+    var active = recs.filter(function (r) {
+      var crew = findById(window.CREW || [], r.crewId) || {};
+      return deriveOnboardStatus(onboardStats(r, crew)) !== "완료";
+    }).length;
+    var avg = recs.length ? Math.round(recs.reduce(function (sum, r) {
+      var crew = findById(window.CREW || [], r.crewId) || {};
+      return sum + onboardStats(r, crew).pct;
+    }, 0) / recs.length) : 0;
+
+    var html = "";
+    html += '<div class="stats stats--edu">'
+      + statCard("acid", recs.length, "명", "온보딩 대상")
+      + statCard(active ? "warn" : "", active, "명", "진행 중")
+      + statCard("", probCount, "명", "수습 크루", "입사 12주 이내")
+      + statCard("green", avg + "%", "", "평균 진행률")
+      + '</div>';
+
+    // 월별/연별 검색 (입사일 기준)
+    html += '<div class="toolbar-row toolbar-row--edu">' + eduPeriodControlHTML("입사일 기준") + '</div>';
+
+    // 표준 프로세스 참고 패널 (접이식)
+    html += '<div class="ob-ref">'
+      + '<button class="ob-ref__toggle" id="obRefToggle">'
+        + '<span>📋 표준 온보딩 프로세스 · 파트별 직무 교육 · 장애 크루 5단계</span>'
+        + '<span class="ob-ref__chev">' + (eduRefOpen ? "▲" : "▼") + '</span>'
+      + '</button>'
+      + (eduRefOpen ? obReferenceHTML() : "")
+      + '</div>';
+
+    if (!recs.length) {
+      html += '<div class="board__empty ob-empty">진행 중인 온보딩이 없습니다. 수습 크루가 입사하면 자동으로 표시되며, <b style="color:var(--accent-text)">+ 온보딩 추가</b>로 직접 등록할 수도 있어요.</div>';
+      return html;
+    }
+
+    html += '<div class="ob-grid">' + recs.map(onboardCard).join("") + '</div>';
+    return html;
+  }
+
+  function obReferenceHTML() {
+    var proc = '<div class="ob-ref__block"><h4>표준 9단계 프로세스</h4>'
+      + '<div class="ob-proc">' + ONBOARD_PROCESS.map(function (p) {
+          return '<div class="ob-proc__row">'
+            + '<span class="ob-proc__step">' + esc(p[0]) + '</span>'
+            + '<span class="ob-proc__when mono">' + esc(p[1]) + '</span>'
+            + '<span class="ob-proc__what">' + esc(p[2]) + '</span>'
+            + '<span class="ob-proc__who">' + esc(p[3]) + '</span>'
+          + '</div>';
+        }).join("") + '</div></div>';
+
+    var jobs = '<div class="ob-ref__block"><h4>파트별 직무 교육 순서</h4><div class="ob-jobs">'
+      + Object.keys(ONBOARD_JOB).map(function (g) {
+          var gg = groupOf(g);
+          return '<div class="ob-jobs__part"><span class="ob-jobs__name"><i class="gdot" style="background:' + gg.bg + '"></i>' + esc(g) + '</span>'
+            + '<span class="ob-jobs__seq">' + ONBOARD_JOB[g].map(esc).join(" → ") + '</span></div>';
+        }).join("") + '</div></div>';
+
+    var dis = '<div class="ob-ref__block ob-ref__block--dis"><h4>장애 크루 5단계 교육 방식</h4>'
+      + '<div class="ob-dissteps">' + ONBOARD_DIS_STEPS.map(function (s, i) {
+          return '<span class="ob-disstep"><b>' + (i + 1) + '</b>' + esc(s) + '</span>';
+        }).join('<span class="ob-disarrow">→</span>') + '</div>'
+      + '<p class="ob-ref__note">말 설명보다 <b>사진·체크리스트·실제 작업 위치</b> 매뉴얼을 함께 제공하고, 한 번에 여러 업무보다 <b>업무를 나눠 단계적으로 독립</b>시키는 구조로 진행합니다. 완료 기준은 “교육을 받았는지”가 아니라 <b>“혼자 수행할 수 있는지”</b>입니다.</p></div>';
+
+    return '<div class="ob-ref__body">' + proc + jobs + dis + '</div>';
+  }
+
+  function onboardCard(rec) {
+    var crew = findById(window.CREW || [], rec.crewId) || { name: rec.crewName, group: "" };
+    var g = groupOf(crew.group);
+    var stats = onboardStats(rec, crew);
+    var st = deriveOnboardStatus(stats);
+    var sc = eduStatusOf(st);
+    var joined = rec.date || crew.joinDate || "";
+    var dayN = dayCountFrom(joined);
+    var left = probationLeft(joined);
+    var initial = (crew.name || "?").slice(0, 1);
+
+    var meta = [];
+    if (joined) meta.push("입사 " + fmtShortDot(joined));
+    if (dayN != null && dayN > 0) meta.push(dayN + "일차");
+    if (left != null && left > 0) meta.push('<span class="ob-card__dday">수습 D-' + left + '</span>');
+    else if (left != null && left <= 0) meta.push('<span class="ob-card__dday ob-card__dday--done">수습 종료</span>');
+
+    var disTag = crew.disability === "장애" ? ' <span class="ob-card__dis">장애 · 5단계</span>' : '';
+
+    return '<div class="ob-card" data-ob-id="' + esc(rec.id) + '">'
+      + '<div class="ob-card__head">'
+        + '<span class="ob-avatar" style="background:' + g.bg + ';color:' + g.fg + '">' + esc(initial) + '</span>'
+        + '<div class="ob-card__id">'
+          + '<b>' + esc(crew.name || rec.crewName) + '</b>'
+          + '<span class="ob-card__group"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(crew.group || "—") + disTag + '</span>'
+        + '</div>'
+        + '<span class="edu-badge" style="--c:' + sc.c + '">' + esc(st) + '</span>'
+      + '</div>'
+      + '<div class="ob-card__meta">' + (meta.join(" · ") || "입사일 미입력") + '</div>'
+      + '<div class="ob-progress"><div class="ob-progress__bar" style="width:' + stats.pct + '%"></div></div>'
+      + '<div class="ob-card__foot">'
+        + '<span class="ob-card__pct">독립수행 이상 <b>' + stats.achieved + '</b>/' + stats.total + ' · ' + stats.pct + '%</span>'
+        + (rec.link ? '<a class="ob-card__link" href="' + esc(rec.link) + '" target="_blank" rel="noopener" title="드라이브 열기" onclick="event.stopPropagation()">📁</a>' : '')
+      + '</div>'
+      + '</div>';
+  }
+
+  function fmtShortDot(iso) {
+    var p = (iso || "").split("-");
+    return p.length === 3 ? (p[0].slice(2)) + "." + p[1] + "." + p[2] : iso;
+  }
+
+  /* ---------- 법정 / 정기 교육 표 섹션 ---------- */
+  function filteredCatEducation(cat) {
+    var list = catRecords(cat).filter(function (r) { return eduInPeriod(r.date); });
+    if (eduQuery) {
+      var q = eduQuery.toLowerCase();
+      list = list.filter(function (r) {
+        return (r.title + " " + r.crewName + " " + r.provider + " " + r.note).toLowerCase().indexOf(q) > -1;
+      });
+    }
+    return list.sort(function (a, b) {
+      var da = a.date || a.dueDate || "", db = b.date || b.dueDate || "";
+      if (da !== db) return da < db ? 1 : -1;
+      return String(b.id).localeCompare(String(a.id));
+    });
+  }
+  function eduTableRow(r) {
+    return '<tr class="edu-row" data-edu-id="' + esc(r.id || "") + '">'
+      + '<td class="edu-title"><b>' + esc(r.title || "—") + '</b>' + (r.note ? '<span class="edu-title__note">' + esc(r.note) + '</span>' : '') + '</td>'
+      + '<td>' + esc(r.crewName || "전체 크루") + '</td>'
+      + '<td class="mono-cell">' + (r.date ? fmtDotDate(r.date) : '<span class="muted">—</span>') + '</td>'
+      + '<td>' + eduDueCell(r) + '</td>'
+      + '<td><span class="edu-badge" style="--c:' + eduStatusOf(r.status).c + '">' + esc(r.status) + '</span></td>'
+      + '<td class="muted">' + esc(r.provider || "—") + (r.hours ? ' <span class="edu-hours">' + esc(r.hours) + '</span>' : '') + '</td>'
+      + '</tr>';
+  }
+  function tableSectionHTML(cat) {
+    var all = catRecords(cat);
+    var done = all.filter(function (r) { return r.status === "완료"; }).length;
+    var dueCount = all.filter(eduDueSoon).length;
+
+    var html = "";
+    html += '<div class="stats stats--edu">'
+      + statCard("acid", all.length, "건", "등록 교육")
+      + statCard("green", done, "건", "완료")
+      + statCard("", all.length - done, "건", "진행/예정")
+      + statCard(dueCount ? "warn" : "", dueCount, "건", "이수기한 임박", "30일 이내 · 미완료")
+      + '</div>';
+
+    var alerts = all.filter(eduDueSoon).sort(function (a, b) { return (a.dueDate || "") < (b.dueDate || "") ? -1 : 1; });
+    if (alerts.length) {
+      html += '<div class="edu-alert"><span class="edu-alert__icon">⚠</span>'
+        + '<div class="edu-alert__body"><b>이수기한 임박 · 초과 ' + alerts.length + '건</b><span>'
+        + alerts.map(function (r) {
+            var dp = (r.dueDate || "").split("-");
+            var dl = dp.length === 3 ? (+dp[1]) + "/" + (+dp[2]) : r.dueDate;
+            return esc(r.title) + ' (' + (eduOverdue(r) ? '기한초과 ' : '~') + dl + ')';
+          }).join(" · ") + '</span></div></div>';
+    }
+
+    html += '<div class="toolbar-row toolbar-row--edu">'
+      + eduPeriodControlHTML("실시일 기준")
+      + '<input class="searchbox" id="eduSearch" type="search" placeholder="교육명 · 대상 · 담당 검색" value="' + esc(eduQuery) + '">'
+      + '</div>';
+
+    var rows = filteredCatEducation(cat);
+    html += '<div class="board"><div class="board__scroll"><table class="board__table board__table--edu2"><thead><tr>'
+      + '<th>교육명</th><th>대상</th><th>실시일</th><th>이수기한</th><th>상태</th><th>담당 · 기관</th>'
+      + '</tr></thead><tbody id="eduBody">'
+      + (rows.length ? rows.map(eduTableRow).join("")
+          : '<tr><td colspan="6" class="board__empty">등록된 교육이 없습니다. <b style="color:var(--accent-text)">+ 교육 등록</b>으로 추가해보세요.</td></tr>')
+      + '</tbody></table></div></div>';
+    return html;
+  }
+
+  /* ======================================================
+     온보딩 상세 모달 (체크리스트 · 드라이브 링크)
+     ====================================================== */
+  var obDraft = null; // { id, link, checklist:{} }
+
+  function openOnboardModal(rec, isNew) {
+    var el = document.getElementById("onboardModal");
+    if (el) el.remove();
+
+    var crew = rec.crewId ? (findById(window.CREW || [], rec.crewId) || {}) : {};
+    obDraft = { id: rec.id, crewId: rec.crewId || "", link: rec.link || "", checklist: parseChecklist(rec.checklist) };
+
+    el = document.createElement("div");
+    el.className = "modal";
+    el.id = "onboardModal";
+    el.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card modal__card--ob" role="dialog" aria-modal="true" aria-label="온보딩 관리">'
+      + '<div class="modal__head"><h3 id="obModalTitle"></h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<div class="ob-modal__body" id="obModalBody"></div>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="obDelBtn"' + (isNew ? " hidden" : "") + '>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="button" class="btn btn--primary" id="obSaveBtn">저장</button>'
+      + '</div>'
+      + '</div>';
+    document.body.appendChild(el);
+
+    renderObModalBody(rec, crew, isNew);
+
+    el.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { el.remove(); obDraft = null; return; }
+
+      var crewSel = ev.target.closest("#obCrewSelect");
+      // (select change 는 별도 change 리스너)
+
+      var stBtn = ev.target.closest(".ob-item__opt[data-ob-area]");
+      if (stBtn) {
+        var area = stBtn.getAttribute("data-ob-area");
+        var idx = stBtn.getAttribute("data-ob-idx");
+        var val = stBtn.getAttribute("data-ob-val");
+        obDraft.checklist[area + ":" + idx] = val;
+        // 같은 아이템 그룹의 활성 표시 갱신
+        var group = stBtn.parentNode;
+        Array.prototype.forEach.call(group.querySelectorAll(".ob-item__opt"), function (b) { b.classList.toggle("is-on", b === stBtn); });
+        updateObProgress(el, crew);
+        return;
+      }
+    });
+
+    // 크루 선택 (신규)
+    var sel = el.querySelector("#obCrewSelect");
+    if (sel) {
+      sel.addEventListener("change", function () {
+        obDraft.crewId = sel.value;
+        var c = findById(window.CREW || [], sel.value) || {};
+        // 새 크루에 맞춰 본문 다시 렌더 (직무 항목·입사일 반영)
+        var pseudo = { id: rec.id, crewId: sel.value, crewName: c.name || "", link: obDraft.link, date: c.joinDate || "", checklist: JSON.stringify(obDraft.checklist) };
+        renderObModalBody(pseudo, c, isNew);
+        // 링크 리스너 재연결
+        wireObLink(el);
+      });
+    }
+    wireObLink(el);
+
+    el.querySelector("#obSaveBtn").addEventListener("click", function () {
+      saveOnboarding(rec, isNew);
+    });
+    el.querySelector("#obDelBtn").addEventListener("click", function () {
+      if (!confirm("이 온보딩 기록을 삭제할까요?")) return;
+      window.EDUCATION = (window.EDUCATION || []).filter(function (r) { return String(r.id) !== String(rec.id); });
+      saveToSheet({ type: "education", action: "delete", id: rec.id });
+      el.remove(); obDraft = null;
+      renderEducation();
+    });
+
+    el.hidden = false;
+  }
+
+  function wireObLink(el) {
+    var linkInput = el.querySelector("#obLinkInput");
+    if (linkInput) linkInput.addEventListener("input", function () { obDraft.link = linkInput.value.trim(); });
+  }
+
+  function renderObModalBody(rec, crew, isNew) {
+    var el = document.getElementById("onboardModal");
+    var body = el.querySelector("#obModalBody");
+    var title = el.querySelector("#obModalTitle");
+
+    var joined = rec.date || (crew && crew.joinDate) || "";
+    var dayN = dayCountFrom(joined);
+    var left = probationLeft(joined);
+    title.innerHTML = (isNew ? "온보딩 추가" : esc(crew.name || rec.crewName || "온보딩")) + '<span class="ob-modal__sub">'
+      + (joined ? "입사 " + fmtShortDot(joined) : "입사일 미입력")
+      + (dayN != null && dayN > 0 ? " · " + dayN + "일차" : "")
+      + (left != null && left > 0 ? " · 수습 D-" + left : "")
+      + '</span>';
+
+    var html = "";
+
+    if (isNew) {
+      html += '<label class="fld"><span>대상 크루 <em>*</em></span><select id="obCrewSelect">'
+        + '<option value="">크루 선택</option>'
+        + (window.CREW || []).filter(function (c) { return c.status !== "퇴사"; }).map(function (c) {
+            return '<option value="' + esc(c.id) + '"' + (String(c.id) === String(rec.crewId) ? " selected" : "") + '>' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + (isProbation(c) ? ' · 수습' : '') + '</option>';
+          }).join("")
+        + '</select></label>';
+    }
+
+    // 진행률 요약
+    var stats = onboardStats({ checklist: obDraft.checklist }, crew);
+    html += '<div class="ob-modal__summary">'
+      + '<div class="ob-progress ob-progress--lg"><div class="ob-progress__bar" id="obTotalBar" style="width:' + stats.pct + '%"></div></div>'
+      + '<span class="ob-modal__pct" id="obTotalPct">독립수행 이상 ' + stats.achieved + '/' + stats.total + ' · ' + stats.pct + '%</span>'
+      + '</div>';
+
+    // 드라이브 링크
+    html += '<label class="fld"><span>📁 드라이브 링크 <em>(크루별 온보딩 폴더)</em></span>'
+      + '<input type="url" id="obLinkInput" value="' + esc(obDraft.link || "") + '" placeholder="' + esc(ONBOARD_DRIVE_ROOT) + '"></label>';
+
+    // 장애 크루 안내
+    if (crew && crew.disability === "장애") {
+      html += '<div class="ob-dis-banner">'
+        + '<b>장애 크루 5단계 방식</b> — '
+        + ONBOARD_DIS_STEPS.map(esc).join(" → ")
+        + '<span>업무를 나눠 단계적으로 독립시키고, 사진·체크리스트 매뉴얼을 함께 활용하세요.</span>'
+        + '</div>';
+    }
+
+    // 6영역 체크리스트
+    var areas = onboardAreas(crew);
+    html += '<div class="ob-areas">';
+    areas.forEach(function (a) {
+      var aTot = a.items.length, aAch = 0;
+      a.items.forEach(function (_, i) { if (onboardAchieved(obDraft.checklist[a.key + ":" + i] || "none")) aAch++; });
+      html += '<div class="ob-area" data-ob-areakey="' + a.key + '">'
+        + '<div class="ob-area__head"><h4>' + esc(a.title) + '</h4><span class="ob-area__count" data-ob-areacount="' + a.key + '">' + aAch + '/' + aTot + '</span></div>'
+        + '<div class="ob-items">';
+      a.items.forEach(function (item, i) {
+        var cur = obDraft.checklist[a.key + ":" + i] || "none";
+        html += '<div class="ob-item">'
+          + '<span class="ob-item__label">' + esc(item) + '</span>'
+          + '<div class="ob-item__opts">'
+          + ONBOARD_STATUS.map(function (s) {
+              return '<button type="button" class="ob-item__opt' + (cur === s.key ? " is-on" : "") + '" data-ob-area="' + a.key + '" data-ob-idx="' + i + '" data-ob-val="' + s.key + '" style="--c:' + s.c + '">' + esc(s.label) + '</button>';
+            }).join("")
+          + '</div>'
+        + '</div>';
+      });
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    body.innerHTML = html;
+  }
+
+  function updateObProgress(el, crew) {
+    var stats = onboardStats({ checklist: obDraft.checklist }, crew);
+    var bar = el.querySelector("#obTotalBar");
+    var pct = el.querySelector("#obTotalPct");
+    if (bar) bar.style.width = stats.pct + "%";
+    if (pct) pct.textContent = "독립수행 이상 " + stats.achieved + "/" + stats.total + " · " + stats.pct + "%";
+    // 영역별 카운트 갱신
+    var areas = onboardAreas(crew);
+    areas.forEach(function (a) {
+      var aTot = a.items.length, aAch = 0;
+      a.items.forEach(function (_, i) { if (onboardAchieved(obDraft.checklist[a.key + ":" + i] || "none")) aAch++; });
+      var cnt = el.querySelector('[data-ob-areacount="' + a.key + '"]');
+      if (cnt) cnt.textContent = aAch + "/" + aTot;
+    });
+  }
+
+  function saveOnboarding(rec, isNew) {
+    if (isNew && !obDraft.crewId) { alert("대상 크루를 선택해주세요."); return; }
+    var crew = findById(window.CREW || [], obDraft.crewId) || {};
+    var stats = onboardStats({ checklist: obDraft.checklist }, crew);
+    var id = isNew ? ("ob-" + (obDraft.crewId || newId("x"))) : rec.id;
+    // 신규인데 이미 같은 크루 온보딩이 있으면 그 레코드를 갱신
+    var existing = findById(window.EDUCATION || [], id);
+    var out = {
+      id: id, category: "OJT온보딩",
+      title: (crew.name || rec.crewName || "온보딩") + " 온보딩",
+      crewId: obDraft.crewId || rec.crewId || "",
+      crewName: crew.name || rec.crewName || "",
+      date: (existing && existing.date) || crew.joinDate || rec.date || "",
+      dueDate: "", status: deriveOnboardStatus(stats),
+      provider: (existing && existing.provider) || "", hours: (existing && existing.hours) || "", note: (existing && existing.note) || "",
+      link: obDraft.link || "",
+      checklist: JSON.stringify(obDraft.checklist || {}),
+    };
+    if (!window.EDUCATION) window.EDUCATION = [];
+    var idx = indexById(window.EDUCATION, id);
+    if (idx > -1) window.EDUCATION[idx] = out; else window.EDUCATION.push(out);
+    saveToSheet(eduPayload(out, idx > -1 ? "update" : "add"));
+    var el = document.getElementById("onboardModal");
+    if (el) el.remove();
+    obDraft = null;
+    renderEducation();
+  }
+
+  /* ======================================================
+     법정 / 정기 교육 등록·수정 모달
+     ====================================================== */
+  var EDU_MODAL_CATS = [
+    { key: "법정의무교육", c: "#ff5a52" },
+    { key: "정기교육",     c: "#60a5fa" },
+  ];
+
+  function openEducationModal(prefill) {
+    var el = document.getElementById("educationModal");
+    if (!el) { el = buildEducationModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#educationModalTitle").textContent = editing ? "교육 수정" : "교육 등록";
+    el.querySelector("#educationDelBtn").hidden = !editing;
+
+    var sel = form.crewId;
+    sel.innerHTML = '<option value="__ALL__">전체 크루</option>'
+      + '<option value="__SNACK__">스낵 파트</option>'
+      + '<option value="__GARDEN__">가든 파트</option>'
+      + '<option value="__GA__">총무지원 파트</option>'
+      + '<option disabled>──────────</option>'
+      + (window.CREW || []).map(function (c) {
+          return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+        }).join("");
+    if (prefill && prefill.crewId) form.crewId.value = prefill.crewId;
+    else if (prefill && prefill.crewName) {
+      var map = { "전체 크루": "__ALL__", "스낵 파트": "__SNACK__", "가든 파트": "__GARDEN__", "총무지원 파트": "__GA__" };
+      form.crewId.value = map[prefill.crewName] || "__ALL__";
+    } else form.crewId.value = "__ALL__";
+
+    form.title.value = (prefill && prefill.title) || "";
+    form.date.value = (prefill && prefill.date) || "";
+    form.dueDate.value = (prefill && prefill.dueDate) || "";
+    form.provider.value = (prefill && prefill.provider) || "";
+    form.hours.value = (prefill && prefill.hours) || "";
+    form.note.value = (prefill && prefill.note) || "";
+
+    var cat = (prefill && prefill.category) || (eduSection === "regular" ? "정기교육" : "법정의무교육");
+    form.category.value = cat;
+    Array.prototype.forEach.call(el.querySelectorAll(".edu-catseg__btn"), function (b) {
+      b.classList.toggle("is-on", b.getAttribute("data-cat") === cat);
+    });
+
+    var status = (prefill && prefill.status) || "예정";
+    form.status.value = status;
+    Array.prototype.forEach.call(el.querySelectorAll(".edu-statseg__btn"), function (b) {
+      b.classList.toggle("is-on", b.getAttribute("data-status") === status);
+    });
+
+    el.hidden = false;
+    setTimeout(function () { form.title.focus(); }, 30);
+  }
+  function closeEducationModal() {
+    var el = document.getElementById("educationModal");
+    if (el) el.hidden = true;
+  }
+  function resolveEduTarget(val) {
+    var groups = { "__ALL__": "전체 크루", "__SNACK__": "스낵 파트", "__GARDEN__": "가든 파트", "__GA__": "총무지원 파트" };
+    if (groups[val]) return { crewId: "", crewName: groups[val] };
+    var crew = findById(window.CREW || [], val);
+    return { crewId: val, crewName: crew ? crew.name : "" };
+  }
+  function buildEducationModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "educationModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="교육 등록">'
+      + '<div class="modal__head"><h3 id="educationModalTitle">교육 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="educationForm">'
+      + '<div class="fld"><span>구분</span>'
+        + '<input type="hidden" name="category" value="법정의무교육">'
+        + '<div class="ivseg edu-catseg">' + EDU_MODAL_CATS.map(function (c) {
+            return '<button type="button" class="ivseg__btn edu-catseg__btn" data-cat="' + esc(c.key) + '" style="--c:' + c.c + '">' + esc(c.key) + '</button>';
+          }).join("") + '</div>'
+      + '</div>'
+      + '<label class="fld"><span>교육명 <em>*</em></span><input type="text" name="title" maxlength="80" required placeholder="예) 직장 내 성희롱 예방교육"></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>대상</span><select name="crewId"></select></label>'
+        + '<div class="fld"><span>상태</span>'
+          + '<input type="hidden" name="status" value="예정">'
+          + '<div class="ivseg edu-statseg">' + EDU_STATUS.map(function (s) {
+              return '<button type="button" class="ivseg__btn edu-statseg__btn" data-status="' + esc(s.key) + '" style="--c:' + s.c + '">' + esc(s.key) + '</button>';
+            }).join("") + '</div>'
+        + '</div>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>실시일 <em>(선택)</em></span><input type="date" name="date"></label>'
+        + '<label class="fld"><span>이수기한 <em>(선택)</em></span><input type="date" name="dueDate"></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>담당 · 기관 <em>(선택)</em></span><input type="text" name="provider" maxlength="40" placeholder="예) 사내 · 외부 강사"></label>'
+        + '<label class="fld"><span>교육시간 <em>(선택)</em></span><input type="text" name="hours" maxlength="20" placeholder="예) 1시간"></label>'
+      + '</div>'
+      + '<label class="fld"><span>비고 <em>(선택)</em></span><textarea name="note" rows="2" maxlength="200" placeholder="특이사항을 입력하세요…"></textarea></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="educationDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { closeEducationModal(); return; }
+      var catBtn = ev.target.closest(".edu-catseg__btn");
+      if (catBtn) {
+        var form = wrap.querySelector("form");
+        form.category.value = catBtn.getAttribute("data-cat");
+        Array.prototype.forEach.call(wrap.querySelectorAll(".edu-catseg__btn"), function (b) { b.classList.toggle("is-on", b === catBtn); });
+        return;
+      }
+      var statBtn = ev.target.closest(".edu-statseg__btn");
+      if (statBtn) {
+        var form2 = wrap.querySelector("form");
+        form2.status.value = statBtn.getAttribute("data-status");
+        Array.prototype.forEach.call(wrap.querySelectorAll(".edu-statseg__btn"), function (b) { b.classList.toggle("is-on", b === statBtn); });
+        return;
+      }
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var title = f.title.value.trim();
+      if (!title) { alert("교육명을 입력해주세요."); f.title.focus(); return; }
+      var target = resolveEduTarget(f.crewId.value);
+      var id = f.dataset.id;
+      var rec = {
+        id: id || newId("ed"),
+        category: f.category.value || "정기교육",
+        title: title,
+        crewId: target.crewId, crewName: target.crewName,
+        date: f.date.value || "", dueDate: f.dueDate.value || "",
+        status: f.status.value || "예정",
+        provider: f.provider.value.trim(), hours: f.hours.value.trim(), note: f.note.value.trim(),
+        link: "", checklist: "{}",
+      };
+      if (!window.EDUCATION) window.EDUCATION = [];
+      var idx = id ? indexById(window.EDUCATION, id) : -1;
+      if (idx > -1) window.EDUCATION[idx] = rec; else window.EDUCATION.push(rec);
+      saveToSheet(eduPayload(rec, id ? "update" : "add"));
+      closeEducationModal();
+      renderEducation();
+    });
+    wrap.querySelector("#educationDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 교육 기록을 삭제할까요?")) return;
+      window.EDUCATION = (window.EDUCATION || []).filter(function (r) { return String(r.id) !== String(id); });
+      saveToSheet({ type: "education", action: "delete", id: id });
+      closeEducationModal();
+      renderEducation();
+    });
+    return wrap;
+  }
+
+  /* ======================================================
      ROUTER
      ====================================================== */
   var VIEWS = {
@@ -2674,6 +3451,7 @@
     interview:   { title: "INTERVIEW", render: renderInterview },
     attendance:  { title: "ATTENDANCE", render: renderAttendance },
     journal:     { title: "JOURNAL", render: renderJournal },
+    education:   { title: "EDUCATION", render: renderEducation },
     schedule:    { title: "SCHEDULE", render: renderSchedule },
     note:        { title: "NOTE", render: renderNote },
     notify:      { title: "NOTIFY", render: renderNotify },
@@ -2720,6 +3498,37 @@
 
       var atStatBtn = ev.target.closest(".stat--clickable[data-kind]");
       if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }
+
+      if (ev.target.closest("#addEducationBtn")) { openEducationModal(null); return; }
+      if (ev.target.closest("#addOnboardBtn")) {
+        openOnboardModal({ id: "", crewId: "", crewName: "", date: "", link: "", checklist: "{}" }, true);
+        return;
+      }
+
+      var eduSectionBtn = ev.target.closest("[data-edu-section]");
+      if (eduSectionBtn) { eduSection = eduSectionBtn.getAttribute("data-edu-section"); eduQuery = ""; renderEducation(); return; }
+
+      if (ev.target.closest("#obRefToggle")) { eduRefOpen = !eduRefOpen; renderEducation(); return; }
+
+      var eduPeriodBtn = ev.target.closest("[data-edu-period]");
+      if (eduPeriodBtn) { eduPeriodMode = eduPeriodBtn.getAttribute("data-edu-period"); renderEducation(); return; }
+
+      var eduPnavBtn = ev.target.closest("[data-edu-pnav]");
+      if (eduPnavBtn) {
+        var epDir = +eduPnavBtn.getAttribute("data-edu-pnav");
+        eduAnchor = addMonths(eduAnchor, eduPeriodMode === "year" ? epDir * 12 : epDir);
+        renderEducation(); return;
+      }
+
+      var obCardEl = ev.target.closest(".ob-card[data-ob-id]");
+      if (obCardEl) {
+        var obRec = findById(window.EDUCATION || [], obCardEl.getAttribute("data-ob-id"));
+        if (obRec) openOnboardModal(obRec, false);
+        return;
+      }
+
+      var eduRowEl = ev.target.closest(".edu-row[data-edu-id]");
+      if (eduRowEl) { var eRec = findById(window.EDUCATION || [], eduRowEl.getAttribute("data-edu-id")); if (eRec) openEducationModal(eRec); return; }
 
       var ivNavBtn = ev.target.closest(".month-nav .iconbtn[data-iv-nav]");
       if (ivNavBtn) {
@@ -2941,6 +3750,15 @@
         if (atBody) {
           var atRows = filteredAttendance();
           atBody.innerHTML = atRows.length ? groupedAttendanceRowsHTML(atRows)
+            : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
+        }
+      }
+      if (ev.target.id === "eduSearch") {
+        eduQuery = ev.target.value;
+        var eduBody = document.getElementById("eduBody");
+        if (eduBody) {
+          var eduRows = filteredCatEducation(eduSectionOf(eduSection).cat);
+          eduBody.innerHTML = eduRows.length ? eduRows.map(eduTableRow).join("")
             : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
         }
       }

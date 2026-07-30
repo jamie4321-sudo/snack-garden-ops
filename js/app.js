@@ -3030,6 +3030,15 @@
       return String(b.id).localeCompare(String(a.id));
     });
   }
+  // 이 교육 기록을 edu-sign(참석 서명 웹)의 "새 교육 세션" 입력값으로 그대로 넘겨서 여는 링크.
+  // edu-sign 쪽 index.html이 ?date=&category=&title= 쿼리를 읽어 세션 등록 모달을 미리 채워서 띄운다.
+  function eduSignUrl(r) {
+    var params = [];
+    if (r.date) params.push("date=" + encodeURIComponent(r.date));
+    if (r.category) params.push("category=" + encodeURIComponent(r.category === "정기교육" ? "정기 교육" : r.category));
+    if (r.title) params.push("title=" + encodeURIComponent(r.title));
+    return EDU_SIGN_URL + (params.length ? "?" + params.join("&") : "") + "#/";
+  }
   function eduTableRow(r) {
     return '<tr class="edu-row" data-edu-id="' + esc(r.id || "") + '">'
       + '<td class="edu-title"><b>' + esc(r.title || "—") + '</b>' + (r.note ? '<span class="edu-title__note">' + esc(r.note) + '</span>' : '') + '</td>'
@@ -3038,6 +3047,7 @@
       + '<td>' + eduDueCell(r) + '</td>'
       + '<td><span class="edu-badge" style="--c:' + eduStatusOf(r.status).c + '">' + esc(r.status) + '</span></td>'
       + '<td class="muted">' + esc(r.provider || "—") + (r.hours ? ' <span class="edu-hours">' + esc(r.hours) + '</span>' : '') + '</td>'
+      + '<td><a class="btn btn--sm" data-edu-signup href="' + esc(eduSignUrl(r)) + '" target="_blank" rel="noopener">서명 등록</a></td>'
       + '</tr>';
   }
   function tableSectionHTML(cat) {
@@ -3071,10 +3081,10 @@
 
     var rows = filteredCatEducation(cat);
     html += '<div class="board"><div class="board__scroll"><table class="board__table board__table--edu2"><thead><tr>'
-      + '<th>교육명</th><th>대상</th><th>실시일</th><th>이수기한</th><th>상태</th><th>담당 · 기관</th>'
+      + '<th>교육명</th><th>대상</th><th>실시일</th><th>이수기한</th><th>상태</th><th>담당 · 기관</th><th>서명</th>'
       + '</tr></thead><tbody id="eduBody">'
       + (rows.length ? rows.map(eduTableRow).join("")
-          : '<tr><td colspan="6" class="board__empty">등록된 교육이 없습니다. <b style="color:var(--accent-text)">+ 교육 등록</b>으로 추가해보세요.</td></tr>')
+          : '<tr><td colspan="7" class="board__empty">등록된 교육이 없습니다. <b style="color:var(--accent-text)">+ 교육 등록</b>으로 추가해보세요.</td></tr>')
       + '</tbody></table></div></div>';
     return html;
   }
@@ -3526,6 +3536,8 @@
         if (obRec) openOnboardModal(obRec, false);
         return;
       }
+
+      if (ev.target.closest("[data-edu-signup]")) return; // 새 탭으로 열리는 링크 — 행 클릭(수정 모달)으로 이어지지 않게 여기서 종료
 
       var eduRowEl = ev.target.closest(".edu-row[data-edu-id]");
       if (eduRowEl) { var eRec = findById(window.EDUCATION || [], eduRowEl.getAttribute("data-edu-id")); if (eRec) openEducationModal(eRec); return; }

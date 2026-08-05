@@ -1987,6 +1987,7 @@
   }
 
   var hcTypeFilter = "전체";
+  var hcCrewFilter = "전체"; // "전체" | crewId — 현재 크루 목록 기준으로 특정 크루만 골라보기
   var hcQuery = "";
   var hcAnchor = TODAY;    // 인사 변동 목록에서 보고 있는 기준 월/년
   var hcMode = "month";    // "month" | "year"
@@ -2006,6 +2007,7 @@
   function filteredHrChanges() {
     var list = hrChangesInScope().filter(function (r) {
       if (hcTypeFilter !== "전체" && r.type !== hcTypeFilter) return false;
+      if (hcCrewFilter !== "전체" && String(r.crewId) !== String(hcCrewFilter)) return false;
       if (hcQuery) {
         var hay = (r.crewName + hcTypeLabel(r) + r.before + r.after + r.reason + r.recorder).toLowerCase();
         if (hay.indexOf(hcQuery.toLowerCase()) === -1) return false;
@@ -2106,6 +2108,12 @@
       + '<div class="filter" id="hcTypeFilter">' + ["전체"].concat(HR_CHANGE_TYPES.map(function (t) { return t.key; })).map(function (f) {
           return '<button class="btn btn--sm btn--pill ' + (f === hcTypeFilter ? "is-on" : "") + '" data-t="' + f + '">' + f + '</button>';
         }).join("") + '</div>'
+      + '<select class="filter-select" id="hcCrewFilter">'
+        + '<option value="전체"' + (hcCrewFilter === "전체" ? ' selected' : '') + '>전체 크루</option>'
+        + (window.CREW || []).slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (c) {
+            return '<option value="' + esc(c.id) + '"' + (String(c.id) === String(hcCrewFilter) ? ' selected' : '') + '>' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+          }).join("")
+      + '</select>'
       + '<input class="searchbox" id="hcSearch" type="search" placeholder="크루 · 유형 · 내용 · 사유 검색" value="' + esc(hcQuery) + '">'
       + '</div>';
 
@@ -2271,6 +2279,16 @@
   var noteFilter = "전체";
   var noteQuickPart = "전체";
   var noteView = "active"; // "active" | "archive"
+  var noteSelected = {}; // 체크박스로 선택한 노트 id → true (일괄 삭제용, 활성 목록에서만 사용)
+
+  function noteSelectedIds() { return Object.keys(noteSelected).filter(function (id) { return noteSelected[id]; }); }
+
+  /* 삭제되었거나 더 이상 존재하지 않는 노트의 선택은 자동으로 정리 */
+  function pruneNoteSelection() {
+    var valid = {};
+    (window.NOTES || []).forEach(function (n) { if (!n.deletedAt) valid[n.id] = true; });
+    Object.keys(noteSelected).forEach(function (id) { if (!valid[id]) delete noteSelected[id]; });
+  }
 
   function noteLinkChip(n) {
     return n.link ? ' <a class="link-chip" href="' + esc(n.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
@@ -2347,7 +2365,10 @@
       return;
     }
 
+    pruneNoteSelection();
     var rows = noteInScope();
+    var selCount = noteSelectedIds().length;
+    var allChecked = rows.length > 0 && rows.every(function (n) { return !!noteSelected[n.id]; });
 
     html += '<div class="note-quickadd">'
       + '<textarea id="noteQuickText" rows="3" placeholder="지금 남기고 싶은 메모를 적어주세요…"></textarea>'
@@ -2367,9 +2388,12 @@
         }).join("") + '</div>'
       + '</div>';
 
-    html += '<div class="board"><div class="board__head"><h3 class="board__title">노트 기록 <span class="chip-mono">' + rows.length + '건</span></h3></div>';
+    html += '<div class="board"><div class="board__head"><h3 class="board__title">노트 기록 <span class="chip-mono">' + rows.length + '건</span></h3>'
+      + (selCount ? '<button type="button" class="btn btn--sm btn--danger" id="noteBulkDeleteBtn">선택 삭제 (' + selCount + ')</button>' : '')
+      + '</div>';
     html += rows.length
       ? '<div class="board__scroll"><table class="board__table board__table--note"><thead><tr>'
+        + '<th><input type="checkbox" class="note-check-all"' + (allChecked ? ' checked' : '') + '></th>'
         + '<th>날짜</th><th>파트</th><th>내용</th><th>작성자</th>'
         + '</tr></thead><tbody>' + rows.map(noteBoardRow).join("") + '</tbody></table></div>'
       : '<div class="board__empty">아직 남긴 메모가 없습니다. 위 칸에 바로 적어보세요.</div>';
@@ -2387,7 +2411,9 @@
 
   function noteBoardRow(n) {
     var g = groupOf(n.part);
-    return '<tr class="board__row" data-note-id="' + esc(n.id || "") + '">'
+    var checked = !!noteSelected[n.id];
+    return '<tr class="board__row' + (checked ? ' is-selected' : '') + '" data-note-id="' + esc(n.id || "") + '">'
+      + '<td class="board__check"><input type="checkbox" class="note-check" data-id="' + esc(n.id || "") + '"' + (checked ? ' checked' : '') + '></td>'
       + '<td class="board__date mono">' + fmtDotDate(n.date) + (n.time ? '<span class="board__time"> · ' + esc(n.time) + '</span>' : '') + '</td>'
       + '<td><span class="ob-card__group"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(n.part || "전체") + '</span></td>'
       + '<td class="board__content"><span class="board__ctext">' + esc(n.text) + '</span>' + noteLinkChip(n) + '</td>'
@@ -2425,6 +2451,20 @@
     if (!window.NOTES) window.NOTES = [];
     window.NOTES.push(note);
     saveToSheet({ type: "note", action: "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author, link: note.link });
+    renderNote();
+  }
+
+  function bulkDeleteSelectedNotes() {
+    var ids = noteSelectedIds();
+    if (!ids.length) return;
+    if (!confirm("선택한 메모 " + ids.length + "개를 삭제할까요? 보관함에서 " + NOTE_RETENTION_DAYS + "일간 볼 수 있어요.")) return;
+    var now = new Date().toISOString();
+    ids.forEach(function (id) {
+      var n = findById(window.NOTES || [], id);
+      if (n) n.deletedAt = now;
+      saveToSheet({ type: "note", action: "delete", id: id });
+    });
+    noteSelected = {};
     renderNote();
   }
 
@@ -4037,6 +4077,25 @@
       if (ev.target.closest("#noteArchiveBtn")) { noteView = "archive"; renderNote(); return; }
       if (ev.target.closest("#noteBackBtn")) { noteView = "active"; renderNote(); return; }
 
+      var noteCheckEl = ev.target.closest(".note-check[data-id]");
+      if (noteCheckEl) {
+        var ncId = noteCheckEl.getAttribute("data-id");
+        if (noteSelected[ncId]) delete noteSelected[ncId]; else noteSelected[ncId] = true;
+        renderNote();
+        return;
+      }
+
+      if (ev.target.closest(".note-check-all")) {
+        var ncAllChecked = ev.target.checked;
+        noteInScope().forEach(function (n) {
+          if (ncAllChecked) noteSelected[n.id] = true; else delete noteSelected[n.id];
+        });
+        renderNote();
+        return;
+      }
+
+      if (ev.target.closest("#noteBulkDeleteBtn")) { bulkDeleteSelectedNotes(); return; }
+
       var noteBoardRowEl = ev.target.closest(".board__row[data-note-id]");
       if (noteBoardRowEl) { var nev = findById(window.NOTES || [], noteBoardRowEl.getAttribute("data-note-id")); if (nev) openNoteModal(nev); return; }
 
@@ -4206,6 +4265,7 @@
             : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
         }
       }
+      if (ev.target.id === "hcCrewFilter") { hcCrewFilter = ev.target.value; renderHrChange(); }
       if (ev.target.id === "eduSearch") {
         eduQuery = ev.target.value;
         var eduBody = document.getElementById("eduBody");

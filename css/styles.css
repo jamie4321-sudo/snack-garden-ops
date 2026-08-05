@@ -487,6 +487,9 @@ html[data-authed="1"] .lock { display: none; }
 .board__table tbody tr:last-child td { border-bottom: none; }
 .board__row { cursor: pointer; transition: background .12s; }
 .board__row:hover { background: var(--panel-2); }
+.board__row.is-selected { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.board__check { padding-left: 20px !important; padding-right: 0 !important; }
+.board__check input[type="checkbox"], .note-check-all { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
 .board__date { white-space: nowrap; color: var(--ink-2); font-size: 12px; }
 .board__date small { color: var(--ink-3); margin-left: 3px; }
 .board__time { color: var(--ink-3); }
@@ -581,6 +584,12 @@ html[data-authed="1"] .lock { display: none; }
 }
 .searchbox::placeholder { color: var(--ink-3); }
 .searchbox:focus { border-color: var(--accent); }
+.filter-select {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 9px 12px; color: var(--ink); font-size: 12.5px;
+  font-family: inherit; outline: none;
+}
+.filter-select:focus { border-color: var(--accent); }
 
 .table-wrap { border: 1px solid var(--line-soft); border-radius: var(--r-lg); overflow: hidden; background: var(--card-bg); }
 .crew-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -753,9 +762,10 @@ html[data-authed="1"] .lock { display: none; }
   transition: border-color .14s;
 }
 .note-quickadd__link:focus { border-color: var(--accent); }
-.board__table--note th:nth-child(1) { width: 130px; }
-.board__table--note th:nth-child(2) { width: 110px; }
-.board__table--note th:nth-child(4) { width: 110px; }
+.board__table--note th:nth-child(1) { width: 40px; }
+.board__table--note th:nth-child(2) { width: 130px; }
+.board__table--note th:nth-child(3) { width: 110px; }
+.board__table--note th:nth-child(5) { width: 110px; }
 .board__table--note-archive th:nth-child(1) { width: 130px; }
 .board__table--note-archive th:nth-child(2) { width: 110px; }
 .board__table--note-archive th:nth-child(4) { width: 170px; }

@@ -139,7 +139,7 @@
       id: r.id || "", crewId: r.crewId || "", crewName: r.crewName || "",
       type: r.type || "기타", typeLabel: r.typeLabel || "", date: fmtDay(r.date),
       before: r.before || "", after: r.after || "",
-      reason: r.reason || "", recorder: r.recorder || "",
+      reason: r.reason || "", recorder: r.recorder || "", link: r.link || "",
     };
   }
 
@@ -1994,6 +1994,41 @@
     return '—';
   }
 
+  /* ---------- 파트별 이직률 (연도 기준) ----------
+     이직률 = 해당 연도 퇴사자 수 / 해당 연도 평균 재직인원 × 100
+     평균 재직인원 = (연초 재직인원 + 연말(또는 오늘) 재직인원) / 2
+     크루의 소속 그룹은 "현재" 값을 기준으로 집계한다(과거 시점 그룹 변경 이력은 반영하지 않음). */
+  function hcCrewActiveAt(c, dateISO) {
+    if (!c.joinDate || c.joinDate > dateISO) return false;
+    if (c.leftDate && c.leftDate <= dateISO) return false;
+    return true;
+  }
+  function turnoverStatsOf(list, year) {
+    var startISO = year + "-01-01";
+    var endISO = year === TODAY.slice(0, 4) ? TODAY : year + "-12-31";
+    var startCount = list.filter(function (c) { return hcCrewActiveAt(c, startISO); }).length;
+    var endCount = list.filter(function (c) { return hcCrewActiveAt(c, endISO); }).length;
+    var avg = (startCount + endCount) / 2;
+    var left = list.filter(function (c) { return c.status === "퇴사" && c.leftDate && c.leftDate.slice(0, 4) === year; }).length;
+    var rate = avg > 0 ? Math.round((left / avg) * 1000) / 10 : 0;
+    return { left: left, avg: avg, rate: rate };
+  }
+  function turnoverStats(year) {
+    var crew = window.CREW || [];
+    var out = { "전체": turnoverStatsOf(crew, year) };
+    CREW_GROUPS.forEach(function (g) {
+      out[g] = turnoverStatsOf(crew.filter(function (c) { return c.group === g; }), year);
+    });
+    return out;
+  }
+  function turnoverCardsHTML(year) {
+    var t = turnoverStats(year);
+    return '<div class="stats">' + ["전체"].concat(CREW_GROUPS).map(function (k) {
+      var s = t[k];
+      return statCard("", s.rate, "%", k + " 이직률", s.left + "명 · 평균 " + s.avg.toFixed(1) + "명");
+    }).join("") + '</div>';
+  }
+
   var hcTypeFilter = "전체";
   var hcCrewFilter = "전체"; // "전체" | crewId — 현재 크루 목록 기준으로 특정 크루만 골라보기
   var hcQuery = "";
@@ -2035,9 +2070,13 @@
       + '<td class="board__date mono">' + fmtDotDate(r.date) + '</td>'
       + '<td class="board__cond"><span class="board__conddot" style="background:' + t.c + '"></span>' + esc(hcTypeLabel(r)) + '</td>'
       + '<td class="board__content"><span class="board__ctext">' + hcChangeText(r) + '</span></td>'
-      + '<td class="board__content"><span class="board__ctext">' + esc(r.reason || "—") + '</span></td>'
+      + '<td class="board__content"><span class="board__ctext">' + esc(r.reason || "—") + '</span>' + hcLinkChip(r) + '</td>'
       + '<td class="board__recorder muted">' + esc(r.recorder || "—") + '</td>'
       + '</tr>';
+  }
+
+  function hcLinkChip(r) {
+    return r.link ? ' <a class="link-chip" href="' + esc(r.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
   }
 
   /* 같은 크루의 변동 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력
@@ -2103,6 +2142,12 @@
       + '</div>'
       + '</div>';
 
+    var hcTurnoverYear = hcAnchor.slice(0, 4);
+    html += '<div class="board__head" style="padding:0 0 10px;border:none">'
+      + '<h3 class="board__title">파트별 이직률 <span class="chip-mono">' + hcTurnoverYear + '년</span></h3>'
+      + '</div>';
+    html += turnoverCardsHTML(hcTurnoverYear);
+
     html += '<div class="month-nav">'
       + '<div class="month-nav__nav">'
         + '<button class="iconbtn" data-hc-nav="-1" aria-label="이전">&larr;</button>'
@@ -2153,7 +2198,7 @@
       type: "hrchange", action: "add",
       id: rec.id, crewId: rec.crewId, crewName: rec.crewName,
       hcType: rec.type, typeLabel: rec.typeLabel, date: rec.date,
-      before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder
+      before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder, link: rec.link || ""
     });
   }
 
@@ -2225,6 +2270,7 @@
     form.before.value = (prefill && prefill.before) || "";
     form.after.value = (prefill && prefill.after) || "";
     form.reason.value = (prefill && prefill.reason) || "";
+    form.link.value = (prefill && prefill.link) || "";
     form.querySelector("#hcRecorder").textContent = (prefill && prefill.recorder) || CURRENT_USER;
 
     var type = (prefill && prefill.type) || "입사";
@@ -2272,6 +2318,7 @@
         + '<label class="fld"><span>사유 · 메모 <em>(선택)</em></span><input type="text" name="reason" maxlength="120" placeholder="변동 사유를 입력하세요…"></label>'
         + '<div class="fld"><span>기록자</span><div class="iv-recorder" id="hcRecorder">' + esc(CURRENT_USER) + '</div></div>'
       + '</div>'
+      + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="hrChangeDelBtn" hidden>삭제</button>'
         + '<div class="modal__spacer"></div>'
@@ -2314,6 +2361,7 @@
         after: f.after.value.trim(),
         reason: f.reason.value.trim(),
         recorder: (id && findById(window.HR_CHANGES || [], id) || {}).recorder || CURRENT_USER,
+        link: f.link.value.trim(),
       };
       if (!window.HR_CHANGES) window.HR_CHANGES = [];
       var idx = id ? indexById(window.HR_CHANGES, id) : -1;
@@ -2323,7 +2371,7 @@
         type: "hrchange", action: id ? "update" : "add",
         id: rec.id, crewId: rec.crewId, crewName: rec.crewName,
         hcType: rec.type, typeLabel: rec.typeLabel, date: rec.date,
-        before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder
+        before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder, link: rec.link
       });
       closeHrChangeModal();
       rerenderAfterHrChange();
@@ -3168,6 +3216,12 @@
       + '<h2>대시보드</h2>'
       + '<p class="sub">크루 구성과 장애유형 분포를 한눈에.</p></div>'
       + '</div>';
+
+    var dashTurnoverYear = TODAY.slice(0, 4);
+    html += '<section class="dash-card" style="margin-bottom:16px">'
+      + '<div class="summary__head"><h3>파트별 이직률</h3><span class="chip-mono">' + dashTurnoverYear + '년</span></div>'
+      + turnoverCardsHTML(dashTurnoverYear)
+      + '</section>';
 
     html += '<div class="dash-grid">'
       // 도넛 카드

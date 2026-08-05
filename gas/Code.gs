@@ -17,7 +17,7 @@
  *  - "notes"       : id | date | time | part | text | author | link | deletedAt
  *                    삭제("delete") 시 행을 지우지 않고 deletedAt(ISO datetime)만 채워 보관함으로 이동.
  *                    deletedAt 이 NOTE_RETENTION_DAYS(1년)보다 오래되면 자동으로 완전히 삭제됨.
- *  - "hrchanges"   : id | crewId | crewName | type | typeLabel | date | before | after | reason | recorder
+ *  - "hrchanges"   : id | crewId | crewName | type | typeLabel | date | before | after | reason | recorder | link
  *                    (type = 입사|퇴사|휴직|복직|파트이동|직급변경|기타, typeLabel 은 type="기타"일 때 직접 입력한 유형명)
  *
  * 면담일지(별도 스프레드시트 "2026 면담일지_DS", 장애크루 개인별 탭) — 읽기 전용, ?action=journal
@@ -52,7 +52,7 @@ var NOTE_FIELDS = ["id","date","time","part","text","author","link","deletedAt"]
 // deletedAt 이 이 기간(일)보다 오래되면 handleNote_/doGet 호출 시점에 완전히 삭제된다.
 var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
-var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder"];
+var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
@@ -527,7 +527,7 @@ function hrChangeValuesObj_(data) {
     id: data.id, crewId: data.crewId || "", crewName: data.crewName || "",
     type: data.hcType || "기타", typeLabel: data.typeLabel || "", date: data.date || "",
     before: data.before || "", after: data.after || "",
-    reason: data.reason || "", recorder: data.recorder || ""
+    reason: data.reason || "", recorder: data.recorder || "", link: data.link || ""
   };
 }
 

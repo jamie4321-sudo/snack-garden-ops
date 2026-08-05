@@ -3217,12 +3217,6 @@
       + '<p class="sub">크루 구성과 장애유형 분포를 한눈에.</p></div>'
       + '</div>';
 
-    var dashTurnoverYear = TODAY.slice(0, 4);
-    html += '<section class="dash-card" style="margin-bottom:16px">'
-      + '<div class="summary__head"><h3>파트별 이직률</h3><span class="chip-mono">' + dashTurnoverYear + '년</span></div>'
-      + turnoverCardsHTML(dashTurnoverYear)
-      + '</section>';
-
     html += '<div class="dash-grid">'
       // 도넛 카드
       + '<section class="dash-card dash-card--donut">'
@@ -3241,6 +3235,21 @@
         + '<div class="tbars">' + typeRows + '</div>'
       + '</section>'
       + '</div>';
+
+    var dashTurnoverYear = TODAY.slice(0, 4);
+    html += '<section class="dash-card" style="margin-bottom:16px">'
+      + '<div class="summary__head"><h3>파트별 이직률</h3><span class="chip-mono">' + dashTurnoverYear + '년</span></div>'
+      + turnoverCardsHTML(dashTurnoverYear)
+      + '</section>';
+
+    var dashUpcoming = upcomingCelebrations(7);
+    html += '<section class="dash-card" style="margin-bottom:16px">'
+      + '<div class="summary__head"><h3>다가오는 축하</h3>'
+        + '<span class="chip-mono">이번 주</span></div>'
+      + (dashUpcoming.length
+          ? '<div class="notify-upcoming">' + dashUpcoming.map(notifyRow).join("") + '</div>'
+          : '<div class="note-empty">이번 주 예정된 생일 · 기념일이 없습니다.</div>')
+      + '</section>';
 
     view.innerHTML = html;
   }

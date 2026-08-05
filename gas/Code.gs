@@ -16,6 +16,8 @@
  *  - "notes"       : id | date | time | part | text | author | link | deletedAt
  *                    삭제("delete") 시 행을 지우지 않고 deletedAt(ISO datetime)만 채워 보관함으로 이동.
  *                    deletedAt 이 NOTE_RETENTION_DAYS(1년)보다 오래되면 자동으로 완전히 삭제됨.
+ *  - "hrchanges"   : id | crewId | crewName | type | typeLabel | date | before | after | reason | recorder
+ *                    (type = 입사|퇴사|휴직|복직|파트이동|직급변경|기타, typeLabel 은 type="기타"일 때 직접 입력한 유형명)
  *
  * 면담일지(별도 스프레드시트 "2026 면담일지_DS", 장애크루 개인별 탭) — 읽기 전용, ?action=journal
  *   ⚠️ 여러 명이 함께 쓰는 실사용 시트입니다. getRange().getValues() 로만 읽고,
@@ -49,6 +51,7 @@ var NOTE_FIELDS = ["id","date","time","part","text","author","link","deletedAt"]
 // deletedAt 이 이 기간(일)보다 오래되면 handleNote_/doGet 호출 시점에 완전히 삭제된다.
 var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
+var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder"];
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
@@ -182,6 +185,7 @@ function doGet(e) {
   if (action === "attendance") return json_(mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)));
   if (action === "notes")      return json_(mapNotes_(rows_notesFresh_()));
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
+  if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "debug")      return json_(getDebugInfo_());
   return json_({
@@ -193,7 +197,16 @@ function doGet(e) {
     interviews: mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)),
     attendance: mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)),
     notes: mapNotes_(rows_notesFresh_()),
-    education: mapEducation_(rows_("education", EDUCATION_FIELDS))
+    education: mapEducation_(rows_("education", EDUCATION_FIELDS)),
+    hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"])
+  });
+}
+
+/** 지정한 필드들을 fmtDate_ 로 정리한다 (범용 날짜 정리 헬퍼). */
+function mapDates_(list, dateFields) {
+  return list.map(function (r) {
+    dateFields.forEach(function (f) { if (r[f]) r[f] = fmtDate_(r[f]); });
+    return r;
   });
 }
 
@@ -370,6 +383,7 @@ function doPost(e) {
   if (data.type === "attendance") return handleAttendance_(action, data);
   if (data.type === "note")     return handleNote_(action, data);
   if (data.type === "education") return handleEducation_(action, data);
+  if (data.type === "hrchange") return handleHrChange_(action, data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -493,6 +507,35 @@ function handleAttendance_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, attendanceValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+
+  return json_({ ok: false, error: "unknown action" });
+}
+
+// 주의: 봉투의 type("hrchange")과 실제 변동 유형이 충돌하지 않도록 유형은 hcType 으로 전송받는다.
+function hrChangeValuesObj_(data) {
+  return {
+    id: data.id, crewId: data.crewId || "", crewName: data.crewName || "",
+    type: data.hcType || "기타", typeLabel: data.typeLabel || "", date: data.date || "",
+    before: data.before || "", after: data.after || "",
+    reason: data.reason || "", recorder: data.recorder || ""
+  };
+}
+
+function handleHrChange_(action, data) {
+  var sh = sheet_("hrchanges", HRCHANGE_FIELDS);
+
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, hrChangeValuesObj_(Object.assign({}, data, { id: id })));
     return json_({ ok: true, id: id });
   }
 

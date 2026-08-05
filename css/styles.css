@@ -467,10 +467,10 @@ html[data-authed="1"] .lock { display: none; }
   font-family: var(--mono); font-weight: 500; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
   border-bottom: 1px solid var(--line); background: var(--panel); white-space: nowrap;
 }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive) th:nth-child(1) { width: 132px; }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive) th:nth-child(2) { width: 96px; }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive) th:nth-child(3) { width: 92px; }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive) th:nth-child(5) { width: 88px; text-align: right; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc) th:nth-child(1) { width: 132px; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc) th:nth-child(2) { width: 96px; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc) th:nth-child(3) { width: 92px; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc) th:nth-child(5) { width: 88px; text-align: right; }
 .board__table--iv th:nth-child(1) { width: 190px; }
 .board__table--iv th:nth-child(2) { width: 132px; }
 .board__table--iv th:nth-child(3) { width: 96px; }
@@ -760,6 +760,10 @@ html[data-authed="1"] .lock { display: none; }
 .board__table--note-archive th:nth-child(2) { width: 110px; }
 .board__table--note-archive th:nth-child(4) { width: 170px; }
 .board__table--note-archive th:nth-child(5) { width: 172px; }
+.board__table--hc th:nth-child(1) { width: 150px; }
+.board__table--hc th:nth-child(2) { width: 96px; }
+.board__table--hc th:nth-child(3) { width: 110px; }
+.board__table--hc th:nth-child(6) { width: 90px; }
 .board__note-actions { display: flex; gap: 8px; justify-content: flex-end; white-space: nowrap; }
 .board__row--static { cursor: default; }
 .board__row--static:hover { background: none; }

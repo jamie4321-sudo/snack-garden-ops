@@ -134,6 +134,15 @@
     };
   }
 
+  function normHrChange(r) {
+    return {
+      id: r.id || "", crewId: r.crewId || "", crewName: r.crewName || "",
+      type: r.type || "기타", typeLabel: r.typeLabel || "", date: fmtDay(r.date),
+      before: r.before || "", after: r.after || "",
+      reason: r.reason || "", recorder: r.recorder || "",
+    };
+  }
+
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
     if (!iso) return "—";
@@ -165,6 +174,7 @@
         if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
         if (d && d.education) window.EDUCATION = d.education.map(normEducation);
         if (d && d.notes) window.NOTES = d.notes.map(normNote);
+        if (d && d.hrChanges) window.HR_CHANGES = d.hrChanges.map(normHrChange);
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -1140,6 +1150,7 @@
   function crewTabPanel(c, tab) {
     if (tab === "interview") return crewInterviewBoard(c);
     if (tab === "attendance") return crewAttendanceBoard(c);
+    if (tab === "change") return crewHrChangeBoard(c);
     if (tab !== "basic") {
       return '<div class="placeholder placeholder--sm"><p class="muted">이 탭은 준비 중입니다.</p></div>';
     }
@@ -1950,6 +1961,280 @@
       + '</div>';
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closeAttendanceKindModal();
+    });
+    return wrap;
+  }
+
+  /* ======================================================
+     HR CHANGE · 인사 변동 (입사 · 퇴사 · 휴직 · 복직 · 파트이동 · 직급변경 · 기타)
+     ====================================================== */
+  var HR_CHANGE_TYPES = [
+    { key: "입사", c: "var(--green)" },
+    { key: "퇴사", c: "var(--red)" },
+    { key: "휴직", c: "var(--amber)" },
+    { key: "복직", c: "#60a5fa" },
+    { key: "파트이동", c: "#b39dff" },
+    { key: "직급변경", c: "#f472b6" },
+    { key: "기타", c: "var(--slate)" },
+  ];
+  function hcTypeOf(t) { for (var i = 0; i < HR_CHANGE_TYPES.length; i++) if (HR_CHANGE_TYPES[i].key === t) return HR_CHANGE_TYPES[i]; return HR_CHANGE_TYPES[HR_CHANGE_TYPES.length - 1]; }
+  function hcTypeLabel(r) { return (r.type === "기타" && r.typeLabel) ? r.typeLabel : r.type; }
+  function hcChangeText(r) {
+    if (r.before && r.after) return esc(r.before) + ' → ' + esc(r.after);
+    if (r.after) return esc(r.after);
+    if (r.before) return esc(r.before);
+    return '—';
+  }
+
+  var hcTypeFilter = "전체";
+  var hcQuery = "";
+
+  function filteredHrChanges() {
+    var list = (window.HR_CHANGES || []).slice().sort(function (a, b) {
+      return (a.date || "") < (b.date || "") ? 1 : -1;
+    });
+    return list.filter(function (r) {
+      if (hcTypeFilter !== "전체" && r.type !== hcTypeFilter) return false;
+      if (hcQuery) {
+        var hay = (r.crewName + hcTypeLabel(r) + r.before + r.after + r.reason + r.recorder).toLowerCase();
+        if (hay.indexOf(hcQuery.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  /* ---------- 인사 변동 게시판 행 (크루 상세 탭 · 전체 목록 공용) ----------
+     crewCell : 6열(전체 목록) 표에서 첫 행에만 넘기는 <td rowspan> HTML.
+                생략하면(크루 상세 탭 · 그룹 내 이어지는 행) 크루 칸 없이 출력. */
+  function hrChangeBoardRow(r, crewCell) {
+    var t = hcTypeOf(r.type);
+    return '<tr class="board__row" data-hc-id="' + esc(r.id || "") + '">'
+      + (crewCell || '')
+      + '<td class="board__date mono">' + fmtDotDate(r.date) + '</td>'
+      + '<td class="board__cond"><span class="board__conddot" style="background:' + t.c + '"></span>' + esc(hcTypeLabel(r)) + '</td>'
+      + '<td class="board__content"><span class="board__ctext">' + hcChangeText(r) + '</span></td>'
+      + '<td class="board__content"><span class="board__ctext">' + esc(r.reason || "—") + '</span></td>'
+      + '<td class="board__recorder muted">' + esc(r.recorder || "—") + '</td>'
+      + '</tr>';
+  }
+
+  /* 같은 크루의 변동 기록이 2건 이상이면 하나의 그룹(rowspan)으로 묶어서 출력
+     이름(crewName) 기준으로 묶는다 — crewId는 신뢰할 수 없는 경우가 있다. */
+  function groupedHrChangeRowsHTML(rows) {
+    var order = [];
+    var map = {};
+    rows.forEach(function (r) {
+      var key = (r.crewName && r.crewName.trim()) || r.crewId || "—";
+      if (!map[key]) { map[key] = { crewName: r.crewName, rows: [] }; order.push(key); }
+      map[key].rows.push(r);
+    });
+    return order.map(function (key) {
+      var g = map[key];
+      return g.rows.map(function (r, i) {
+        if (i !== 0) return hrChangeBoardRow(r);
+        var crewCell = '<td class="board__crew"' + (g.rows.length > 1 ? ' rowspan="' + g.rows.length + '"' : '') + '>'
+          + '<b>' + esc(g.crewName || "—") + '</b>'
+          + (g.rows.length > 1 ? '<span class="board__crew__n">' + g.rows.length + '건</span>' : '')
+          + '</td>';
+        return hrChangeBoardRow(r, crewCell);
+      }).join("");
+    }).join("");
+  }
+
+  /* ---------- 크루 상세 · 인사 변동 게시판 ---------- */
+  function crewHrChangeBoard(c) {
+    var rows = (window.HR_CHANGES || []).filter(function (r) {
+      return String(r.crewId) === String(c.id) || (r.crewName && r.crewName === c.name);
+    }).sort(function (a, b) { return (a.date || "") < (b.date || "") ? 1 : -1; });
+
+    var head = '<div class="board__head">'
+      + '<h3 class="board__title">인사 변동 <span class="chip-mono">' + rows.length + '건</span></h3>'
+      + '<button type="button" class="btn btn--sm btn--primary" id="crewAddHrChangeBtn">+ 인사 변동</button>'
+      + '</div>';
+
+    if (!rows.length) {
+      return '<div class="board">' + head
+        + '<div class="board__empty">아직 등록된 인사 변동 이력이 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 인사 변동</b>으로 첫 기록을 남겨보세요.</span></div>'
+        + '</div>';
+    }
+
+    var body = rows.map(function (r) { return hrChangeBoardRow(r); }).join("");
+
+    return '<div class="board">' + head
+      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<th>날짜</th><th>유형</th><th>내용</th><th>사유</th><th>기록자</th>'
+      + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+      + '</div>';
+  }
+
+  function renderHrChange() {
+    var rows = filteredHrChanges();
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Crew / HR Change</p>'
+      + '<h2>인사 변동</h2>'
+      + '<p class="sub">입사 · 퇴사 · 휴직 · 복직 · 파트이동 · 직급변경 등 인사 변동을 이력으로 남겨두세요.</p></div>'
+      + '<button class="btn btn--primary" id="addHrChangeBtn">+ 인사 변동</button>'
+      + '</div>';
+
+    html += '<div class="toolbar-row">'
+      + '<div class="filter" id="hcTypeFilter">' + ["전체"].concat(HR_CHANGE_TYPES.map(function (t) { return t.key; })).map(function (f) {
+          return '<button class="btn btn--sm btn--pill ' + (f === hcTypeFilter ? "is-on" : "") + '" data-t="' + f + '">' + f + '</button>';
+        }).join("") + '</div>'
+      + '<input class="searchbox" id="hcSearch" type="search" placeholder="크루 · 유형 · 내용 · 사유 검색" value="' + esc(hcQuery) + '">'
+      + '</div>';
+
+    html += '<div class="board">'
+      + '<div class="board__head"><h3 class="board__title">인사 변동 <span class="chip-mono">' + rows.length + '건</span></h3></div>'
+      + '<div class="board__scroll"><table class="board__table board__table--hc" id="hcTable"><thead><tr>'
+      + '<th>크루</th><th>날짜</th><th>유형</th><th>내용</th><th>사유</th><th>기록자</th>'
+      + '</tr></thead><tbody id="hcBody">'
+      + (rows.length ? groupedHrChangeRowsHTML(rows)
+          : '<tr><td colspan="6" class="board__empty">기록이 없습니다. <b style="color:var(--accent-text)">+ 인사 변동</b>으로 첫 이력을 남겨보세요.</td></tr>')
+      + '</tbody></table></div>'
+      + '</div>';
+
+    view.innerHTML = html;
+  }
+
+  /* 인사 변동 저장/삭제 후: 크루 상세를 보고 있으면 상세로, 아니면 목록으로 갱신 */
+  function rerenderAfterHrChange() {
+    if (crewDetailId) renderCrew(); else renderHrChange();
+  }
+
+  /* ---------- 인사 변동 등록/수정 모달 ---------- */
+  function openHrChangeModal(prefill) {
+    var el = document.getElementById("hrChangeModal");
+    if (!el) { el = buildHrChangeModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#hrChangeModalTitle").textContent = editing ? "인사 변동 수정" : "인사 변동 등록";
+    el.querySelector("#hrChangeDelBtn").hidden = !editing;
+
+    var sel = form.crewId;
+    sel.innerHTML = '<option value="">크루 선택</option>' + (window.CREW || []).map(function (c) {
+      return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+    }).join("");
+
+    form.crewId.value = (prefill && prefill.crewId) || "";
+    form.date.value = (prefill && prefill.date) || TODAY;
+    form.before.value = (prefill && prefill.before) || "";
+    form.after.value = (prefill && prefill.after) || "";
+    form.reason.value = (prefill && prefill.reason) || "";
+    form.querySelector("#hcRecorder").textContent = (prefill && prefill.recorder) || CURRENT_USER;
+
+    var type = (prefill && prefill.type) || "입사";
+    form.type.value = type;
+    Array.prototype.forEach.call(el.querySelectorAll(".ivseg__btn"), function (b) {
+      b.classList.toggle("is-on", b.getAttribute("data-type") === type);
+    });
+    form.typeLabel.value = (prefill && prefill.typeLabel) || "";
+    el.querySelector("#hcTypeLabelWrap").hidden = type !== "기타";
+
+    el.hidden = false;
+    setTimeout(function () { form.crewId.focus(); }, 30);
+  }
+  function closeHrChangeModal() {
+    var el = document.getElementById("hrChangeModal");
+    if (el) el.hidden = true;
+  }
+
+  function buildHrChangeModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "hrChangeModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="인사 변동 등록">'
+      + '<div class="modal__head"><h3 id="hrChangeModalTitle">인사 변동 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="hrChangeForm">'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>크루 <em>*</em></span><select name="crewId" required></select></label>'
+        + '<label class="fld"><span>일자 <em>*</em></span><input type="date" name="date" required></label>'
+      + '</div>'
+      + '<div class="fld"><span>유형</span>'
+        + '<input type="hidden" name="type" value="입사">'
+        + '<div class="ivseg">' + HR_CHANGE_TYPES.map(function (t) {
+            return '<button type="button" class="ivseg__btn" data-type="' + t.key + '" style="--c:' + t.c + '">' + t.key + '</button>';
+          }).join("") + '</div>'
+      + '</div>'
+      + '<label class="fld" id="hcTypeLabelWrap" hidden><span>유형명 직접 입력 <em>*</em></span><input type="text" name="typeLabel" maxlength="30" placeholder="예) 파견 전환, 직무 재배치 등"></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>변경 전 <em>(선택)</em></span><input type="text" name="before" maxlength="60" placeholder="예) 스낵 · 크루"></label>'
+        + '<label class="fld"><span>변경 후 <em>(선택)</em></span><input type="text" name="after" maxlength="60" placeholder="예) 가든 · 시니어 크루"></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>사유 · 메모 <em>(선택)</em></span><input type="text" name="reason" maxlength="120" placeholder="변동 사유를 입력하세요…"></label>'
+        + '<div class="fld"><span>기록자</span><div class="iv-recorder" id="hcRecorder">' + esc(CURRENT_USER) + '</div></div>'
+      + '</div>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="hrChangeDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { closeHrChangeModal(); return; }
+      var segBtn = ev.target.closest(".ivseg__btn");
+      if (segBtn) {
+        var form = wrap.querySelector("form");
+        var type = segBtn.getAttribute("data-type");
+        form.type.value = type;
+        Array.prototype.forEach.call(wrap.querySelectorAll(".ivseg__btn"), function (b) { b.classList.toggle("is-on", b === segBtn); });
+        wrap.querySelector("#hcTypeLabelWrap").hidden = type !== "기타";
+        return;
+      }
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var crewId = f.crewId.value;
+      if (!crewId) { alert("크루를 선택해주세요."); f.crewId.focus(); return; }
+      var type = f.type.value || "입사";
+      var typeLabel = type === "기타" ? f.typeLabel.value.trim() : "";
+      if (type === "기타" && !typeLabel) { alert("유형명을 입력해주세요."); f.typeLabel.focus(); return; }
+      var crew = findById(window.CREW || [], crewId);
+      var id = f.dataset.id;
+      var rec = {
+        id: id || newId("hc"),
+        crewId: crewId,
+        crewName: crew ? crew.name : "",
+        type: type,
+        typeLabel: typeLabel,
+        date: f.date.value,
+        before: f.before.value.trim(),
+        after: f.after.value.trim(),
+        reason: f.reason.value.trim(),
+        recorder: (id && findById(window.HR_CHANGES || [], id) || {}).recorder || CURRENT_USER,
+      };
+      if (!window.HR_CHANGES) window.HR_CHANGES = [];
+      var idx = id ? indexById(window.HR_CHANGES, id) : -1;
+      if (idx > -1) window.HR_CHANGES[idx] = rec; else window.HR_CHANGES.push(rec);
+      // 주의: 봉투의 type("hrchange")과 변동 유형(rec.type)이 충돌하지 않도록 유형은 hcType 으로 전송
+      saveToSheet({
+        type: "hrchange", action: id ? "update" : "add",
+        id: rec.id, crewId: rec.crewId, crewName: rec.crewName,
+        hcType: rec.type, typeLabel: rec.typeLabel, date: rec.date,
+        before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder
+      });
+      closeHrChangeModal();
+      rerenderAfterHrChange();
+    });
+    wrap.querySelector("#hrChangeDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 인사 변동 기록을 삭제할까요?")) return;
+      window.HR_CHANGES = (window.HR_CHANGES || []).filter(function (r) { return String(r.id) !== String(id); });
+      saveToSheet({ type: "hrchange", action: "delete", id: id });
+      closeHrChangeModal();
+      rerenderAfterHrChange();
     });
     return wrap;
   }
@@ -3554,6 +3839,7 @@
     attendance:  { title: "ATTENDANCE", render: renderAttendance },
     journal:     { title: "JOURNAL", render: renderJournal },
     education:   { title: "EDUCATION", render: renderEducation },
+    hrchange:    { title: "HR CHANGE", render: renderHrChange },
     schedule:    { title: "SCHEDULE", render: renderSchedule },
     note:        { title: "NOTE", render: renderNote },
     notify:      { title: "NOTIFY", render: renderNotify },
@@ -3814,6 +4100,20 @@
       var atBoardRow = ev.target.closest(".board__row[data-att-id]");
       if (atBoardRow) { var bAt = findById(window.ATTENDANCE || [], atBoardRow.getAttribute("data-att-id")); if (bAt) openAttendanceModal(bAt); return; }
 
+      if (ev.target.closest("#addHrChangeBtn")) { openHrChangeModal(null); return; }
+
+      if (ev.target.closest("#crewAddHrChangeBtn")) {
+        var addHcC = findById(window.CREW, crewDetailId);
+        openHrChangeModal(addHcC ? { crewId: addHcC.id } : null);
+        return;
+      }
+
+      var hcBoardRow = ev.target.closest(".board__row[data-hc-id]");
+      if (hcBoardRow) { var bHc = findById(window.HR_CHANGES || [], hcBoardRow.getAttribute("data-hc-id")); if (bHc) openHrChangeModal(bHc); return; }
+
+      var hcTypeBtn = ev.target.closest("#hcTypeFilter button[data-t]");
+      if (hcTypeBtn) { hcTypeFilter = hcTypeBtn.getAttribute("data-t"); renderHrChange(); return; }
+
       var crewDetailEditBtn = ev.target.closest("#crewDetailEditBtn");
       if (crewDetailEditBtn) { var cd = findById(window.CREW, crewDetailId); if (cd) openCrewModal(cd); return; }
 
@@ -3860,6 +4160,15 @@
         if (atBody) {
           var atRows = filteredAttendance();
           atBody.innerHTML = atRows.length ? groupedAttendanceRowsHTML(atRows)
+            : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
+        }
+      }
+      if (ev.target.id === "hcSearch") {
+        hcQuery = ev.target.value;
+        var hcBody = document.getElementById("hcBody");
+        if (hcBody) {
+          var hcRows = filteredHrChanges();
+          hcBody.innerHTML = hcRows.length ? groupedHrChangeRowsHTML(hcRows)
             : '<tr><td colspan="6" class="board__empty">검색 결과가 없습니다.</td></tr>';
         }
       }

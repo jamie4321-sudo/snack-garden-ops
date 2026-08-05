@@ -87,6 +87,15 @@ window.ATTENDANCE = [
   { id:"at2", date:"2026-07-24", time:"14:00", crewId:"c8", crewName:"신엔조", kind:"조퇴", reason:"병원 진료", recorder:"제이미" },
 ];
 
+/* --- 인사 변동 : 시트 "hrchanges" (헤더 = id,crewId,crewName,type,typeLabel,date,before,after,reason,recorder)
+   type : 입사 | 퇴사 | 휴직 | 복직 | 파트이동 | 직급변경 | 기타
+   typeLabel : type="기타"일 때 직접 입력한 유형명 --- */
+window.HR_CHANGES = [
+  { id:"hc1", crewId:"c5", crewName:"정배라", type:"입사", typeLabel:"", date:"2026-07-20", before:"", after:"신입 크루 · 스낵", reason:"성수 OJT로 입사", recorder:"제이미" },
+  { id:"hc2", crewId:"c7", crewName:"오미라", type:"휴직", typeLabel:"", date:"2026-06-01", before:"재직", after:"육아휴직", reason:"육아휴직 (~2026.09)", recorder:"제이미" },
+  { id:"hc3", crewId:"c9", crewName:"강아라", type:"퇴사", typeLabel:"", date:"2026-06-30", before:"재직", after:"퇴사", reason:"개인 사유로 퇴사", recorder:"제이미" },
+];
+
 /* --- 노트 기록 : 시트 "notes" (헤더 = id,date,time,part,text,author,link,deletedAt)
    part : 전체 | 스낵 | 가든 | 총무지원
    link : 관련 링크(선택)   deletedAt : 삭제 시각(ISO datetime, 있으면 보관함으로 이동 / 보관 기한 1년) --- */

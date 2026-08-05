@@ -1988,12 +1988,23 @@
 
   var hcTypeFilter = "전체";
   var hcQuery = "";
+  var hcAnchor = TODAY;    // 인사 변동 목록에서 보고 있는 기준 월/년
+  var hcMode = "month";    // "month" | "year"
+
+  function hcScopeLabel() { return hcMode === "year" ? (+hcAnchor.slice(0, 4)) + "년" : monthLabel(hcAnchor); }
+
+  /* 2023년부터의 이력이 계속 누적되는 구조 — 월/연 네비게이션으로 원하는 시점을 조회 */
+  function hrChangesInScope() {
+    if (hcMode === "year") {
+      var y = hcAnchor.slice(0, 4);
+      return (window.HR_CHANGES || []).filter(function (r) { return (r.date || "").slice(0, 4) === y; });
+    }
+    var ym = hcAnchor.slice(0, 7);
+    return (window.HR_CHANGES || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
+  }
 
   function filteredHrChanges() {
-    var list = (window.HR_CHANGES || []).slice().sort(function (a, b) {
-      return (a.date || "") < (b.date || "") ? 1 : -1;
-    });
-    return list.filter(function (r) {
+    var list = hrChangesInScope().filter(function (r) {
       if (hcTypeFilter !== "전체" && r.type !== hcTypeFilter) return false;
       if (hcQuery) {
         var hay = (r.crewName + hcTypeLabel(r) + r.before + r.after + r.reason + r.recorder).toLowerCase();
@@ -2001,6 +2012,7 @@
       }
       return true;
     });
+    return list.sort(function (a, b) { return (a.date || "") < (b.date || "") ? 1 : -1; });
   }
 
   /* ---------- 인사 변동 게시판 행 (크루 상세 탭 · 전체 목록 공용) ----------
@@ -2076,6 +2088,18 @@
       + '<h2>인사 변동</h2>'
       + '<p class="sub">입사 · 퇴사 · 휴직 · 복직 · 파트이동 · 직급변경 등 인사 변동을 이력으로 남겨두세요.</p></div>'
       + '<button class="btn btn--primary" id="addHrChangeBtn">+ 인사 변동</button>'
+      + '</div>';
+
+    html += '<div class="month-nav">'
+      + '<div class="month-nav__nav">'
+        + '<button class="iconbtn" data-hc-nav="-1" aria-label="이전">&larr;</button>'
+        + '<span class="month-nav__label">' + hcScopeLabel() + '</span>'
+        + '<button class="iconbtn" data-hc-nav="1" aria-label="다음">&rarr;</button>'
+      + '</div>'
+      + '<div class="seg month-nav__seg">'
+        + '<button class="btn btn--sm ' + (hcMode === "month" ? "is-on" : "") + '" data-hc-mode="month">월간</button>'
+        + '<button class="btn btn--sm ' + (hcMode === "year" ? "is-on" : "") + '" data-hc-mode="year">' + hcAnchor.slice(0, 4) + '년</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="toolbar-row">'
@@ -3883,6 +3907,16 @@
 
       var atModeBtn = ev.target.closest(".month-nav [data-at-mode]");
       if (atModeBtn) { attMode = atModeBtn.getAttribute("data-at-mode"); renderAttendance(); return; }
+
+      var hcNavBtn = ev.target.closest(".month-nav .iconbtn[data-hc-nav]");
+      if (hcNavBtn) {
+        var hcDir = +hcNavBtn.getAttribute("data-hc-nav");
+        hcAnchor = addMonths(hcAnchor, hcMode === "year" ? hcDir * 12 : hcDir);
+        renderHrChange(); return;
+      }
+
+      var hcModeBtn = ev.target.closest(".month-nav [data-hc-mode]");
+      if (hcModeBtn) { hcMode = hcModeBtn.getAttribute("data-hc-mode"); renderHrChange(); return; }
 
       var atStatBtn = ev.target.closest(".stat--clickable[data-kind]");
       if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }

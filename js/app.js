@@ -2089,7 +2089,10 @@
       + '<div><p class="eyebrow">Crew / HR Change</p>'
       + '<h2>인사 변동</h2>'
       + '<p class="sub">입사 · 퇴사 · 휴직 · 복직 · 파트이동 · 직급변경 등 인사 변동을 이력으로 남겨두세요.</p></div>'
-      + '<button class="btn btn--primary" id="addHrChangeBtn">+ 인사 변동</button>'
+      + '<div class="page-head__actions">'
+        + '<button class="btn btn--ghost" id="hcBackfillBtn">📥 크루 입사일로 채우기</button>'
+        + '<button class="btn btn--primary" id="addHrChangeBtn">+ 인사 변동</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="month-nav">'
@@ -2133,6 +2136,35 @@
   /* 인사 변동 저장/삭제 후: 크루 상세를 보고 있으면 상세로, 아니면 목록으로 갱신 */
   function rerenderAfterHrChange() {
     if (crewDetailId) renderCrew(); else renderHrChange();
+  }
+
+  /* 크루 목록의 입사일(joinDate)을 기준으로, 아직 "입사" 인사 변동 기록이 없는 크루만
+     골라 일괄 생성한다. 이미 기록이 있는 크루는 건너뛰므로 여러 번 눌러도 중복되지 않는다. */
+  function backfillHireRecords() {
+    var existingHireCrewIds = {};
+    (window.HR_CHANGES || []).forEach(function (r) { if (r.type === "입사" && r.crewId) existingHireCrewIds[r.crewId] = true; });
+    var targets = (window.CREW || []).filter(function (c) { return c.joinDate && !existingHireCrewIds[c.id]; });
+
+    if (!targets.length) { alert("이미 모든 크루의 입사 기록이 있습니다."); return; }
+    if (!confirm(targets.length + "명의 크루 입사일을 기준으로 \"입사\" 기록을 생성할까요?")) return;
+
+    if (!window.HR_CHANGES) window.HR_CHANGES = [];
+    targets.forEach(function (c) {
+      var rec = {
+        id: newId("hc"), crewId: c.id, crewName: c.name,
+        type: "입사", typeLabel: "", date: c.joinDate,
+        before: "", after: (c.role || "") + (c.group ? " · " + c.group : ""),
+        reason: "크루 목록 입사일 기준 자동 생성", recorder: CURRENT_USER,
+      };
+      window.HR_CHANGES.push(rec);
+      saveToSheet({
+        type: "hrchange", action: "add",
+        id: rec.id, crewId: rec.crewId, crewName: rec.crewName,
+        hcType: rec.type, typeLabel: rec.typeLabel, date: rec.date,
+        before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder
+      });
+    });
+    renderHrChange();
   }
 
   /* ---------- 인사 변동 등록/수정 모달 ---------- */
@@ -4194,6 +4226,7 @@
       if (atBoardRow) { var bAt = findById(window.ATTENDANCE || [], atBoardRow.getAttribute("data-att-id")); if (bAt) openAttendanceModal(bAt); return; }
 
       if (ev.target.closest("#addHrChangeBtn")) { openHrChangeModal(null); return; }
+      if (ev.target.closest("#hcBackfillBtn")) { backfillHireRecords(); return; }
 
       if (ev.target.closest("#crewAddHrChangeBtn")) {
         var addHcC = findById(window.CREW, crewDetailId);

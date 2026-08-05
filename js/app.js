@@ -88,7 +88,7 @@
   function normCrew(r) {
     return {
       id: r.id || "", name: r.name || "", role: r.role || "", team: r.team || "", group: r.group || "미지정",
-      status: r.status || "재직", joinDate: fmtDay(r.joinDate), phone: r.phone || "",
+      status: r.status || "재직", joinDate: fmtDay(r.joinDate), leftDate: fmtDay(r.leftDate), phone: r.phone || "",
       site: r.site || "", duties: toArr(r.duties), note: r.note || "",
       contractType: r.contractType || "", birthDate: fmtDay(r.birthDate),
       disability: r.disability || "비장애", disabilityType: r.disabilityType || "",
@@ -1168,6 +1168,7 @@
       + detailField("비상연락처", c.emergencyContact)
       + detailField("출입증번호", c.badgeNumber)
       + detailField("상태", c.status)
+      + (c.status === "퇴사" ? detailField("퇴사일", c.leftDate) : "")
       + '</div>';
   }
   function detailField(label, value) {
@@ -1265,6 +1266,8 @@
     form.contractType.value = (prefill && prefill.contractType) || "정규";
     form.workHours.value = (prefill && prefill.workHours) || "";
     form.joinDate.value = (prefill && prefill.joinDate) || "";
+    form.leftDate.value = (prefill && prefill.leftDate) || "";
+    el.querySelector("#crewLeftDateWrap").hidden = form.status.value !== "퇴사";
     form.phone.value = (prefill && prefill.phone) || "";
     form.birthDate.value = (prefill && prefill.birthDate) || "";
     form.emergencyContact.value = (prefill && prefill.emergencyContact) || "";
@@ -1308,6 +1311,7 @@
         + '<label class="fld"><span>연락처</span><input type="text" name="phone" placeholder="010-0000-0000"></label>'
         + '<label class="fld"><span>생년월일 <em>(선택)</em></span><input type="date" name="birthDate"></label>'
       + '</div>'
+      + '<label class="fld" id="crewLeftDateWrap" hidden><span>퇴사일</span><input type="date" name="leftDate"></label>'
       + '<div class="fld-row--3">'
         + '<label class="fld"><span>비상연락처 <em>(선택)</em></span><input type="text" name="emergencyContact" placeholder="010-0000-0000"></label>'
         + '<label class="fld"><span>장애여부</span><select name="disability">' + CREW_DISABILITY.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("") + '</select></label>'
@@ -1331,6 +1335,9 @@
     wrap.addEventListener("click", function (ev) {
       if (ev.target.hasAttribute("data-close")) closeCrewModal();
     });
+    wrap.querySelector('select[name="status"]').addEventListener("change", function (ev) {
+      wrap.querySelector("#crewLeftDateWrap").hidden = ev.target.value !== "퇴사";
+    });
     // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -1342,6 +1349,7 @@
         id: id || newId("c"),
         name: name, role: f.role.value.trim(), team: f.team.value.trim(),
         group: f.group.value, status: f.status.value, joinDate: f.joinDate.value,
+        leftDate: f.status.value === "퇴사" ? f.leftDate.value : "",
         phone: f.phone.value.trim(), site: f.site.value.trim(),
         duties: toArr(f.duties.value), note: f.note.value.trim(),
         contractType: f.contractType.value, workHours: f.workHours.value.trim(),
@@ -2090,7 +2098,7 @@
       + '<h2>인사 변동</h2>'
       + '<p class="sub">입사 · 퇴사 · 휴직 · 복직 · 파트이동 · 직급변경 등 인사 변동을 이력으로 남겨두세요.</p></div>'
       + '<div class="page-head__actions">'
-        + '<button class="btn btn--ghost" id="hcBackfillBtn">📥 크루 입사일로 채우기</button>'
+        + '<button class="btn btn--ghost" id="hcBackfillBtn">📥 크루 정보로 채우기</button>'
         + '<button class="btn btn--primary" id="addHrChangeBtn">+ 인사 변동</button>'
       + '</div>'
       + '</div>';
@@ -2138,30 +2146,59 @@
     if (crewDetailId) renderCrew(); else renderHrChange();
   }
 
-  /* 크루 목록의 입사일(joinDate)을 기준으로, 아직 "입사" 인사 변동 기록이 없는 크루만
-     골라 일괄 생성한다. 이미 기록이 있는 크루는 건너뛰므로 여러 번 눌러도 중복되지 않는다. */
-  function backfillHireRecords() {
-    var existingHireCrewIds = {};
-    (window.HR_CHANGES || []).forEach(function (r) { if (r.type === "입사" && r.crewId) existingHireCrewIds[r.crewId] = true; });
-    var targets = (window.CREW || []).filter(function (c) { return c.joinDate && !existingHireCrewIds[c.id]; });
-
-    if (!targets.length) { alert("이미 모든 크루의 입사 기록이 있습니다."); return; }
-    if (!confirm(targets.length + "명의 크루 입사일을 기준으로 \"입사\" 기록을 생성할까요?")) return;
-
+  function pushHrChangeRecord_(rec) {
     if (!window.HR_CHANGES) window.HR_CHANGES = [];
-    targets.forEach(function (c) {
-      var rec = {
+    window.HR_CHANGES.push(rec);
+    saveToSheet({
+      type: "hrchange", action: "add",
+      id: rec.id, crewId: rec.crewId, crewName: rec.crewName,
+      hcType: rec.type, typeLabel: rec.typeLabel, date: rec.date,
+      before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder
+    });
+  }
+
+  /* 크루 목록의 입사일(joinDate) · 퇴사일(leftDate)을 기준으로, 아직 해당 인사 변동
+     기록이 없는 크루만 골라 "입사"/"퇴사" 기록을 일괄 생성한다.
+     이미 기록이 있는 크루는 건너뛰므로 여러 번 눌러도 중복되지 않는다.
+     퇴사 크루인데 크루 정보에 퇴사일이 비어있으면(크루 수정에서 입력 필요) 건너뛴다. */
+  function backfillFromCrewList() {
+    var existingByType = { 입사: {}, 퇴사: {} };
+    (window.HR_CHANGES || []).forEach(function (r) {
+      if (existingByType[r.type] && r.crewId) existingByType[r.type][r.crewId] = true;
+    });
+
+    var hireTargets = (window.CREW || []).filter(function (c) { return c.joinDate && !existingByType.입사[c.id]; });
+    var leaveTargets = (window.CREW || []).filter(function (c) { return c.status === "퇴사" && c.leftDate && !existingByType.퇴사[c.id]; });
+    var missingLeftDate = (window.CREW || []).filter(function (c) { return c.status === "퇴사" && !c.leftDate && !existingByType.퇴사[c.id]; }).length;
+
+    if (!hireTargets.length && !leaveTargets.length) {
+      alert(missingLeftDate
+        ? "새로 생성할 기록은 없습니다. 다만 퇴사일이 비어있는 퇴사 크루가 " + missingLeftDate + "명 있어요 — 크루 수정에서 퇴사일을 입력한 뒤 다시 눌러주세요."
+        : "이미 모든 크루의 입사 · 퇴사 기록이 있습니다.");
+      return;
+    }
+
+    var parts = [];
+    if (hireTargets.length) parts.push("입사 " + hireTargets.length + "명");
+    if (leaveTargets.length) parts.push("퇴사 " + leaveTargets.length + "명");
+    var msg = parts.join(" · ") + "의 기록을 크루 목록 정보를 기준으로 생성할까요?";
+    if (missingLeftDate) msg += "\n(퇴사일이 비어있는 " + missingLeftDate + "명은 이번에 건너뜁니다)";
+    if (!confirm(msg)) return;
+
+    hireTargets.forEach(function (c) {
+      pushHrChangeRecord_({
         id: newId("hc"), crewId: c.id, crewName: c.name,
         type: "입사", typeLabel: "", date: c.joinDate,
         before: "", after: (c.role || "") + (c.group ? " · " + c.group : ""),
         reason: "크루 목록 입사일 기준 자동 생성", recorder: CURRENT_USER,
-      };
-      window.HR_CHANGES.push(rec);
-      saveToSheet({
-        type: "hrchange", action: "add",
-        id: rec.id, crewId: rec.crewId, crewName: rec.crewName,
-        hcType: rec.type, typeLabel: rec.typeLabel, date: rec.date,
-        before: rec.before, after: rec.after, reason: rec.reason, recorder: rec.recorder
+      });
+    });
+    leaveTargets.forEach(function (c) {
+      pushHrChangeRecord_({
+        id: newId("hc"), crewId: c.id, crewName: c.name,
+        type: "퇴사", typeLabel: "", date: c.leftDate,
+        before: (c.role || "") + (c.group ? " · " + c.group : ""), after: "퇴사",
+        reason: c.note || "크루 목록 퇴사일 기준 자동 생성", recorder: CURRENT_USER,
       });
     });
     renderHrChange();
@@ -4226,7 +4263,7 @@
       if (atBoardRow) { var bAt = findById(window.ATTENDANCE || [], atBoardRow.getAttribute("data-att-id")); if (bAt) openAttendanceModal(bAt); return; }
 
       if (ev.target.closest("#addHrChangeBtn")) { openHrChangeModal(null); return; }
-      if (ev.target.closest("#hcBackfillBtn")) { backfillHireRecords(); return; }
+      if (ev.target.closest("#hcBackfillBtn")) { backfillFromCrewList(); return; }
 
       if (ev.target.closest("#crewAddHrChangeBtn")) {
         var addHcC = findById(window.CREW, crewDetailId);

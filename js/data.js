@@ -87,11 +87,13 @@ window.ATTENDANCE = [
   { id:"at2", date:"2026-07-24", time:"14:00", crewId:"c8", crewName:"신엔조", kind:"조퇴", reason:"병원 진료", recorder:"제이미" },
 ];
 
-/* --- 노트 기록 : 시트 "notes" (헤더 = id,date,time,part,text,author)
-   part : 전체 | 스낵 | 가든 | 총무지원 --- */
+/* --- 노트 기록 : 시트 "notes" (헤더 = id,date,time,part,text,author,link,deletedAt)
+   part : 전체 | 스낵 | 가든 | 총무지원
+   link : 관련 링크(선택)   deletedAt : 삭제 시각(ISO datetime, 있으면 보관함으로 이동 / 보관 기한 1년) --- */
 window.NOTES = [
-  { id:"nt1", date:"2026-07-24", time:"11:20", part:"가든", text:"카렌 현장 우산꽂이 파손 — 다음 발주 때 같이 신청", author:"제이미" },
-  { id:"nt2", date:"2026-07-22", time:"09:05", part:"스낵", text:"성수 OJT 배라 명찰 아직 미발급, 뱃지번호 확인 필요", author:"제이미" },
+  { id:"nt1", date:"2026-07-24", time:"11:20", part:"가든", text:"카렌 현장 우산꽂이 파손 — 다음 발주 때 같이 신청", author:"제이미", link:"", deletedAt:"" },
+  { id:"nt2", date:"2026-07-22", time:"09:05", part:"스낵", text:"성수 OJT 배라 명찰 아직 미발급, 뱃지번호 확인 필요", author:"제이미", link:"", deletedAt:"" },
+  { id:"nt3", date:"2026-07-10", time:"14:40", part:"총무지원", text:"7월 발주서 초안 공유 드라이브", author:"제이미", link:"https://docs.google.com/document/d/EXAMPLE_DOC_ID/edit", deletedAt:"2026-07-15T05:00:00.000Z" },
 ];
 
 /* --- 교육 관리 : 시트 "education"

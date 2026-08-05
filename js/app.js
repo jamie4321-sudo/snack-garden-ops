@@ -126,6 +126,14 @@
     };
   }
 
+  function normNote(r) {
+    return {
+      id: r.id || "", date: r.date || "", time: r.time || "",
+      part: r.part || "전체", text: r.text || "", author: r.author || "",
+      link: r.link || "", deletedAt: r.deletedAt || "",
+    };
+  }
+
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
     if (!iso) return "—";
@@ -156,7 +164,7 @@
         if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
         if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
         if (d && d.education) window.EDUCATION = d.education.map(normEducation);
-        if (d && d.notes) window.NOTES = d.notes;
+        if (d && d.notes) window.NOTES = d.notes.map(normNote);
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -1950,31 +1958,91 @@
      NOTE · 노트 기록 (파트별 빠른 메모)
      ====================================================== */
   var NOTE_PARTS = ["스낵", "가든", "총무지원"];
+  var NOTE_RETENTION_DAYS = 365; // 삭제한 노트 보관 기한
   var noteFilter = "전체";
   var noteQuickPart = "전체";
+  var noteView = "active"; // "active" | "archive"
 
-  function noteInScope() {
-    var list = (window.NOTES || []).slice().sort(function (a, b) {
-      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-      if ((a.time || "") !== (b.time || "")) return (a.time || "") < (b.time || "") ? 1 : -1;
-      return String(b.id).localeCompare(String(a.id));
-    });
+  function noteLinkChip(n) {
+    return n.link ? ' <a class="link-chip" href="' + esc(n.link) + '" target="_blank" rel="noopener" title="링크 열기">🔗</a>' : "";
+  }
+
+  /** deletedAt(ISO datetime) → 만료일까지 남은 일수 (0 이면 오늘 만료) */
+  function noteDaysLeft(deletedAt) {
+    if (!deletedAt) return null;
+    var dt = new Date(deletedAt);
+    if (isNaN(dt.getTime())) return null;
+    var expiresAt = dt.getTime() + NOTE_RETENTION_DAYS * 24 * 3600 * 1000;
+    return Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 3600 * 1000)));
+  }
+  function noteDeletedDateLabel(deletedAt) {
+    if (!deletedAt) return "—";
+    var dt = new Date(deletedAt);
+    if (isNaN(dt.getTime())) return "—";
+    return fmtDotDate(isoOf(dt));
+  }
+
+  function noteByPart(list) {
     if (noteFilter === "전체") return list;
     return list.filter(function (n) { return n.part === noteFilter; });
   }
 
-  function renderNote() {
-    var rows = noteInScope();
+  function noteInScope() {
+    var list = (window.NOTES || []).filter(function (n) { return !n.deletedAt; }).sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      if ((a.time || "") !== (b.time || "")) return (a.time || "") < (b.time || "") ? 1 : -1;
+      return String(b.id).localeCompare(String(a.id));
+    });
+    return noteByPart(list);
+  }
 
+  function noteArchiveScope() {
+    var list = (window.NOTES || []).filter(function (n) { return !!n.deletedAt; }).sort(function (a, b) {
+      return a.deletedAt < b.deletedAt ? 1 : -1;
+    });
+    return noteByPart(list);
+  }
+
+  function renderNote() {
     var html = "";
+    var archivedCount = (window.NOTES || []).filter(function (n) { return !!n.deletedAt; }).length;
+
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Operation / Note</p>'
       + '<h2>노트 기록</h2>'
-      + '<p class="sub">갑자기 떠오른 메모를 파트별로 바로 남겨두세요.</p></div>'
+      + '<p class="sub">' + (noteView === "archive"
+          ? '삭제한 메모를 모아둔 보관함입니다. 삭제 후 ' + NOTE_RETENTION_DAYS + '일이 지나면 자동으로 완전히 삭제됩니다.'
+          : '갑자기 떠오른 메모를 파트별로 바로 남겨두세요.') + '</p></div>'
+      + '<div class="page-head__actions">' + (noteView === "archive"
+          ? '<button class="btn btn--ghost" id="noteBackBtn">← 노트로 돌아가기</button>'
+          : '<button class="btn btn--ghost" id="noteArchiveBtn">🗄 보관함' + (archivedCount ? ' (' + archivedCount + ')' : '') + '</button>') + '</div>'
       + '</div>';
+
+    if (noteView === "archive") {
+      var arows = noteArchiveScope();
+      html += '<div class="toolbar-row">'
+        + '<div class="filter" id="noteFilter">' + ["전체"].concat(NOTE_PARTS).map(function (p) {
+            return '<button class="btn btn--sm btn--pill ' + (p === noteFilter ? "is-on" : "") + '" data-note-filter="' + p + '">' + p + '</button>';
+          }).join("") + '</div>'
+        + '</div>';
+
+      html += '<div class="board"><div class="board__head"><h3 class="board__title">보관함 <span class="chip-mono">' + arows.length + '건</span></h3></div>';
+      html += arows.length
+        ? '<div class="board__scroll"><table class="board__table board__table--note-archive"><thead><tr>'
+          + '<th>날짜</th><th>파트</th><th>내용</th><th>삭제일 · 보관기한</th><th></th>'
+          + '</tr></thead><tbody>' + arows.map(noteArchiveBoardRow).join("") + '</tbody></table></div>'
+        : '<div class="board__empty">보관함이 비어있습니다.</div>';
+      html += '</div>';
+
+      view.innerHTML = html;
+      return;
+    }
+
+    var rows = noteInScope();
 
     html += '<div class="note-quickadd">'
       + '<textarea id="noteQuickText" rows="3" placeholder="지금 남기고 싶은 메모를 적어주세요…"></textarea>'
+      + '<input type="url" id="noteQuickLink" class="note-quickadd__link" placeholder="관련 링크 (선택)">'
       + '<div class="note-quickadd__foot">'
         + '<div class="seg" id="noteQuickPart">' + ["전체"].concat(NOTE_PARTS).map(function (p) {
             return '<button type="button" class="btn btn--sm btn--pill' + (p === noteQuickPart ? " is-on" : "") + '" data-note-quick-part="' + p + '">' + p + '</button>';
@@ -1990,9 +2058,13 @@
         }).join("") + '</div>'
       + '</div>';
 
+    html += '<div class="board"><div class="board__head"><h3 class="board__title">노트 기록 <span class="chip-mono">' + rows.length + '건</span></h3></div>';
     html += rows.length
-      ? '<div class="note-grid">' + rows.map(noteCard).join("") + '</div>'
-      : '<div class="board__empty note-empty">아직 남긴 메모가 없습니다. 위 칸에 바로 적어보세요.</div>';
+      ? '<div class="board__scroll"><table class="board__table board__table--note"><thead><tr>'
+        + '<th>날짜</th><th>파트</th><th>내용</th><th>작성자</th>'
+        + '</tr></thead><tbody>' + rows.map(noteBoardRow).join("") + '</tbody></table></div>'
+      : '<div class="board__empty">아직 남긴 메모가 없습니다. 위 칸에 바로 적어보세요.</div>';
+    html += '</div>';
 
     view.innerHTML = html;
 
@@ -2004,19 +2076,29 @@
     }
   }
 
-  function noteCard(n) {
-    var color = groupOf(n.part).bg;
-    return '<div class="note-card" data-id="' + esc(n.id || "") + '">'
-      + '<div class="note-card__top">'
-        + '<span class="note-card__part"><i class="note-card__dot" style="background:' + color + '"></i>' + esc(n.part || "전체") + '</span>'
-        + '<span class="note-card__time">' + fmtDotDate(n.date) + (n.time ? ' ' + esc(n.time) : '') + '</span>'
-      + '</div>'
-      + '<p class="note-card__text">' + esc(n.text) + '</p>'
-      + '<div class="note-card__actions">'
-        + '<button type="button" class="evt__act note-act--edit" data-id="' + esc(n.id || "") + '" title="수정">✎</button>'
-        + '<button type="button" class="evt__act evt__act--del note-act--del" data-id="' + esc(n.id || "") + '" title="삭제">&times;</button>'
-      + '</div>'
-      + '</div>';
+  function noteBoardRow(n) {
+    var g = groupOf(n.part);
+    return '<tr class="board__row" data-note-id="' + esc(n.id || "") + '">'
+      + '<td class="board__date mono">' + fmtDotDate(n.date) + (n.time ? '<span class="board__time"> · ' + esc(n.time) + '</span>' : '') + '</td>'
+      + '<td><span class="ob-card__group"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(n.part || "전체") + '</span></td>'
+      + '<td class="board__content"><span class="board__ctext">' + esc(n.text) + '</span>' + noteLinkChip(n) + '</td>'
+      + '<td class="board__recorder muted">' + esc(n.author || "—") + '</td>'
+      + '</tr>';
+  }
+
+  function noteArchiveBoardRow(n) {
+    var g = groupOf(n.part);
+    var daysLeft = noteDaysLeft(n.deletedAt);
+    return '<tr class="board__row board__row--static">'
+      + '<td class="board__date mono">' + fmtDotDate(n.date) + (n.time ? '<span class="board__time"> · ' + esc(n.time) + '</span>' : '') + '</td>'
+      + '<td><span class="ob-card__group"><i class="gdot" style="background:' + g.bg + '"></i>' + esc(n.part || "전체") + '</span></td>'
+      + '<td class="board__content"><span class="board__ctext">' + esc(n.text) + '</span>' + noteLinkChip(n) + '</td>'
+      + '<td class="mono-cell">' + noteDeletedDateLabel(n.deletedAt) + (daysLeft === null ? '' : ' · ' + daysLeft + '일 남음') + '</td>'
+      + '<td class="board__note-actions">'
+        + '<button type="button" class="btn btn--sm note-act--restore" data-id="' + esc(n.id || "") + '">복원</button>'
+        + '<button type="button" class="btn btn--sm btn--danger note-act--purge" data-id="' + esc(n.id || "") + '">완전 삭제</button>'
+      + '</td>'
+      + '</tr>';
   }
 
   function commitNoteQuickAdd() {
@@ -2024,21 +2106,31 @@
     if (!ta) return;
     var text = ta.value.trim();
     if (!text) { ta.focus(); return; }
+    var linkEl = document.getElementById("noteQuickLink");
     var now = new Date();
     var note = {
       id: newId("nt"), date: TODAY, time: pad2(now.getHours()) + ":" + pad2(now.getMinutes()),
       part: noteQuickPart, text: text, author: CURRENT_USER,
+      link: linkEl ? linkEl.value.trim() : "", deletedAt: "",
     };
     if (!window.NOTES) window.NOTES = [];
     window.NOTES.push(note);
-    saveToSheet({ type: "note", action: "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author });
+    saveToSheet({ type: "note", action: "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author, link: note.link });
     renderNote();
   }
 
-  function deleteNoteQuick(id) {
-    if (!confirm("이 메모를 삭제할까요?")) return;
+  function restoreNoteQuick(id) {
+    var n = findById(window.NOTES || [], id);
+    if (!n) return;
+    n.deletedAt = "";
+    saveToSheet({ type: "note", action: "restore", id: id });
+    renderNote();
+  }
+
+  function purgeNoteForever(id) {
+    if (!confirm("이 메모를 완전히 삭제할까요? 복원할 수 없습니다.")) return;
     window.NOTES = (window.NOTES || []).filter(function (n) { return String(n.id) !== String(id); });
-    saveToSheet({ type: "note", action: "delete", id: id });
+    saveToSheet({ type: "note", action: "purge", id: id });
     renderNote();
   }
 
@@ -2050,6 +2142,7 @@
     form.reset();
     form.dataset.id = (prefill && prefill.id) || "";
     form.text.value = (prefill && prefill.text) || "";
+    form.link.value = (prefill && prefill.link) || "";
     var part = (prefill && prefill.part) || "전체";
     form.part.value = part;
     Array.prototype.forEach.call(el.querySelectorAll("#noteModalPart [data-part]"), function (b) {
@@ -2077,6 +2170,7 @@
           return '<button type="button" class="btn btn--sm btn--pill" data-part="' + p + '">' + p + '</button>';
         }).join("") + '</div></div>'
       + '<label class="fld"><span>내용</span><textarea name="text" rows="4" maxlength="500" required placeholder="메모 내용을 입력하세요…"></textarea></label>'
+      + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="noteDelBtn">삭제</button>'
         + '<div class="modal__spacer"></div>'
@@ -2109,20 +2203,23 @@
         time: existing ? existing.time : "",
         part: f.part.value || "전체",
         text: text,
+        link: f.link.value.trim(),
         author: existing ? existing.author : CURRENT_USER,
+        deletedAt: existing ? existing.deletedAt : "",
       };
       if (!window.NOTES) window.NOTES = [];
       var idx = id ? indexById(window.NOTES, id) : -1;
       if (idx > -1) window.NOTES[idx] = note; else window.NOTES.push(note);
-      saveToSheet({ type: "note", action: id ? "update" : "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author });
+      saveToSheet({ type: "note", action: id ? "update" : "add", id: note.id, date: note.date, time: note.time, part: note.part, text: note.text, author: note.author, link: note.link });
       closeNoteModal();
       renderNote();
     });
     wrap.querySelector("#noteDelBtn").addEventListener("click", function () {
       var id = wrap.querySelector("form").dataset.id;
       if (!id) return;
-      if (!confirm("이 메모를 삭제할까요?")) return;
-      window.NOTES = (window.NOTES || []).filter(function (n) { return String(n.id) !== String(id); });
+      if (!confirm("이 메모를 삭제할까요? 보관함에서 " + NOTE_RETENTION_DAYS + "일간 볼 수 있어요.")) return;
+      var n = findById(window.NOTES || [], id);
+      if (n) n.deletedAt = new Date().toISOString();
       saveToSheet({ type: "note", action: "delete", id: id });
       closeNoteModal();
       renderNote();
@@ -3617,11 +3714,17 @@
       var noteFilterBtn = ev.target.closest("#noteFilter [data-note-filter]");
       if (noteFilterBtn) { noteFilter = noteFilterBtn.getAttribute("data-note-filter"); renderNote(); return; }
 
-      var noteEditBtn = ev.target.closest(".note-act--edit[data-id]");
-      if (noteEditBtn) { var nev = findById(window.NOTES || [], noteEditBtn.getAttribute("data-id")); if (nev) openNoteModal(nev); return; }
+      if (ev.target.closest("#noteArchiveBtn")) { noteView = "archive"; renderNote(); return; }
+      if (ev.target.closest("#noteBackBtn")) { noteView = "active"; renderNote(); return; }
 
-      var noteDelBtn = ev.target.closest(".note-act--del[data-id]");
-      if (noteDelBtn) { deleteNoteQuick(noteDelBtn.getAttribute("data-id")); return; }
+      var noteBoardRowEl = ev.target.closest(".board__row[data-note-id]");
+      if (noteBoardRowEl) { var nev = findById(window.NOTES || [], noteBoardRowEl.getAttribute("data-note-id")); if (nev) openNoteModal(nev); return; }
+
+      var noteRestoreBtn = ev.target.closest(".note-act--restore[data-id]");
+      if (noteRestoreBtn) { restoreNoteQuick(noteRestoreBtn.getAttribute("data-id")); return; }
+
+      var notePurgeBtn = ev.target.closest(".note-act--purge[data-id]");
+      if (notePurgeBtn) { purgeNoteForever(notePurgeBtn.getAttribute("data-id")); return; }
 
       var notifyToggleBtn = ev.target.closest(".switch[data-notify-toggle]");
       if (notifyToggleBtn) {

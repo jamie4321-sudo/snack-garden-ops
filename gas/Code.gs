@@ -13,6 +13,9 @@
  *  - "education"   : id | category | title | crewId | crewName | date | dueDate | status | provider | hours | note | link | checklist
  *                    (category = OJT온보딩|법정의무교육|정기교육, status = 예정|진행중|완료)
  *                    link = 온보딩 드라이브 폴더 URL, checklist = 온보딩 6영역 체크리스트 JSON 문자열
+ *  - "notes"       : id | date | time | part | text | author | link | deletedAt
+ *                    삭제("delete") 시 행을 지우지 않고 deletedAt(ISO datetime)만 채워 보관함으로 이동.
+ *                    deletedAt 이 NOTE_RETENTION_DAYS(1년)보다 오래되면 자동으로 완전히 삭제됨.
  *
  * 면담일지(별도 스프레드시트 "2026 면담일지_DS", 장애크루 개인별 탭) — 읽기 전용, ?action=journal
  *   ⚠️ 여러 명이 함께 쓰는 실사용 시트입니다. getRange().getValues() 로만 읽고,
@@ -41,7 +44,10 @@ var POINT_FIELDS = ["id","text"];
 var REPORT_FIELDS = ["id","text","link","urgent","done","reportedAt"];
 var INTERVIEW_FIELDS = ["id","date","time","crewId","crewName","type","condition","recorder","content","followUp","followUpNote","privateNote"];
 var ATTENDANCE_FIELDS = ["id","date","time","crewId","crewName","kind","reason","recorder"];
-var NOTE_FIELDS = ["id","date","time","part","text","author"];
+var NOTE_FIELDS = ["id","date","time","part","text","author","link","deletedAt"];
+// 노트 삭제 시 즉시 지우지 않고 deletedAt(ISO datetime)만 채워 보관함으로 이동시킨다.
+// deletedAt 이 이 기간(일)보다 오래되면 handleNote_/doGet 호출 시점에 완전히 삭제된다.
+var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
@@ -174,7 +180,7 @@ function doGet(e) {
   if (action === "reports")  return json_(mapReports_(rows_("reports", REPORT_FIELDS)));
   if (action === "interviews") return json_(mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)));
   if (action === "attendance") return json_(mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)));
-  if (action === "notes")      return json_(mapNotes_(rows_("notes", NOTE_FIELDS)));
+  if (action === "notes")      return json_(mapNotes_(rows_notesFresh_()));
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "debug")      return json_(getDebugInfo_());
@@ -186,9 +192,16 @@ function doGet(e) {
     reports: mapReports_(rows_("reports", REPORT_FIELDS)),
     interviews: mapInterviews_(rows_("interviews", INTERVIEW_FIELDS)),
     attendance: mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)),
-    notes: mapNotes_(rows_("notes", NOTE_FIELDS)),
+    notes: mapNotes_(rows_notesFresh_()),
     education: mapEducation_(rows_("education", EDUCATION_FIELDS))
   });
+}
+
+/** notes 시트 조회 전 보관 기한이 지난(1년 초과) 삭제 노트를 정리한다. */
+function rows_notesFresh_() {
+  var sh = sheet_("notes", NOTE_FIELDS);
+  purgeExpiredNotes_(sh);
+  return rows_("notes", NOTE_FIELDS);
 }
 
 function mapSchedule_(list) {
@@ -496,23 +509,75 @@ function handleAttendance_(action, data) {
 function noteValuesObj_(data) {
   return {
     id: data.id, date: data.date || "", time: data.time || "",
-    part: data.part || "전체", text: data.text || "", author: data.author || ""
+    part: data.part || "전체", text: data.text || "", author: data.author || "",
+    link: data.link || "", deletedAt: data.deletedAt || ""
   };
+}
+
+/** 헤더 이름 기준으로 특정 행의 값을 { 헤더명: 값 } 객체로 읽어온다. */
+function rowValuesByHeader_(sh, row, headers) {
+  var vals = sh.getRange(row, 1, 1, headers.length).getValues()[0];
+  var o = {};
+  headers.forEach(function (h, i) { if (h) o[h] = vals[i]; });
+  return o;
+}
+
+/** deletedAt 이 NOTE_RETENTION_DAYS 보다 오래된 노트를 완전히 삭제한다(보관 기한 만료). */
+function purgeExpiredNotes_(sh) {
+  var last = sh.getLastRow();
+  if (last < 2) return;
+  var headers = headerRow_(sh);
+  var delCol = headers.indexOf("deletedAt") + 1;
+  if (delCol < 1) return;
+  var cutoff = Date.now() - NOTE_RETENTION_DAYS * 24 * 3600 * 1000;
+  for (var r = last; r >= 2; r--) {
+    var v = sh.getRange(r, delCol).getValue();
+    if (!v) continue;
+    var dt = new Date(v);
+    if (!isNaN(dt.getTime()) && dt.getTime() < cutoff) sh.deleteRow(r);
+  }
 }
 
 function handleNote_(action, data) {
   var sh = sheet_("notes", NOTE_FIELDS);
+  purgeExpiredNotes_(sh);
+  var headers = headerRow_(sh);
 
-  if (action === "add" || action === "update") {
+  if (action === "add") {
     var id = data.id || Utilities.getUuid();
-    upsertRowByHeader_(sh, id, noteValuesObj_(Object.assign({}, data, { id: id })));
+    upsertRowByHeader_(sh, id, noteValuesObj_(Object.assign({}, data, { id: id, deletedAt: "" })));
     return json_({ ok: true, id: id });
   }
 
+  if (action === "update") {
+    var urow = findRowById_(sh, data.id);
+    var keepDeletedAt = urow > 0 ? (rowValuesByHeader_(sh, urow, headers).deletedAt || "") : "";
+    upsertRowByHeader_(sh, data.id, noteValuesObj_(Object.assign({}, data, { deletedAt: keepDeletedAt })));
+    return json_({ ok: true, id: data.id });
+  }
+
   if (action === "delete") {
-    var row = findRowById_(sh, data.id);
-    if (row < 0) return json_({ ok: false, error: "not found" });
-    sh.deleteRow(row);
+    var drow = findRowById_(sh, data.id);
+    if (drow < 0) return json_({ ok: false, error: "not found" });
+    var dvals = rowValuesByHeader_(sh, drow, headers);
+    dvals.deletedAt = new Date().toISOString();
+    upsertRowByHeader_(sh, data.id, dvals);
+    return json_({ ok: true });
+  }
+
+  if (action === "restore") {
+    var rrow = findRowById_(sh, data.id);
+    if (rrow < 0) return json_({ ok: false, error: "not found" });
+    var rvals = rowValuesByHeader_(sh, rrow, headers);
+    rvals.deletedAt = "";
+    upsertRowByHeader_(sh, data.id, rvals);
+    return json_({ ok: true });
+  }
+
+  if (action === "purge") {
+    var prow = findRowById_(sh, data.id);
+    if (prow < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(prow);
     return json_({ ok: true });
   }
 

@@ -416,14 +416,14 @@
       + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="일정 등록">'
       + '<div class="modal__head"><h3 id="eventModalTitle">일정 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="eventForm">'
-      + '<label class="fld"><span>날짜</span><input type="date" name="date" required></label>'
+      + '<label class="fld"><span>날짜</span><input type="date" name="date"></label>'
       + '<div class="fld-row">'
         + '<label class="fld"><span>시간 <em>(선택)</em></span><input type="time" name="time"></label>'
         + '<label class="fld"><span>카테고리</span><select name="category">'
           + CATEGORIES.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join("")
         + '</select></label>'
       + '</div>'
-      + '<label class="fld"><span>제목</span><input type="text" name="title" maxlength="60" required placeholder="일정 제목"></label>'
+      + '<label class="fld"><span>제목</span><input type="text" name="title" maxlength="60" placeholder="일정 제목"></label>'
       + '<label class="fld fld--check" id="eventRepeatWrap"><input type="checkbox" name="repeatWeekly"><span>매주 반복</span></label>'
       + '<label class="fld" id="eventRepeatEndWrap" hidden><span>반복 종료일</span><input type="date" name="repeatUntil"></label>'
       + '<label class="fld"><span>담당 <em>(선택)</em></span><input type="text" name="assignee" maxlength="20" placeholder="담당자 / 팀"></label>'
@@ -460,10 +460,19 @@
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var f = ev.target;
+      // 모달이 스크롤 컨테이너(overflow) 안에 있어 브라우저 기본 필수입력(required) 툴팁이
+      // 잘려서 안 보일 수 있어 — required 속성 대신 직접 확인 후 알림으로 안내
+      if (!f.date.value) {
+        alert("날짜를 선택해주세요.");
+        f.date.focus();
+        return;
+      }
       var title = f.title.value.trim();
-      if (!title) return;
-      // 모달이 스크롤 컨테이너(overflow) 안에 있어 브라우저 기본 필수입력 툴팁이 잘려서 안 보일 수 있어
-      // required 속성 대신 직접 확인 후 알림으로 안내
+      if (!title) {
+        alert("제목을 입력해주세요.");
+        f.title.focus();
+        return;
+      }
       if (f.repeatWeekly.checked && !f.repeatUntil.value) {
         alert("반복 종료일을 선택해주세요.");
         f.repeatUntil.focus();

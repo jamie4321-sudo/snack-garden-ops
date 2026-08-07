@@ -397,7 +397,6 @@
     form.repeatWeekly.checked = false;
     form.repeatUntil.value = "";
     form.repeatUntil.min = form.date.value;
-    form.repeatUntil.required = false;
     el.querySelector("#eventRepeatEndWrap").hidden = true;
     el.hidden = false;
     setTimeout(function () { form.title.focus(); }, 30);
@@ -453,7 +452,6 @@
     });
     wrap.querySelector('input[name="repeatWeekly"]').addEventListener("change", function (ev) {
       wrap.querySelector("#eventRepeatEndWrap").hidden = !ev.target.checked;
-      wrap.querySelector('input[name="repeatUntil"]').required = ev.target.checked;
     });
     wrap.querySelector('input[name="date"]').addEventListener("change", function (ev) {
       wrap.querySelector('input[name="repeatUntil"]').min = ev.target.value;
@@ -464,6 +462,13 @@
       var f = ev.target;
       var title = f.title.value.trim();
       if (!title) return;
+      // 모달이 스크롤 컨테이너(overflow) 안에 있어 브라우저 기본 필수입력 툴팁이 잘려서 안 보일 수 있어
+      // required 속성 대신 직접 확인 후 알림으로 안내
+      if (f.repeatWeekly.checked && !f.repeatUntil.value) {
+        alert("반복 종료일을 선택해주세요.");
+        f.repeatUntil.focus();
+        return;
+      }
       var id = f.dataset.id;
       var evt = {
         id: id || newId("s"),

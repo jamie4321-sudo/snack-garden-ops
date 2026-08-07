@@ -394,8 +394,10 @@
     el.querySelector("#eventAlarmWrap").hidden = !alarmOn;
     // 매주 반복은 신규 등록에만 제공 — 이미 저장된 일정을 수정할 땐 반복 묶음이 아닌 단일 일정이라 혼동을 피하기 위해 숨김
     el.querySelector("#eventRepeatWrap").hidden = editing;
+    form.repeatWeekly.checked = false;
     form.repeatUntil.value = "";
     form.repeatUntil.min = form.date.value;
+    form.repeatUntil.required = false;
     el.querySelector("#eventRepeatEndWrap").hidden = true;
     el.hidden = false;
     setTimeout(function () { form.title.focus(); }, 30);
@@ -451,6 +453,7 @@
     });
     wrap.querySelector('input[name="repeatWeekly"]').addEventListener("change", function (ev) {
       wrap.querySelector("#eventRepeatEndWrap").hidden = !ev.target.checked;
+      wrap.querySelector('input[name="repeatUntil"]').required = ev.target.checked;
     });
     wrap.querySelector('input[name="date"]').addEventListener("change", function (ev) {
       wrap.querySelector('input[name="repeatUntil"]').min = ev.target.value;
@@ -484,11 +487,18 @@
         // 매주 반복: 같은 요일로 반복 종료일까지 각각 별개의 일정으로 추가 생성
         if (f.repeatWeekly.checked && f.repeatUntil.value) {
           var cursor = addDays(evt.date, 7);
+          var addedCount = 0;
           while (cursor <= f.repeatUntil.value) {
             var occurrence = Object.assign({}, evt, { id: newId("s"), date: cursor });
             window.SCHEDULE.push(occurrence);
             saveToSheet(schedulePayload_(occurrence, "add"));
+            addedCount++;
             cursor = addDays(cursor, 7);
+          }
+          // 반복 생성 결과를 바로 확인할 수 있도록 안내 — 현재 화면(주간/월간)에 안 보여도
+          // 실제로는 생성됐다는 걸 알 수 있게(캘린더에서 다음 주·다음 달로 넘겨야 보임)
+          if (addedCount) {
+            alert("'" + title + "' 일정이 " + WD[wd(evt.date)] + "요일마다 총 " + (addedCount + 1) + "건 등록되었습니다.\n(오늘 보고 있는 화면 밖의 일정은 '다음' 버튼이나 월간 보기로 넘겨야 보여요)");
           }
         }
       }

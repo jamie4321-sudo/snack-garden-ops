@@ -90,7 +90,7 @@
       id: r.id || "", name: r.name || "", role: r.role || "", team: r.team || "", group: r.group || "미지정",
       status: r.status || "재직", joinDate: fmtDay(r.joinDate), leftDate: fmtDay(r.leftDate), phone: r.phone || "",
       site: r.site || "", duties: toArr(r.duties), note: r.note || "",
-      contractType: r.contractType || "", birthDate: fmtDay(r.birthDate),
+      contractType: r.contractType || "", contractEndDate: fmtDay(r.contractEndDate), birthDate: fmtDay(r.birthDate),
       disability: r.disability || "비장애", disabilityType: r.disabilityType || "",
       emergencyContact: r.emergencyContact || "", badgeNumber: r.badgeNumber || "",
       workHours: r.workHours || "",
@@ -1158,6 +1158,7 @@
       + detailField("이름", c.name)
       + detailField("소속팀", c.team || c.group)
       + detailField("계약현황", c.contractType)
+      + (c.contractType === "단기계약" ? detailField("계약 종료일", c.contractEndDate) : "")
       + detailField("업무시간", c.workHours)
       + detailField("입사일", c.joinDate)
       + detailField("근속", tenureOf(c.joinDate))
@@ -1264,6 +1265,8 @@
     form.group.value = (prefill && prefill.group) || "스낵";
     form.status.value = (prefill && prefill.status) || "재직";
     form.contractType.value = (prefill && prefill.contractType) || "정규";
+    form.contractEndDate.value = (prefill && prefill.contractEndDate) || "";
+    el.querySelector("#crewContractEndWrap").hidden = form.contractType.value !== "단기계약";
     form.workHours.value = (prefill && prefill.workHours) || "";
     form.joinDate.value = (prefill && prefill.joinDate) || "";
     form.leftDate.value = (prefill && prefill.leftDate) || "";
@@ -1312,6 +1315,7 @@
         + '<label class="fld"><span>생년월일 <em>(선택)</em></span><input type="date" name="birthDate"></label>'
       + '</div>'
       + '<label class="fld" id="crewLeftDateWrap" hidden><span>퇴사일</span><input type="date" name="leftDate"></label>'
+      + '<label class="fld" id="crewContractEndWrap" hidden><span>계약 종료일</span><input type="date" name="contractEndDate"></label>'
       + '<div class="fld-row--3">'
         + '<label class="fld"><span>비상연락처 <em>(선택)</em></span><input type="text" name="emergencyContact" placeholder="010-0000-0000"></label>'
         + '<label class="fld"><span>장애여부</span><select name="disability">' + CREW_DISABILITY.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join("") + '</select></label>'
@@ -1338,6 +1342,9 @@
     wrap.querySelector('select[name="status"]').addEventListener("change", function (ev) {
       wrap.querySelector("#crewLeftDateWrap").hidden = ev.target.value !== "퇴사";
     });
+    wrap.querySelector('select[name="contractType"]').addEventListener("change", function (ev) {
+      wrap.querySelector("#crewContractEndWrap").hidden = ev.target.value !== "단기계약";
+    });
     // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -1353,6 +1360,7 @@
         phone: f.phone.value.trim(), site: f.site.value.trim(),
         duties: toArr(f.duties.value), note: f.note.value.trim(),
         contractType: f.contractType.value, workHours: f.workHours.value.trim(),
+        contractEndDate: f.contractType.value === "단기계약" ? f.contractEndDate.value : "",
         birthDate: f.birthDate.value, emergencyContact: f.emergencyContact.value.trim(),
         disability: f.disability.value, disabilityType: f.disabilityType.value.trim(),
         badgeNumber: f.badgeNumber.value.trim(),

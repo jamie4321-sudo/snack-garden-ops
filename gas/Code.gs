@@ -6,8 +6,9 @@
  *
  * 시트 탭 (없으면 자동 생성, 필드가 늘어나면 끝에 컬럼을 자동 추가):
  *  - "crew"     : id | name | role | team | group | status | joinDate | leftDate | phone | site | duties | note
- *                 | contractType | birthDate | disability | disabilityType | emergencyContact | badgeNumber | workHours
+ *                 | contractType | contractEndDate | birthDate | disability | disabilityType | emergencyContact | badgeNumber | workHours
  *                 (leftDate = 퇴사일, status="퇴사"일 때만 의미 있음)
+ *                 (contractEndDate = 계약 종료일, contractType="단기계약"일 때만 의미 있음)
  *  - "schedule" : id | date | time | title | category | done | assignee | link
  *  - "interviews"  : id | date | time | crewId | crewName | type | condition | recorder | content | followUp | followUpNote | privateNote
  *  - "attendance"  : id | date | time | crewId | crewName | kind | reason | recorder  (kind = 지각|조퇴)
@@ -39,7 +40,7 @@
 
 var CREW_FIELDS = [
   "id","name","role","team","group","status","joinDate","leftDate","phone","site","duties","note",
-  "contractType","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
+  "contractType","contractEndDate","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
 ];
 var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link","alarm","alarmTime"];
 var ISSUE_FIELDS = ["id","text","link"];
@@ -393,7 +394,7 @@ function crewValuesObj_(data) {
     id: data.id, name: data.name || "", role: data.role || "", team: data.team || "", group: data.group || "미지정",
     status: data.status || "재직", joinDate: data.joinDate || "", leftDate: data.leftDate || "", phone: data.phone || "", site: data.site || "",
     duties: (data.duties || []).join(", "), note: data.note || "",
-    contractType: data.contractType || "", birthDate: data.birthDate || "",
+    contractType: data.contractType || "", contractEndDate: data.contractEndDate || "", birthDate: data.birthDate || "",
     disability: data.disability || "", disabilityType: data.disabilityType || "",
     emergencyContact: data.emergencyContact || "", badgeNumber: data.badgeNumber || "",
     workHours: data.workHours || ""

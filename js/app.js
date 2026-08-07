@@ -392,6 +392,11 @@
     form.alarm.checked = alarmOn;
     form.alarmTime.value = (prefill && prefill.alarmTime) || (prefill && prefill.time) || "";
     el.querySelector("#eventAlarmWrap").hidden = !alarmOn;
+    // 매주 반복은 신규 등록에만 제공 — 이미 저장된 일정을 수정할 땐 반복 묶음이 아닌 단일 일정이라 혼동을 피하기 위해 숨김
+    el.querySelector("#eventRepeatWrap").hidden = editing;
+    form.repeatUntil.value = "";
+    form.repeatUntil.min = form.date.value;
+    el.querySelector("#eventRepeatEndWrap").hidden = true;
     el.hidden = false;
     setTimeout(function () { form.title.focus(); }, 30);
   }
@@ -418,6 +423,8 @@
         + '</select></label>'
       + '</div>'
       + '<label class="fld"><span>제목</span><input type="text" name="title" maxlength="60" required placeholder="일정 제목"></label>'
+      + '<label class="fld fld--check" id="eventRepeatWrap"><input type="checkbox" name="repeatWeekly"><span>매주 반복</span></label>'
+      + '<label class="fld" id="eventRepeatEndWrap" hidden><span>반복 종료일</span><input type="date" name="repeatUntil"></label>'
       + '<label class="fld"><span>담당 <em>(선택)</em></span><input type="text" name="assignee" maxlength="20" placeholder="담당자 / 팀"></label>'
       + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
       + '<div class="fld-row">'
@@ -441,6 +448,12 @@
       var f = wrap.querySelector("form");
       wrap.querySelector("#eventAlarmWrap").hidden = !ev.target.checked;
       if (ev.target.checked && !f.alarmTime.value) f.alarmTime.value = f.time.value || "09:00";
+    });
+    wrap.querySelector('input[name="repeatWeekly"]').addEventListener("change", function (ev) {
+      wrap.querySelector("#eventRepeatEndWrap").hidden = !ev.target.checked;
+    });
+    wrap.querySelector('input[name="date"]').addEventListener("change", function (ev) {
+      wrap.querySelector('input[name="repeatUntil"]').min = ev.target.value;
     });
     // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
@@ -468,6 +481,16 @@
       } else {
         window.SCHEDULE.push(evt);
         saveToSheet(schedulePayload_(evt, "add"));
+        // 매주 반복: 같은 요일로 반복 종료일까지 각각 별개의 일정으로 추가 생성
+        if (f.repeatWeekly.checked && f.repeatUntil.value) {
+          var cursor = addDays(evt.date, 7);
+          while (cursor <= f.repeatUntil.value) {
+            var occurrence = Object.assign({}, evt, { id: newId("s"), date: cursor });
+            window.SCHEDULE.push(occurrence);
+            saveToSheet(schedulePayload_(occurrence, "add"));
+            cursor = addDays(cursor, 7);
+          }
+        }
       }
       closeEventModal();
       renderSchedule();

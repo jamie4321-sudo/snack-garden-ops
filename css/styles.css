@@ -960,15 +960,18 @@ html[data-authed="1"] .lock { display: none; }
 }
 .edu-tab.is-on .edu-tab__count { color: var(--c); border-color: color-mix(in srgb, var(--c) 45%, var(--line)); }
 
-/* 표 (법정/정기) — 컬럼폭을 모두 지정했으므로 100% 스트레치 대신 실제 합계 너비만큼만 차지 */
-.board__table--edu2 { width: auto; }
-.board__table--edu2 th:nth-child(1) { width: auto; }
-.board__table--edu2 th:nth-child(2) { width: 120px; }
-.board__table--edu2 th:nth-child(3) { width: 108px; }
-.board__table--edu2 th:nth-child(4) { width: 130px; text-align: left; }
-.board__table--edu2 th:nth-child(5) { width: 82px; }
-.board__table--edu2 th:nth-child(6) { width: 150px; }
-.board__table--edu2 th:nth-child(7) { width: 110px; }
+/* 표 (법정/정기) — 7컬럼. 좁은 화면에선 board__scroll 로 가로 스크롤 */
+.board__table--edu2 { width: 100%; min-width: 760px; }
+.board__table--edu2 th, .board__table--edu2 td { padding: 12px 14px; }
+.board__table--edu2 th:nth-child(1) { width: auto; }         /* 교육명 */
+.board__table--edu2 th:nth-child(2) { width: 100px; }        /* 대상 */
+.board__table--edu2 th:nth-child(3) { width: 106px; }        /* 실시일 */
+.board__table--edu2 th:nth-child(4) { width: 122px; text-align: left; } /* 이수기한 */
+.board__table--edu2 th:nth-child(5) { width: 72px; }         /* 상태 */
+.board__table--edu2 th:nth-child(6) { width: 132px; }        /* 담당·기관 */
+.board__table--edu2 th:nth-child(7),
+.board__table--edu2 td:nth-child(7) { width: 96px; text-align: center; } /* 서명 */
+.board__table--edu2 [data-edu-signup] { white-space: nowrap; padding: 5px 12px; }
 .edu-row { cursor: pointer; transition: background .12s; }
 .edu-row:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .edu-title b { display: block; color: var(--ink); font-weight: 600; }

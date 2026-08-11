@@ -1186,9 +1186,6 @@
       + '</div>'
     + '</div>';
 
-    // AI 면담 요약 — 배너 바로 아래(탭 위) 상단 고정
-    html += crewSummaryCard(c);
-
     html += '<div class="crew-tabs">' + CREW_TABS.map(function (t) {
       return '<button class="crew-tab' + (t.key === crewDetailTab ? " is-on" : "") + '" data-tab="' + t.key + '">'
         + esc(t.label) + (t.locked ? " 🔒" : "") + '</button>';
@@ -1199,8 +1196,8 @@
 
     view.innerHTML = html;
 
-    // 면담일지가 아직 안 실렸으면 로드 후 상단 통계 채워 재렌더 (라이브 모드에서만)
-    if (crewDetailId === c.id && !(window.JOURNAL && window.JOURNAL.tabs)
+    // 장애 크루 상세에서 면담일지가 아직 안 실렸으면 로드 후 통계 채워 재렌더 (라이브 모드에서만)
+    if (crewDetailId === c.id && c.disability === "장애" && !(window.JOURNAL && window.JOURNAL.tabs)
         && window.CONFIG && window.CONFIG.endpoint && typeof loadJournalOnce === "function") {
       loadJournalOnce().then(function () {
         if (crewDetailId === c.id) renderCrewDetail(c);
@@ -1230,7 +1227,22 @@
     var dated = rows.map(function (r) { return r.date; }).filter(Boolean).sort();
     var cats = Object.keys(cat).map(function (k) { return { k: k, v: cat[k] }; })
       .sort(function (a, b) { return b.v - a.v; });
-    return { count: rows.length, first: dated[0] || "", last: dated[dated.length - 1] || "", late: late, cats: cats };
+    return { count: rows.length, first: dated[0] || "", last: dated[dated.length - 1] || "", late: late, cats: cats, src: "면담일지" };
+  }
+
+  /** 비장애 크루: 앱에서 직접 작성한 면담기록(INTERVIEWS)·근태(ATTENDANCE)로 통계 집계 */
+  function crewInappStats(c) {
+    var mine = function (r) { return String(r.crewId) === String(c.id) || (r.crewName && r.crewName === c.name); };
+    var iv = (window.INTERVIEWS || []).filter(mine);
+    var at = (window.ATTENDANCE || []).filter(mine);
+    if (!iv.length && !at.length) return null;
+    var cat = {};
+    iv.forEach(function (r) { var k = r.type || "면담"; cat[k] = (cat[k] || 0) + 1; });
+    var late = at.filter(function (r) { return /지각|결근|조퇴|무단/.test((r.kind || "") + (r.reason || "")); }).length;
+    var dated = iv.map(function (r) { return r.date; }).filter(Boolean).sort();
+    var cats = Object.keys(cat).map(function (k) { return { k: k, v: cat[k] }; })
+      .sort(function (a, b) { return b.v - a.v; });
+    return { count: iv.length, first: dated[0] || "", last: dated[dated.length - 1] || "", late: late, cats: cats, src: "면담기록" };
   }
 
   function summaryDimBlock(name, dm) {
@@ -1249,11 +1261,19 @@
   function crewSummaryCard(c) {
     var nick = crewNickname(c.name);
     var sum = (window.CREW_SUMMARY || {})[nick];
-    var stats = crewJournalStats(nick);
-    var journalReady = !!(window.JOURNAL && window.JOURNAL.tabs);
+    // 장애 크루 → 면담일지 시트 기반, 비장애 크루 → 앱에서 직접 작성한 면담기록 기반
+    var isDisabled = c.disability === "장애";
+    var stats = isDisabled ? crewJournalStats(nick) : crewInappStats(c);
+    var srcLabel = isDisabled ? "면담일지" : "면담기록";
+    var dataReady = isDisabled ? !!(window.JOURNAL && window.JOURNAL.tabs) : true;
 
-    // 요약도 통계도 없고 데이터도 다 실렸으면 카드 자체를 숨긴다.
-    if (!sum && !stats && journalReady) return "";
+    // 요약도 통계도 없고 데이터도 다 실렸으면 안내 문구.
+    if (!sum && !stats && dataReady) {
+      var emptyMsg = isDisabled
+        ? '이 크루의 면담일지 기록이 없어 AI 요약을 만들 수 없습니다.<br><span class="muted">면담일지 시트에 기록이 쌓이면 매주 자동으로 요약이 생성됩니다.</span>'
+        : '작성된 면담 기록이 없어 AI 지원가이드를 만들 수 없습니다.<br><span class="muted">면담기록 탭에 기록을 남기면 매주 자동으로 요약이 생성됩니다.</span>';
+      return '<div class="placeholder placeholder--sm"><p class="muted">' + emptyMsg + '</p></div>';
+    }
 
     var head = '<button type="button" class="aisum__head" id="crewSummaryToggle" aria-expanded="' + (crewSummaryOpen ? "true" : "false") + '">'
       + '<span class="aisum__title">🤖 AI 면담 요약'
@@ -1267,7 +1287,7 @@
         + (stats.first ? '<span class="aisum__chip">' + esc(stats.first.slice(0, 7)) + ' ~ ' + esc(stats.last.slice(0, 7)) + '</span>' : '')
         + (stats.late ? '<span class="aisum__chip aisum__chip--warn">지각 언급 <b>' + stats.late + '</b></span>' : '')
         + '</span>';
-    } else if (!journalReady) {
+    } else if (!dataReady) {
       chips = '<span class="aisum__stats"><span class="aisum__chip">통계 불러오는 중…</span></span>';
     }
     head += chips + '<span class="aisum__caret">' + (crewSummaryOpen ? "▾" : "▸") + '</span></button>';
@@ -1297,8 +1317,8 @@
           return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
         }).forEach(function (k) { body += summaryDimBlock(k, sum.dimensions[k]); });
       }
-      if (!sum) body += '<p class="aisum__pending">아직 이 크루의 AI 요약이 생성되지 않았습니다. 위 통계는 면담일지에서 실시간 집계한 값입니다.</p>';
-      else if (sum.updated) body += '<p class="aisum__meta">요약 생성일 ' + esc(sum.updated) + ' · 면담일지 원문 기반</p>';
+      if (!sum) body += '<p class="aisum__pending">아직 이 크루의 AI 요약이 생성되지 않았습니다. 위 통계는 ' + srcLabel + '에서 실시간 집계한 값입니다.</p>';
+      else if (sum.updated) body += '<p class="aisum__meta">요약 생성일 ' + esc(sum.updated) + ' · ' + srcLabel + ' 기반</p>';
       body += '</div>';
     }
     return '<section class="aisum' + (sum && sum.risk ? ' aisum--risk' : '') + '">' + head + body + '</section>';
@@ -1308,6 +1328,7 @@
     if (tab === "interview") return crewInterviewBoard(c);
     if (tab === "attendance") return crewAttendanceBoard(c);
     if (tab === "change") return crewHrChangeBoard(c);
+    if (tab === "ai") return crewSummaryCard(c);
     if (tab !== "basic") {
       return '<div class="placeholder placeholder--sm"><p class="muted">이 탭은 준비 중입니다.</p></div>';
     }

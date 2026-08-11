@@ -244,7 +244,10 @@
       + '<div><p class="eyebrow">Operation / Schedule</p>'
       + '<h2>일정 관리</h2>'
       + '<p class="sub">이달의 사업 현황과 날짜별 일정을 한눈에.</p></div>'
-      + '<button class="btn btn--primary" id="addEventBtn">+ 일정 등록</button>'
+      + '<div class="page-head__actions">'
+        + '<button class="btn" id="openRepeatManageBtn">반복 일정 관리</button>'
+        + '<button class="btn btn--primary" id="addEventBtn">+ 일정 등록</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="summary">'
@@ -1183,6 +1186,9 @@
       + '</div>'
     + '</div>';
 
+    // AI 면담 요약 — 배너 바로 아래(탭 위) 상단 고정
+    html += crewSummaryCard(c);
+
     html += '<div class="crew-tabs">' + CREW_TABS.map(function (t) {
       return '<button class="crew-tab' + (t.key === crewDetailTab ? " is-on" : "") + '" data-tab="' + t.key + '">'
         + esc(t.label) + (t.locked ? " 🔒" : "") + '</button>';
@@ -1192,6 +1198,110 @@
     html += '</div>';
 
     view.innerHTML = html;
+
+    // 면담일지가 아직 안 실렸으면 로드 후 상단 통계 채워 재렌더 (라이브 모드에서만)
+    if (crewDetailId === c.id && !(window.JOURNAL && window.JOURNAL.tabs)
+        && window.CONFIG && window.CONFIG.endpoint && typeof loadJournalOnce === "function") {
+      loadJournalOnce().then(function () {
+        if (crewDetailId === c.id) renderCrewDetail(c);
+      });
+    }
+  }
+
+  /* ---------- 크루 상세 · AI 면담 요약 카드 (상단 고정) ----------
+     - 서술 요약(장점/누락/지원방향, 근태 타임라인)은 window.CREW_SUMMARY 캐시에서.
+     - 통계(건수·기간·카테고리·지각 언급)는 window.JOURNAL 에서 실시간 집계. */
+  var crewSummaryOpen = true;
+
+  function crewJournalStats(nick) {
+    var tabs = (window.JOURNAL && window.JOURNAL.tabs) || null;
+    if (!tabs) return null;
+    var t = null;
+    for (var i = 0; i < tabs.length; i++) { if (String(tabs[i].name).trim() === nick) { t = tabs[i]; break; } }
+    if (!t) return null;
+    var rows = normalizeJournalRows(t.rows);
+    if (!rows.length) return null;
+    var cat = {}, late = 0;
+    rows.forEach(function (r) {
+      var c = r.category || "(미분류)";
+      cat[c] = (cat[c] || 0) + 1;
+      if (/지각|늦잠|늦게|연착|결근|조퇴|무단/.test(r.content)) late++;
+    });
+    var dated = rows.map(function (r) { return r.date; }).filter(Boolean).sort();
+    var cats = Object.keys(cat).map(function (k) { return { k: k, v: cat[k] }; })
+      .sort(function (a, b) { return b.v - a.v; });
+    return { count: rows.length, first: dated[0] || "", last: dated[dated.length - 1] || "", late: late, cats: cats };
+  }
+
+  function summaryDimBlock(name, dm) {
+    function list(items, cls, lbl, mark) {
+      if (!items || !items.length) return "";
+      return '<div class="aisum__box aisum__box--' + cls + '"><h5>' + mark + ' ' + lbl + '</h5><ul>'
+        + items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+    }
+    var inner = list(dm.good, "good", "장점", "▲")
+      + list(dm.gap, "gap", "누락 / 개선", "●")
+      + list(dm.support, "sup", "지원방향", "◆");
+    if (!inner) return "";
+    return '<div class="aisum__dim"><h4>' + esc(name) + '</h4><div class="aisum__grid">' + inner + '</div></div>';
+  }
+
+  function crewSummaryCard(c) {
+    var nick = crewNickname(c.name);
+    var sum = (window.CREW_SUMMARY || {})[nick];
+    var stats = crewJournalStats(nick);
+    var journalReady = !!(window.JOURNAL && window.JOURNAL.tabs);
+
+    // 요약도 통계도 없고 데이터도 다 실렸으면 카드 자체를 숨긴다.
+    if (!sum && !stats && journalReady) return "";
+
+    var head = '<button type="button" class="aisum__head" id="crewSummaryToggle" aria-expanded="' + (crewSummaryOpen ? "true" : "false") + '">'
+      + '<span class="aisum__title">🤖 AI 면담 요약'
+      + (sum && sum.tag ? ' <span class="aisum__tag' + (sum.risk ? ' aisum__tag--risk' : '') + '">' + esc(sum.tag) + '</span>' : '')
+      + '</span>';
+
+    var chips = "";
+    if (stats) {
+      chips = '<span class="aisum__stats">'
+        + '<span class="aisum__chip">기록 <b>' + stats.count + '</b>건</span>'
+        + (stats.first ? '<span class="aisum__chip">' + esc(stats.first.slice(0, 7)) + ' ~ ' + esc(stats.last.slice(0, 7)) + '</span>' : '')
+        + (stats.late ? '<span class="aisum__chip aisum__chip--warn">지각 언급 <b>' + stats.late + '</b></span>' : '')
+        + '</span>';
+    } else if (!journalReady) {
+      chips = '<span class="aisum__stats"><span class="aisum__chip">통계 불러오는 중…</span></span>';
+    }
+    head += chips + '<span class="aisum__caret">' + (crewSummaryOpen ? "▾" : "▸") + '</span></button>';
+
+    var body = "";
+    if (crewSummaryOpen) {
+      body += '<div class="aisum__body">';
+      if (sum && sum.headline) body += '<p class="aisum__headline">' + esc(sum.headline) + '</p>';
+      if (stats && stats.cats.length) {
+        body += '<div class="aisum__cats">' + stats.cats.slice(0, 8).map(function (x) {
+          return '<span class="aisum__cat">' + esc(x.k) + ' <b>' + x.v + '</b></span>';
+        }).join("") + '</div>';
+      }
+      if (sum && sum.attendance) {
+        var a = sum.attendance;
+        body += '<div class="aisum__dim"><h4>근태 — 지각 타임라인</h4><div class="aisum__tl">'
+          + (a.timeline || []).map(function (t) {
+            return '<p class="aisum__tlrow' + (t.flag ? ' is-flag' : '') + '"><span class="aisum__tld">'
+              + esc(t.date) + '</span><span>' + esc(t.note) + '</span></p>';
+          }).join("")
+          + '</div>' + (a.summary ? '<p class="aisum__note">' + esc(a.summary) + '</p>' : '') + '</div>';
+      }
+      if (sum && sum.dimensions) {
+        var order = ["성향", "건강", "업무 발전도", "대인관계"];
+        Object.keys(sum.dimensions).sort(function (x, y) {
+          var ix = order.indexOf(x), iy = order.indexOf(y);
+          return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
+        }).forEach(function (k) { body += summaryDimBlock(k, sum.dimensions[k]); });
+      }
+      if (!sum) body += '<p class="aisum__pending">아직 이 크루의 AI 요약이 생성되지 않았습니다. 위 통계는 면담일지에서 실시간 집계한 값입니다.</p>';
+      else if (sum.updated) body += '<p class="aisum__meta">요약 생성일 ' + esc(sum.updated) + ' · 면담일지 원문 기반</p>';
+      body += '</div>';
+    }
+    return '<section class="aisum' + (sum && sum.risk ? ' aisum--risk' : '') + '">' + head + body + '</section>';
   }
 
   function crewTabPanel(c, tab) {
@@ -4361,6 +4471,8 @@
 
       var crewTabBtn = ev.target.closest(".crew-tab[data-tab]");
       if (crewTabBtn) { crewDetailTab = crewTabBtn.getAttribute("data-tab"); renderCrew(); return; }
+
+      if (ev.target.closest("#crewSummaryToggle")) { crewSummaryOpen = !crewSummaryOpen; renderCrew(); return; }
 
       if (ev.target.closest("#crewAddInterviewBtn")) {
         var addC = findById(window.CREW, crewDetailId);

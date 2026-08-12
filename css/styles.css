@@ -1227,3 +1227,37 @@ html[data-authed="1"] .lock { display: none; }
   flex:0 0 auto;font-size:11.5px;font-weight:800;color:var(--accent-ink);
   background:var(--accent);border-radius:999px;padding:2px 10px;white-space:nowrap;
 }
+
+/* AI 지원가이드 · 비장애(직무지도·운영 관리자) 성장 지원형 */
+.aisum__mgrbadges{ display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 12px; }
+.aisum__rolebadge{
+  font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;
+  background:var(--panel-2);color:var(--ink);border:1px solid var(--line);
+}
+.aisum__level{ font-size:11.5px;font-weight:800;padding:3px 10px;border-radius:999px; }
+.aisum__level--need{ background:color-mix(in srgb,var(--red) 15%,var(--card-bg)); color:var(--red); }
+.aisum__level--doing{ background:color-mix(in srgb,#60a5fa 16%,var(--card-bg)); color:#3b82f6; }
+.aisum__level--indep{ background:color-mix(in srgb,var(--green) 15%,var(--card-bg)); color:var(--green); }
+.aisum__level--ext{ background:color-mix(in srgb,var(--accent) 20%,var(--card-bg)); color:var(--accent-text); }
+.aisum__level--obs{ background:var(--panel-2); color:var(--ink-2); }
+.aisum__goal{ margin:0 0 16px;font-size:13.5px;line-height:1.6;color:var(--ink);padding-left:12px;border-left:3px solid var(--accent); }
+.aisum__goal-lbl{ font-weight:800;color:var(--accent-text);margin-right:6px; }
+
+.aisum__lead{ display:flex;flex-direction:column;gap:7px; }
+.aisum__leadrow{
+  display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.55;color:var(--ink);
+  background:color-mix(in srgb,var(--accent) 8%,var(--card-bg));
+  border:1px solid color-mix(in srgb,var(--accent) 26%,var(--line));
+  border-radius:var(--r-sm);padding:9px 12px;
+}
+.aisum__method{
+  flex:0 0 auto;font-size:11px;font-weight:800;color:var(--accent-ink);
+  background:var(--accent);border-radius:999px;padding:2px 9px;white-space:nowrap;
+}
+.aisum__intensity{ display:flex;flex-wrap:wrap;gap:4px;align-items:center; }
+.aisum__istep{
+  font-size:11.5px;padding:3px 9px;border-radius:6px;color:var(--ink-3,var(--ink-2));
+  background:var(--panel-2);border:1px solid var(--line-soft);
+}
+.aisum__istep.is-past{ opacity:.5; }
+.aisum__istep.is-on{ background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:800; }

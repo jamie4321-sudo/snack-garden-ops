@@ -1271,6 +1271,10 @@
     return { count: jrows.length + iv.length, first: dates[0] || "", last: dates[dates.length - 1] || "", late: late, cats: cats, src: srcs.join("+") };
   }
 
+  function levelClass(l) {
+    return l === "지원 필요" ? "need" : l === "수행 중" ? "doing" : l === "독립 수행" ? "indep" : l === "확장 수행" ? "ext" : "obs";
+  }
+
   function summaryDimBlock(name, dm, labels) {
     var L = labels || ["장점", "누락 / 개선", "지원방향"];
     function list(items, cls, lbl, mark) {
@@ -1321,9 +1325,10 @@
     if (crewSummaryOpen) {
       body += '<div class="aisum__body">';
       if (sum && sum.headline) body += '<p class="aisum__headline">' + esc(sum.headline) + '</p>';
-      // 핵심 강점 (강점기반)
+      var isManager = c.disability !== "장애"; // 비장애 = 장애크루 직무지도·운영 관리자
+      // 확인된/핵심 강점
       if (sum && sum.strengths && sum.strengths.length) {
-        body += '<div class="aisum__strengths"><span class="aisum__strengths-lbl">핵심 강점</span>'
+        body += '<div class="aisum__strengths"><span class="aisum__strengths-lbl">' + (isManager ? "확인된 강점" : "핵심 강점") + '</span>'
           + sum.strengths.map(function (s) { return '<span class="aisum__strength">★ ' + esc(s) + '</span>'; }).join("")
           + '</div>';
       }
@@ -1332,34 +1337,51 @@
           return '<span class="aisum__cat">' + esc(x.k) + ' <b>' + x.v + '</b></span>';
         }).join("") + '</div>';
       }
-      var isManager = c.disability !== "장애"; // 비장애 = 장애크루 관리자/직무지도원 관점
 
       if (isManager) {
-        /* ---- 관리자 성장형 (직무지도원·재활 관리자 역량) ---- */
-        if (sum && sum.roadmap && sum.roadmap.length) {
-          body += '<div class="aisum__dim"><h4>🎯 성장 로드맵 <span class="aisum__dtype">대체불가 인재로</span></h4><div class="aisum__road">'
-            + sum.roadmap.map(function (r) {
-              return '<div class="aisum__roadrow"><span class="aisum__roadstage">' + esc(r.stage) + '</span><span>' + esc(r.item) + '</span></div>';
-            }).join("") + '</div></div>';
-        }
-        var mdims = (sum && sum.competencies) || (sum && sum.dimensions) || null;
-        if (mdims) {
-          var morder = ["장애 이해·감수성", "직무지도·행동지원", "소통·정서지원", "서비스 운영·품질", "협업·리더십", "자기관리·전문성"];
-          Object.keys(mdims).sort(function (x, y) {
-            var ix = morder.indexOf(x), iy = morder.indexOf(y);
-            return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
-          }).forEach(function (k) { body += summaryDimBlock(k, mdims[k], ["강점", "보완점", "성장방향"]); });
-        }
-        if (sum && sum.selfcare && sum.selfcare.length) {
-          body += '<div class="aisum__dim"><h4>🔋 소진 · 자기돌봄 신호</h4><div class="aisum__triggers">'
-            + sum.selfcare.map(function (t) {
-              return '<div class="aisum__trigger"><span class="aisum__trig-sig">' + esc(t.signal) + '</span>'
-                + '<span class="aisum__trig-arrow">→</span><span class="aisum__trig-res">' + esc(t.response) + '</span></div>';
-            }).join("") + '</div></div>';
-        }
-        if (sum && sum.development && sum.development.length) {
-          body += '<div class="aisum__dim"><h4>📚 추천 역량개발</h4><ul class="aisum__tips">'
-            + sum.development.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+        /* ---- 비장애 = 직무지도·운영 관리자 성장 지원 가이드 (인사평가 아님) ---- */
+        var hasNew = !!(sum && (sum.level || (sum.leaderSupport && sum.leaderSupport.length) || sum.coreGoal));
+        if (hasNew) {
+          var mrole = (sum && sum.role) || c.role || "";
+          if (mrole || sum.level) {
+            body += '<div class="aisum__mgrbadges">'
+              + (mrole ? '<span class="aisum__rolebadge">' + esc(mrole) + '</span>' : '')
+              + (sum.level ? '<span class="aisum__level aisum__level--' + levelClass(sum.level) + '">' + esc(sum.level) + '</span>' : '')
+              + '</div>';
+          }
+          if (sum.coreGoal) body += '<p class="aisum__goal"><span class="aisum__goal-lbl">핵심 목표</span> ' + esc(sum.coreGoal) + '</p>';
+          if (sum.growthAreas && sum.growthAreas.length) {
+            body += '<div class="aisum__dim"><h4>● 성장 필요 영역 <span class="aisum__dtype">행동 기준</span></h4><ul class="aisum__tips">'
+              + sum.growthAreas.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+          }
+          if (sum.leaderSupport && sum.leaderSupport.length) {
+            body += '<div class="aisum__dim"><h4>🧭 리더 지원 가이드</h4><div class="aisum__lead">'
+              + sum.leaderSupport.map(function (s) {
+                return '<div class="aisum__leadrow">' + (s.method ? '<span class="aisum__method">' + esc(s.method) + '</span>' : '')
+                  + '<span>' + esc(s.action) + '</span></div>';
+              }).join("") + '</div></div>';
+          }
+          if (sum.nextCheck && sum.nextCheck.length) {
+            body += '<div class="aisum__dim"><h4>🔎 다음 면담 확인사항</h4><ul class="aisum__tips">'
+              + sum.nextCheck.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+          }
+          if (sum.supportIntensity) {
+            var isteps = ["직접지원", "방법지원", "코칭", "결과리뷰", "모니터링", "권한위임"];
+            var icur = isteps.indexOf(sum.supportIntensity);
+            body += '<div class="aisum__dim"><h4>지원 강도</h4><div class="aisum__intensity">'
+              + isteps.map(function (s, i) { return '<span class="aisum__istep' + (i === icur ? " is-on" : (i < icur ? " is-past" : "")) + '">' + esc(s) + '</span>'; }).join("")
+              + '</div></div>';
+          }
+        } else if (sum && (sum.roadmap || sum.competencies)) {
+          /* 미마이그레이션 폴백: 기존 로드맵/역량 표시 */
+          if (sum.roadmap && sum.roadmap.length) {
+            body += '<div class="aisum__dim"><h4>🎯 성장 로드맵</h4><div class="aisum__road">'
+              + sum.roadmap.map(function (r) { return '<div class="aisum__roadrow"><span class="aisum__roadstage">' + esc(r.stage) + '</span><span>' + esc(r.item) + '</span></div>'; }).join("") + '</div></div>';
+          }
+          if (sum.competencies) {
+            var morder = ["장애 이해·감수성", "직무지도·행동지원", "소통·정서지원", "서비스 운영·품질", "협업·리더십", "자기관리·전문성"];
+            Object.keys(sum.competencies).sort(function (x, y) { var ix = morder.indexOf(x), iy = morder.indexOf(y); return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy); }).forEach(function (k) { body += summaryDimBlock(k, sum.competencies[k], ["강점", "보완점", "성장방향"]); });
+          }
         }
       } else {
         /* ---- 장애 크루 (지원 중심) ---- */

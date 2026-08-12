@@ -1271,15 +1271,16 @@
     return { count: jrows.length + iv.length, first: dates[0] || "", last: dates[dates.length - 1] || "", late: late, cats: cats, src: srcs.join("+") };
   }
 
-  function summaryDimBlock(name, dm) {
+  function summaryDimBlock(name, dm, labels) {
+    var L = labels || ["장점", "누락 / 개선", "지원방향"];
     function list(items, cls, lbl, mark) {
       if (!items || !items.length) return "";
       return '<div class="aisum__box aisum__box--' + cls + '"><h5>' + mark + ' ' + lbl + '</h5><ul>'
         + items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
     }
-    var inner = list(dm.good, "good", "장점", "▲")
-      + list(dm.gap, "gap", "누락 / 개선", "●")
-      + list(dm.support, "sup", "지원방향", "◆");
+    var inner = list(dm.good, "good", L[0], "▲")
+      + list(dm.gap, "gap", L[1], "●")
+      + list(dm.support, "sup", L[2], "◆");
     if (!inner) return "";
     return '<div class="aisum__dim"><h4>' + esc(name) + '</h4><div class="aisum__grid">' + inner + '</div></div>';
   }
@@ -1331,36 +1332,66 @@
           return '<span class="aisum__cat">' + esc(x.k) + ' <b>' + x.v + '</b></span>';
         }).join("") + '</div>';
       }
-      if (sum && sum.attendance) {
-        var a = sum.attendance;
-        body += '<div class="aisum__dim"><h4>근태 — 지각 타임라인</h4><div class="aisum__tl">'
-          + (a.timeline || []).map(function (t) {
-            return '<p class="aisum__tlrow' + (t.flag ? ' is-flag' : '') + '"><span class="aisum__tld">'
-              + esc(t.date) + '</span><span>' + esc(t.note) + '</span></p>';
-          }).join("")
-          + '</div>' + (a.summary ? '<p class="aisum__note">' + esc(a.summary) + '</p>' : '') + '</div>';
-      }
-      // 위기신호 · 트리거 & 대응
-      if (sum && sum.triggers && sum.triggers.length) {
-        body += '<div class="aisum__dim"><h4>⚠ 위기신호 · 트리거 &amp; 대응</h4><div class="aisum__triggers">'
-          + sum.triggers.map(function (t) {
-            return '<div class="aisum__trigger"><span class="aisum__trig-sig">' + esc(t.signal) + '</span>'
-              + '<span class="aisum__trig-arrow">→</span><span class="aisum__trig-res">' + esc(t.response) + '</span></div>';
-          }).join("") + '</div></div>';
-      }
-      // 장애특성 맞춤 지원
-      if (sum && sum.disabilityTips && sum.disabilityTips.length) {
-        var dtype = (c.disabilityType || c.disability || "").trim();
-        body += '<div class="aisum__dim"><h4>장애특성 맞춤 지원'
-          + (dtype ? ' <span class="aisum__dtype">' + esc(dtype) + '</span>' : '') + '</h4><ul class="aisum__tips">'
-          + sum.disabilityTips.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
-      }
-      if (sum && sum.dimensions) {
-        var order = ["성향", "건강", "업무 발전도", "대인관계"];
-        Object.keys(sum.dimensions).sort(function (x, y) {
-          var ix = order.indexOf(x), iy = order.indexOf(y);
-          return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
-        }).forEach(function (k) { body += summaryDimBlock(k, sum.dimensions[k]); });
+      var isManager = c.disability !== "장애"; // 비장애 = 장애크루 관리자/직무지도원 관점
+
+      if (isManager) {
+        /* ---- 관리자 성장형 (직무지도원·재활 관리자 역량) ---- */
+        if (sum && sum.roadmap && sum.roadmap.length) {
+          body += '<div class="aisum__dim"><h4>🎯 성장 로드맵 <span class="aisum__dtype">대체불가 인재로</span></h4><div class="aisum__road">'
+            + sum.roadmap.map(function (r) {
+              return '<div class="aisum__roadrow"><span class="aisum__roadstage">' + esc(r.stage) + '</span><span>' + esc(r.item) + '</span></div>';
+            }).join("") + '</div></div>';
+        }
+        var mdims = (sum && sum.competencies) || (sum && sum.dimensions) || null;
+        if (mdims) {
+          var morder = ["장애 이해·감수성", "직무지도·행동지원", "소통·정서지원", "업무 운영·협업", "자기관리·전문성"];
+          Object.keys(mdims).sort(function (x, y) {
+            var ix = morder.indexOf(x), iy = morder.indexOf(y);
+            return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
+          }).forEach(function (k) { body += summaryDimBlock(k, mdims[k], ["강점", "보완점", "성장방향"]); });
+        }
+        if (sum && sum.selfcare && sum.selfcare.length) {
+          body += '<div class="aisum__dim"><h4>🔋 소진 · 자기돌봄 신호</h4><div class="aisum__triggers">'
+            + sum.selfcare.map(function (t) {
+              return '<div class="aisum__trigger"><span class="aisum__trig-sig">' + esc(t.signal) + '</span>'
+                + '<span class="aisum__trig-arrow">→</span><span class="aisum__trig-res">' + esc(t.response) + '</span></div>';
+            }).join("") + '</div></div>';
+        }
+        if (sum && sum.development && sum.development.length) {
+          body += '<div class="aisum__dim"><h4>📚 추천 역량개발</h4><ul class="aisum__tips">'
+            + sum.development.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+        }
+      } else {
+        /* ---- 장애 크루 (지원 중심) ---- */
+        if (sum && sum.attendance) {
+          var a = sum.attendance;
+          body += '<div class="aisum__dim"><h4>근태 — 지각 타임라인</h4><div class="aisum__tl">'
+            + (a.timeline || []).map(function (t) {
+              return '<p class="aisum__tlrow' + (t.flag ? ' is-flag' : '') + '"><span class="aisum__tld">'
+                + esc(t.date) + '</span><span>' + esc(t.note) + '</span></p>';
+            }).join("")
+            + '</div>' + (a.summary ? '<p class="aisum__note">' + esc(a.summary) + '</p>' : '') + '</div>';
+        }
+        if (sum && sum.triggers && sum.triggers.length) {
+          body += '<div class="aisum__dim"><h4>⚠ 위기신호 · 트리거 &amp; 대응</h4><div class="aisum__triggers">'
+            + sum.triggers.map(function (t) {
+              return '<div class="aisum__trigger"><span class="aisum__trig-sig">' + esc(t.signal) + '</span>'
+                + '<span class="aisum__trig-arrow">→</span><span class="aisum__trig-res">' + esc(t.response) + '</span></div>';
+            }).join("") + '</div></div>';
+        }
+        if (sum && sum.disabilityTips && sum.disabilityTips.length) {
+          var dtype = (c.disabilityType || c.disability || "").trim();
+          body += '<div class="aisum__dim"><h4>장애특성 맞춤 지원'
+            + (dtype ? ' <span class="aisum__dtype">' + esc(dtype) + '</span>' : '') + '</h4><ul class="aisum__tips">'
+            + sum.disabilityTips.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+        }
+        if (sum && sum.dimensions) {
+          var order = ["성향", "건강", "업무 발전도", "대인관계"];
+          Object.keys(sum.dimensions).sort(function (x, y) {
+            var ix = order.indexOf(x), iy = order.indexOf(y);
+            return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
+          }).forEach(function (k) { body += summaryDimBlock(k, sum.dimensions[k]); });
+        }
       }
       if (!sum) body += '<p class="aisum__pending">아직 이 크루의 AI 요약이 생성되지 않았습니다. 위 통계는 ' + srcLabel + '에서 실시간 집계한 값입니다.</p>';
       else if (sum.updated) body += '<p class="aisum__meta">요약 생성일 ' + esc(sum.updated) + ' · ' + srcLabel + ' 기반</p>';

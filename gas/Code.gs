@@ -59,8 +59,15 @@ var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","befor
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
 var SHEET_ID = "1NG8IozqEbilXBEFLjZZANJf1tQlL5wVzP29xg_Z9W6M";
 
-// 면담일지는 운영 데이터와 별도의 스프레드시트("2026 면담일지_DS")에 있다.
-var JOURNAL_SHEET_ID = "1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc";
+// 면담일지는 운영 데이터와 별도의 스프레드시트에 있고, 팀별로 시트가 나뉜다.
+// 팀이 추가되면 { team, id } 한 줄만 더하면 된다.
+var JOURNAL_SHEETS = [
+  { team: "스낵",    id: "1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc" },
+  { team: "가든",    id: "1XLQUdFDpwe_JD4uuplxwz7wu2AgzQkrHOn2lxVUSBu0" },
+  { team: "총무지원", id: "1WI32s1CgnW5UqMl-bFFxh-ODQzpPas76py3CzxR2_pQ" }
+];
+// (하위호환) 예전 단일 상수를 참조하는 코드가 있으면 첫 팀으로 대체
+var JOURNAL_SHEET_ID = JOURNAL_SHEETS[0].id;
 // 면담일지 탭이 아닌 탭(그 시트 안의 빈 운영 데이터 탭 + 안내/템플릿 탭 + 설문 응답 탭)은 건너뛴다
 var JOURNAL_SKIP_TABS = [
   "crew", "schedule", "issues", "points", "reports", "interviews", "attendance", "notes", "education",
@@ -292,18 +299,24 @@ function getDebugInfo_() {
  *  그대로 읽어온다. 날짜 정규화·최신순 정렬 등은 프론트엔드에서 처리한다(시트 표기가
  *  "2025", "08-05"처럼 불규칙해서 서버에서 섣불리 파싱하지 않고 원본 그대로 내려준다). */
 function getJournalData_() {
-  var ss;
-  try { ss = SpreadsheetApp.openById(JOURNAL_SHEET_ID); } catch (err) { return { tabs: [], error: String(err) }; }
   var tabs = [];
+  var sheets = [];
   var skipped = [];
-  ss.getSheets().forEach(function (sh) {
-    var name = sh.getName();
-    if (JOURNAL_SKIP_TABS.indexOf(name) > -1) return;
-    var parsed = readJournalSheet_(sh);
-    if (!parsed.rows.length) { skipped.push({ name: name, preview: parsed.preview }); return; }
-    tabs.push({ name: name, gid: sh.getSheetId(), rows: parsed.rows });
+  JOURNAL_SHEETS.forEach(function (cfg) {
+    var ss;
+    try { ss = SpreadsheetApp.openById(cfg.id); }
+    catch (err) { sheets.push({ team: cfg.team, id: cfg.id, error: String(err) }); return; }
+    sheets.push({ team: cfg.team, id: cfg.id, title: ss.getName() });
+    ss.getSheets().forEach(function (sh) {
+      var name = sh.getName();
+      if (JOURNAL_SKIP_TABS.indexOf(name) > -1) return;
+      var parsed = readJournalSheet_(sh);
+      if (!parsed.rows.length) { skipped.push({ team: cfg.team, name: name }); return; }
+      // team, sheetId 를 함께 실어 프론트에서 팀 필터/시트링크에 쓴다.
+      tabs.push({ team: cfg.team, sheetId: cfg.id, name: name, gid: sh.getSheetId(), rows: parsed.rows });
+    });
   });
-  return { tabs: tabs, sheetTitle: ss.getName(), skippedNoData: skipped };
+  return { tabs: tabs, sheets: sheets, skippedNoData: skipped };
 }
 
 /** "일자" 헤더 셀을 찾을 때까지 처음 15행 x 6열을 훑는다(행뿐 아니라 열 오프셋도 대비). */

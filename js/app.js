@@ -3116,7 +3116,18 @@
      JOURNAL · 면담일지 검토 (외부 구글시트, 읽기 전용)
      ====================================================== */
   var journalQuery = "";
+  var journalTeam = "스낵"; // 현재 보고 있는 팀 시트 (스낵/가든/총무지원)
   var pad2j = function (n) { return ("0" + n).slice(-2); };
+
+  /** 로드된 면담일지에 존재하는 팀 목록 (백엔드 sheets 메타 우선, 없으면 tabs에서 유추). */
+  function journalTeams() {
+    var j = window.JOURNAL || {};
+    if (j.sheets && j.sheets.length) return j.sheets.map(function (s) { return s.team; });
+    var set = {};
+    (j.tabs || []).forEach(function (t) { set[t.team || "스낵"] = 1; });
+    var arr = Object.keys(set);
+    return arr.length ? arr : ["스낵"];
+  }
 
   function crewNickname(name) {
     if (!name) return "";
@@ -3170,10 +3181,10 @@
 
     var groups = tabs.map(function (t) {
       var crew = nickToCrew[t.name.trim()];
-      if (!crew) { console.warn("[면담일지] 크루 매칭 실패:", t.name); return null; }
+      if (!crew) { console.warn("[면담일지] 크루 매칭 실패:", t.name, "(" + (t.team || "스낵") + ")"); return null; }
       var rows = normalizeJournalRows(t.rows);
       if (!rows.length) return null;
-      return { crew: crew, gid: t.gid, rows: rows };
+      return { crew: crew, gid: t.gid, team: t.team || "스낵", sheetId: t.sheetId || "", rows: rows };
     }).filter(Boolean);
 
     groups.sort(function (a, b) {
@@ -3187,7 +3198,7 @@
   }
 
   function filteredJournalGroups() {
-    var groups = journalGroups();
+    var groups = journalGroups().filter(function (g) { return g.team === journalTeam; });
     if (!journalQuery) return groups;
     var q = journalQuery.toLowerCase();
     return groups.filter(function (g) {
@@ -3196,9 +3207,18 @@
     });
   }
 
-  function journalGidUrl(gid) {
-    var base = ((window.CONFIG && window.CONFIG.journalSheetUrl) || "").replace(/#.*$/, "");
+  function journalGidUrl(sheetId, gid) {
+    var base = sheetId
+      ? "https://docs.google.com/spreadsheets/d/" + sheetId + "/edit"
+      : ((window.CONFIG && window.CONFIG.journalSheetUrl) || "").replace(/#.*$/, "");
     return base + "#gid=" + gid;
+  }
+  /** 특정 팀 시트의 전체 보기 URL (팀 헤더 링크용). */
+  function journalTeamSheetUrl(team) {
+    var sheets = (window.JOURNAL && window.JOURNAL.sheets) || [];
+    var m = sheets.filter(function (s) { return s.team === team; })[0];
+    if (m && m.id) return "https://docs.google.com/spreadsheets/d/" + m.id + "/edit";
+    return (window.CONFIG && window.CONFIG.journalSheetUrl) || "#";
   }
 
   function journalCard(g) {
@@ -3214,7 +3234,7 @@
             + '<span class="jcard__meta mono">전체 ' + g.rows.length + '건' + (latest.date ? ' · 최근 ' + fmtDotDate(latest.date) : latest.dateRaw ? ' · 최근 ' + esc(latest.dateRaw) : '') + '</span>'
           + '</div>'
         + '</div>'
-        + '<a class="jcard__link" href="' + esc(journalGidUrl(g.gid)) + '" target="_blank" rel="noopener" title="시트에서 보기" onclick="event.stopPropagation()">🔗</a>'
+        + '<a class="jcard__link" href="' + esc(journalGidUrl(g.sheetId, g.gid)) + '" target="_blank" rel="noopener" title="시트에서 보기" onclick="event.stopPropagation()">🔗</a>'
       + '</div>'
       + (latest.category ? '<span class="jcard__cat">' + esc(latest.category) + '</span>' : '')
       + '<p class="jcard__preview">' + esc(preview) + '</p>'
@@ -3224,11 +3244,13 @@
 
   function renderJournal() {
     var html = "";
+    var headTeamUrl = window.JOURNAL ? journalTeamSheetUrl(journalTeam)
+      : ((window.CONFIG && window.CONFIG.journalSheetUrl) || "#");
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Crew / Journal</p>'
       + '<h2>면담일지 검토</h2>'
-      + '<p class="sub">장애크루 면담일지 시트의 최근 기록을 크루별로 모아봅니다.</p></div>'
-      + '<a class="btn" href="' + esc((window.CONFIG && window.CONFIG.journalSheetUrl) || "#") + '" target="_blank" rel="noopener">시트 전체 보기 ↗</a>'
+      + '<p class="sub">팀별 장애크루 면담일지 시트의 최근 기록을 크루별로 모아봅니다.</p></div>'
+      + '<a class="btn" href="' + esc(headTeamUrl) + '" target="_blank" rel="noopener">' + esc(journalTeam) + ' 시트 전체 보기 ↗</a>'
       + '</div>';
 
     if (!isLive()) {
@@ -3244,14 +3266,29 @@
       return;
     }
 
-    html += '<div class="toolbar-row">'
+    // 로드된 팀 중 현재 선택이 없으면 첫 팀으로 보정
+    var teams = journalTeams();
+    if (teams.indexOf(journalTeam) < 0) journalTeam = teams[0];
+
+    // 팀별 크루 수 (배지용)
+    var countByTeam = {};
+    journalGroups().forEach(function (g) { countByTeam[g.team] = (countByTeam[g.team] || 0) + 1; });
+
+    html += '<div class="toolbar-row toolbar-row--split">'
+      + '<div class="filter filter--xs" id="journalTeamFilter">'
+      + teams.map(function (tm) {
+          var n = countByTeam[tm] || 0;
+          return '<button class="btn btn--xs btn--pill ' + (tm === journalTeam ? "is-on" : "") + '" data-jteam="' + esc(tm) + '">'
+            + esc(tm) + ' <span class="chip-mono">' + n + '</span></button>';
+        }).join("")
+      + '</div>'
       + '<input class="searchbox" id="journalSearch" type="search" placeholder="크루 · 내용 검색" value="' + esc(journalQuery) + '">'
       + '</div>';
 
     var groups = filteredJournalGroups();
     html += '<div class="jlist" id="journalList">'
       + (groups.length ? groups.map(journalCard).join("")
-          : '<div class="placeholder placeholder--sm"><p class="muted">' + (journalQuery ? "검색 결과가 없습니다." : "일치하는 면담일지를 찾지 못했습니다.") + '</p></div>')
+          : '<div class="placeholder placeholder--sm"><p class="muted">' + (journalQuery ? "검색 결과가 없습니다." : esc(journalTeam) + " 팀의 면담일지를 찾지 못했습니다.") + '</p></div>')
       + '</div>';
 
     view.innerHTML = html;
@@ -3277,7 +3314,7 @@
 
     el.querySelector("#jdModalTitle").textContent = g.crew.name;
     el.querySelector("#jdModalCount").textContent = g.rows.length + "건";
-    el.querySelector("#jdModalLink").href = journalGidUrl(g.gid);
+    el.querySelector("#jdModalLink").href = journalGidUrl(g.sheetId, g.gid);
     el.querySelector("#jdModalBody").innerHTML = g.rows.map(function (r) {
       return '<tr>'
         + '<td class="board__date mono">' + (r.date ? fmtDotDate(r.date) : esc(r.dateRaw || "—")) + '</td>'
@@ -4321,6 +4358,9 @@
 
       var ivModeBtn = ev.target.closest(".month-nav [data-iv-mode]");
       if (ivModeBtn) { ivMode = ivModeBtn.getAttribute("data-iv-mode"); renderInterview(); return; }
+
+      var jteamBtn = ev.target.closest("#journalTeamFilter button[data-jteam]");
+      if (jteamBtn) { journalTeam = jteamBtn.getAttribute("data-jteam"); journalQuery = ""; renderJournal(); return; }
 
       var jcard = ev.target.closest(".jcard[data-name]");
       if (jcard) { openJournalDetailModal(jcard.getAttribute("data-name")); return; }

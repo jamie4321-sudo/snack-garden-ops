@@ -1183,3 +1183,8 @@ html[data-authed="1"] .lock { display: none; }
 }
 .aisum__pending{ margin:4px 0 0;font-size:13px;color:var(--ink-2); }
 .aisum__meta{ margin:6px 0 0;font-size:11.5px;color:var(--ink-3, var(--ink-2)); text-align:right; }
+
+/* 면담일지 · 팀 선택 툴바 (팀 필터 왼쪽 + 검색 오른쪽) */
+.toolbar-row--split .searchbox { margin-left: auto; }
+#journalTeamFilter { padding-left: 0; border-left: 0; }
+#journalTeamFilter .chip-mono { opacity: .7; margin-left: 2px; }

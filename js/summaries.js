@@ -387,7 +387,8 @@ window.CREW_SUMMARY = {
       "장애 이해·감수성": { good: ["장애 특성을 고려해 응대하려 노력"], gap: [], support: ["유형별 특성·개별화 접근을 체계적으로 학습"] },
       "직무지도·행동지원": { good: [], gap: ["명확·단호한 피드백이 아직 어려움(샘에게 반복·모호)"], support: ["과업 단계화·촉진→용암, PBS 기법 습득"] },
       "소통·정서지원": { good: ["공감적으로 응대"], gap: ["경계 설정·단호함 보완 필요"], support: ["쉬운 말·구조화된 피드백, 라포 유지"] },
-      "업무 운영·협업": { good: [], gap: [], support: ["모니터링·피드백 루틴을 본인 방식으로 정립"] },
+      "서비스 운영·품질": { good: [], gap: [], support: ["이용자(카카오 크루) 관점의 서비스 품질 기준 내재화", "현장 상황을 서비스 개선 제안으로 연결"] },
+      "협업·리더십": { good: [], gap: [], support: ["모니터링·피드백 루틴 정립, 버디·타부서 협업"] },
       "자기관리·전문성": { good: ["성찰적이고 배우려는 태도"], gap: ["자책·감정노동 부담"], support: ["수퍼비전·셀프케어 루틴, 지속 학습"] }
     },
     selfcare: [
@@ -653,5 +654,66 @@ window.CREW_SUMMARY = {
     if (e.strengths && e.strengths.length) CS[k].strengths = e.strengths;
     if (e.triggers && e.triggers.length) CS[k].triggers = e.triggers;
     if (e.disabilityTips && e.disabilityTips.length) CS[k].disabilityTips = e.disabilityTips;
+  });
+})();
+
+/* =========================================================
+   비장애 크루 = 장애크루 관리자/직무지도원 (+ 서비스 운영자)
+   관리자 성장형 틀: 성장 로드맵 · 6역량(재활+서비스) · 소진자기돌봄 · 추천 역량개발
+   ========================================================= */
+(function () {
+  var CS = window.CREW_SUMMARY; if (!CS) return;
+  var DEV = ["직무지도원 양성과정", "긍정적 행동지원(PBS) 교육", "장애인식개선 교육", "직업재활 관련 자격(직업재활사·사회복지사) 검토"];
+  var DEV_MGR = DEV.concat(["관리자·직업재활 리더십 과정", "서비스 운영·CS 역량 교육"]);
+  var SELF = [{ signal: "감정노동 누적·소진 신호", response: "정기 수퍼비전·동료 디브리핑, 셀프케어(휴식·경계) 루틴 확보" }];
+
+  function comp(over) {
+    var b = {
+      "장애 이해·감수성": { good: [], gap: [], support: ["담당 크루의 장애 유형·특성과 개별 지원 니즈 파악", "인권·존중 기반 개별화 접근"] },
+      "직무지도·행동지원": { good: [], gap: [], support: ["과업 분석·단계적 지도(촉진→용암)", "긍정적 행동지원(PBS) 기법 습득"] },
+      "소통·정서지원": { good: [], gap: [], support: ["명확·비폭력 소통, 라포·경청", "스트레스·컨디션 신호 조기 감지"] },
+      "서비스 운영·품질": { good: [], gap: [], support: ["이용자(카카오 크루) 관점의 서비스 품질 기준 내재화", "현장 상황을 서비스 개선 제안으로 연결"] },
+      "협업·리더십": { good: [], gap: [], support: ["버디·타부서 협업과 정보 공유", "솔선수범으로 팀 문화에 기여"] },
+      "자기관리·전문성": { good: [], gap: [], support: ["감정노동·소진 예방(셀프케어)", "직업재활·장애인식·서비스 지속 학습"] }
+    };
+    over = over || {};
+    Object.keys(over).forEach(function (k) {
+      b[k] = b[k] || { good: [], gap: [], support: [] };
+      ["good", "gap", "support"].forEach(function (f) { if (over[k][f]) b[k][f] = over[k][f].concat(b[k][f]); });
+    });
+    return b;
+  }
+  var ROAD = {
+    crew: [{ stage: "단기", item: "담당 크루의 특성·지원 니즈 파악과 서비스 품질 기준 숙지, 라포 형성" }, { stage: "중기", item: "단계적 직무지도·PBS 적용 + 현장 개선 제안으로 서비스 기여" }, { stage: "전문성", item: "직무지도원 양성과정·장애인식개선 교육으로 전문성 인증" }],
+    mgr: [{ stage: "단기", item: "담당 팀의 직무지도 기준·개별 지원 흐름과 서비스 운영 표준 정립" }, { stage: "중기", item: "크루 성장 코칭과 서비스 품질·운영 최적화" }, { stage: "전문성", item: "직업재활 관리자 전문성 인증(자격·리더십 과정)" }],
+    part: [{ stage: "단기", item: "파트 직무지도·서비스 운영 표준화와 모범" }, { stage: "중기", item: "크루 성장 코칭·위기 대응 체계 구축" }, { stage: "전문성", item: "직무지도원 심화·리더십 과정" }],
+    lead: [{ stage: "단기", item: "개별지원계획(ISP)·팀 운영 체계와 서비스 표준 정착" }, { stage: "중기", item: "직무지도원 역량 코칭·서비스 모델 표준화" }, { stage: "전문성", item: "조직 차원 직업재활·서비스 모델 고도화" }]
+  };
+  function entry(tier, tag, headline, strengths, over) {
+    return { tag: tag, updated: "2026-08-12", headline: headline, strengths: strengths || [],
+      roadmap: ROAD[tier], competencies: comp(over), selfcare: SELF, development: (tier === "crew" ? DEV : DEV_MGR) };
+  }
+
+  var baseHead = "담당 크루 지원과 서비스 운영 역량을 함께 키워갈 단계";
+  var MGR = {
+    "제이미": entry("lead", "팀 운영·직업재활 리더십", "팀리더로서 직무지도 체계와 서비스 운영을 표준화하고 조직 모델을 고도화할 위치", []),
+    "헤이든": entry("part", "파트 직무지도·서비스 표준화", "파트리더로서 직무지도·서비스 운영을 표준화하고 크루 성장을 이끄는 단계", ["체계적 소통(이슈 트래킹) 지향"], { "협업·리더십": { good: ["이슈 트래킹 등 체계적 소통 지향"] } }),
+    "엔조": entry("mgr", "관리자 역량 성장", "매니저로서 크루 지도와 서비스 운영을 균형 있게 이끄는 단계", [], { "소통·정서지원": { gap: ["대화 중 재촉하는 태도(관찰)"] } }),
+    "엘리": entry("mgr", "매니저 소통·운영 역량", "가든 매니저 — 적극적 코칭 강점을 살리되 사실 중심 소통과 운영 이해를 키울 단계", ["크루에게 적극적으로 업무 코칭"], { "소통·정서지원": { gap: ["부정 우선·감정 섞인 소통(정제 필요)"] }, "서비스 운영·품질": { gap: ["운영 전반 이해·전달 부족"] }, "자기관리·전문성": { gap: ["컨디션 저하·거취 고민"] }, "협업·리더십": { good: ["크루 지도에 적극적"] } }),
+    "스완": entry("crew", "서비스 개선 기여", "앱 개선·도구 전파 등 서비스 개선에 적극 기여하는 버디 크루", ["수량표앱 개선 기여", "장애크루에게 도구 사용 전파"], { "서비스 운영·품질": { good: ["수량표앱 개선 등 서비스 도구 기여"] }, "직무지도·행동지원": { good: ["장애크루에게 도구 사용을 쉽게 전파"] } }),
+    "린지": entry("crew", "능동적 수행·정서 안정", "능동적으로 업무를 수행하고 감정 컨트롤이 향상된 안정적 버디 크루", ["능동적 업무 수행", "작년 대비 감정 컨트롤 향상"], { "협업·리더십": { good: ["백업 요청 즉시 응답 등 능동적"] }, "자기관리·전문성": { good: ["감정 컨트롤 향상"] } }),
+    "찰스": entry("mgr", "총무 운영·직무지도", "총무지원 매니저 — 총무 크루(제티·카주) 지도와 서비스 운영을 함께 이끄는 단계", []),
+    "마린": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "조지": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "애셔": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "로렌": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "니아": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "베라": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "엘라": entry("crew", "직무지도 역량 성장", baseHead, []),
+    "에드윈": entry("crew", "가든 직무지도 역량 성장", "가든 직무지도와 서비스 운영 역량을 함께 키워갈 가드너", [])
+  };
+  Object.keys(MGR).forEach(function (k) {
+    CS[k] = Object.assign(CS[k] || {}, MGR[k]);
+    delete CS[k].dimensions; delete CS[k].triggers; delete CS[k].disabilityTips; delete CS[k].attendance;
   });
 })();

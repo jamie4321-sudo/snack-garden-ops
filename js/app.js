@@ -1344,7 +1344,7 @@
         }
         var mdims = (sum && sum.competencies) || (sum && sum.dimensions) || null;
         if (mdims) {
-          var morder = ["장애 이해·감수성", "직무지도·행동지원", "소통·정서지원", "업무 운영·협업", "자기관리·전문성"];
+          var morder = ["장애 이해·감수성", "직무지도·행동지원", "소통·정서지원", "서비스 운영·품질", "협업·리더십", "자기관리·전문성"];
           Object.keys(mdims).sort(function (x, y) {
             var ix = morder.indexOf(x), iy = morder.indexOf(y);
             return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
@@ -3337,13 +3337,10 @@
 
   function renderJournal() {
     var html = "";
-    var headTeamUrl = window.JOURNAL ? journalTeamSheetUrl(journalTeam)
-      : ((window.CONFIG && window.CONFIG.journalSheetUrl) || "#");
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Crew / Journal</p>'
       + '<h2>면담일지 검토</h2>'
       + '<p class="sub">팀별 장애크루 면담일지 시트의 최근 기록을 크루별로 모아봅니다.</p></div>'
-      + '<a class="btn" href="' + esc(headTeamUrl) + '" target="_blank" rel="noopener">' + esc(journalTeam) + ' 시트 전체 보기 ↗</a>'
       + '</div>';
 
     if (!isLive()) {

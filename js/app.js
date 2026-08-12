@@ -1196,8 +1196,8 @@
 
     view.innerHTML = html;
 
-    // 장애 크루 상세에서 면담일지가 아직 안 실렸으면 로드 후 통계 채워 재렌더 (라이브 모드에서만)
-    if (crewDetailId === c.id && c.disability === "장애" && !(window.JOURNAL && window.JOURNAL.tabs)
+    // 크루 상세에서 면담일지가 아직 안 실렸으면 로드 후 통계 채워 재렌더 (라이브 모드에서만)
+    if (crewDetailId === c.id && !(window.JOURNAL && window.JOURNAL.tabs)
         && window.CONFIG && window.CONFIG.endpoint && typeof loadJournalOnce === "function") {
       loadJournalOnce().then(function () {
         if (crewDetailId === c.id) renderCrewDetail(c);
@@ -1245,6 +1245,32 @@
     return { count: iv.length, first: dated[0] || "", last: dated[dated.length - 1] || "", late: late, cats: cats, src: "면담기록" };
   }
 
+  /** 면담일지(닉네임 매칭, 여러 팀 시트 합산) + 앱 면담기록·근태를 모두 취합한 통계 */
+  function crewCombinedStats(c) {
+    var nick = crewNickname(c.name);
+    var tabs = (window.JOURNAL && window.JOURNAL.tabs) || [];
+    var jrows = [];
+    tabs.forEach(function (t) { if (String(t.name).trim() === nick) jrows = jrows.concat(normalizeJournalRows(t.rows)); });
+    var mine = function (r) { return String(r.crewId) === String(c.id) || (r.crewName && r.crewName === c.name); };
+    var iv = (window.INTERVIEWS || []).filter(mine);
+    var at = (window.ATTENDANCE || []).filter(mine);
+    if (!jrows.length && !iv.length && !at.length) return null;
+    var cat = {}, late = 0, dates = [];
+    jrows.forEach(function (r) {
+      var k = r.category || "(미분류)"; cat[k] = (cat[k] || 0) + 1;
+      if (/지각|늦잠|늦게|연착|결근|조퇴|무단/.test(r.content)) late++;
+      if (r.date) dates.push(r.date);
+    });
+    iv.forEach(function (r) { var k = r.type || "면담"; cat[k] = (cat[k] || 0) + 1; if (r.date) dates.push(r.date); });
+    at.forEach(function (r) { if (/지각|결근|조퇴|무단/.test((r.kind || "") + (r.reason || ""))) late++; });
+    dates.sort();
+    var cats = Object.keys(cat).map(function (k) { return { k: k, v: cat[k] }; }).sort(function (a, b) { return b.v - a.v; });
+    var srcs = [];
+    if (jrows.length) srcs.push("면담일지");
+    if (iv.length || at.length) srcs.push("면담기록");
+    return { count: jrows.length + iv.length, first: dates[0] || "", last: dates[dates.length - 1] || "", late: late, cats: cats, src: srcs.join("+") };
+  }
+
   function summaryDimBlock(name, dm) {
     function list(items, cls, lbl, mark) {
       if (!items || !items.length) return "";
@@ -1261,18 +1287,16 @@
   function crewSummaryCard(c) {
     var nick = crewNickname(c.name);
     var sum = (window.CREW_SUMMARY || {})[nick];
-    // 장애 크루 → 면담일지 시트 기반, 비장애 크루 → 앱에서 직접 작성한 면담기록 기반
-    var isDisabled = c.disability === "장애";
-    var stats = isDisabled ? crewJournalStats(nick) : crewInappStats(c);
-    var srcLabel = isDisabled ? "면담일지" : "면담기록";
-    var dataReady = isDisabled ? !!(window.JOURNAL && window.JOURNAL.tabs) : true;
+    // 면담일지(시트) + 앱 면담기록을 모두 취합
+    var stats = crewCombinedStats(c);
+    var srcLabel = (stats && stats.src) || "면담일지+면담기록";
+    var dataReady = !!(window.JOURNAL && window.JOURNAL.tabs);
 
     // 요약도 통계도 없고 데이터도 다 실렸으면 안내 문구.
     if (!sum && !stats && dataReady) {
-      var emptyMsg = isDisabled
-        ? '이 크루의 면담일지 기록이 없어 AI 요약을 만들 수 없습니다.<br><span class="muted">면담일지 시트에 기록이 쌓이면 매주 자동으로 요약이 생성됩니다.</span>'
-        : '작성된 면담 기록이 없어 AI 지원가이드를 만들 수 없습니다.<br><span class="muted">면담기록 탭에 기록을 남기면 매주 자동으로 요약이 생성됩니다.</span>';
-      return '<div class="placeholder placeholder--sm"><p class="muted">' + emptyMsg + '</p></div>';
+      return '<div class="placeholder placeholder--sm"><p class="muted">'
+        + '면담일지·면담기록이 없어 AI 지원가이드를 만들 수 없습니다.<br>'
+        + '<span class="muted">기록이 쌓이면 매주 자동으로 요약이 생성됩니다.</span></p></div>';
     }
 
     var head = '<button type="button" class="aisum__head" id="crewSummaryToggle" aria-expanded="' + (crewSummaryOpen ? "true" : "false") + '">'
@@ -3119,13 +3143,13 @@
   var journalTeam = "스낵"; // 현재 보고 있는 팀 시트 (스낵/가든/총무지원)
   var pad2j = function (n) { return ("0" + n).slice(-2); };
 
-  /** 로드된 면담일지에 존재하는 팀 목록 (백엔드 sheets 메타 우선, 없으면 tabs에서 유추). */
+  /** 면담일지가 있는 크루들의 소속팀 목록 (크루 목록 기준, 스낵→가든→총무지원 순). */
   function journalTeams() {
-    var j = window.JOURNAL || {};
-    if (j.sheets && j.sheets.length) return j.sheets.map(function (s) { return s.team; });
-    var set = {};
-    (j.tabs || []).forEach(function (t) { set[t.team || "스낵"] = 1; });
-    var arr = Object.keys(set);
+    var order = ["스낵", "가든", "총무지원"];
+    var present = {};
+    journalGroups().forEach(function (g) { present[g.team] = 1; });
+    var arr = order.filter(function (t) { return present[t]; });
+    Object.keys(present).forEach(function (t) { if (arr.indexOf(t) < 0) arr.push(t); });
     return arr.length ? arr : ["스낵"];
   }
 
@@ -3173,27 +3197,44 @@
     return out;
   }
 
-  /** window.JOURNAL(원본 탭 목록)을 CREW 명단과 이름으로 매칭해 크루별 그룹으로 만든다. */
+  function journalRowDateDesc(a, b) {
+    var da = a.date, db = b.date;
+    if (da && db) return da < db ? 1 : (da > db ? -1 : 0);
+    if (da && !db) return -1;
+    if (!da && db) return 1;
+    return 0;
+  }
+
+  /** 원본 탭들을 CREW 명단과 이름으로 매칭해 크루별 그룹으로 만든다.
+   *  - 한 크루의 탭이 여러 팀 시트에 흩어져 있으면 합친다.
+   *  - 팀 구분은 시트가 아니라 크루 목록의 소속팀(c.group) 기준. */
   function journalGroups() {
     var tabs = (window.JOURNAL && window.JOURNAL.tabs) || [];
     var nickToCrew = {};
     (window.CREW || []).forEach(function (c) { nickToCrew[crewNickname(c.name)] = c; });
 
-    var groups = tabs.map(function (t) {
+    var byCrew = {};
+    tabs.forEach(function (t) {
       var crew = nickToCrew[t.name.trim()];
-      if (!crew) { console.warn("[면담일지] 크루 매칭 실패:", t.name, "(" + (t.team || "스낵") + ")"); return null; }
+      if (!crew) { console.warn("[면담일지] 크루 매칭 실패:", t.name, "(" + (t.team || "?") + ")"); return; }
+      if (crew.status === "퇴사") return; // 퇴사 크루는 면담일지 목록에서 자동 제외
       var rows = normalizeJournalRows(t.rows);
-      if (!rows.length) return null;
-      return { crew: crew, gid: t.gid, team: t.team || "스낵", sheetId: t.sheetId || "", rows: rows };
-    }).filter(Boolean);
-
-    groups.sort(function (a, b) {
-      var da = a.rows[0].date, db = b.rows[0].date;
-      if (da && db) return da < db ? 1 : (da > db ? -1 : 0);
-      if (da && !db) return -1;
-      if (!da && db) return 1;
-      return 0;
+      if (!rows.length) return;
+      var g = byCrew[crew.id] || (byCrew[crew.id] = { crew: crew, team: crew.group || "스낵", refs: [], rows: [] });
+      g.refs.push({ team: t.team, sheetId: t.sheetId || "", gid: t.gid });
+      g.rows = g.rows.concat(rows);
     });
+
+    var groups = Object.keys(byCrew).map(function (id) {
+      var g = byCrew[id];
+      g.rows.sort(journalRowDateDesc);
+      // 시트 링크는 크루 소속팀 시트 탭을 우선, 없으면 첫 탭
+      var ref = g.refs.filter(function (r) { return r.team === g.team; })[0] || g.refs[0];
+      g.sheetId = ref.sheetId; g.gid = ref.gid;
+      return g;
+    });
+
+    groups.sort(function (a, b) { return journalRowDateDesc(a.rows[0], b.rows[0]); });
     return groups;
   }
 
@@ -3314,6 +3355,7 @@
 
     el.querySelector("#jdModalTitle").textContent = g.crew.name;
     el.querySelector("#jdModalCount").textContent = g.rows.length + "건";
+    el.querySelector("#jdModalAiBtn").setAttribute("data-crew-id", g.crew.id);
     el.querySelector("#jdModalLink").href = journalGidUrl(g.sheetId, g.gid);
     el.querySelector("#jdModalBody").innerHTML = g.rows.map(function (r) {
       return '<tr>'
@@ -3341,6 +3383,7 @@
       + '<div class="modal__head">'
         + '<h3><span id="jdModalTitle"></span> <span class="chip-mono" id="jdModalCount"></span></h3>'
         + '<div class="modal__head-actions">'
+          + '<button type="button" class="btn btn--sm btn--primary" id="jdModalAiBtn">🤖 AI 지원가이드</button>'
           + '<a class="btn btn--sm" id="jdModalLink" target="_blank" rel="noopener">시트에서 보기 ↗</a>'
           + '<button type="button" class="modal__x" data-close aria-label="닫기">×</button>'
         + '</div>'
@@ -3350,7 +3393,13 @@
       + '</tr></thead><tbody id="jdModalBody"></tbody></table></div>'
       + '</div>';
     wrap.addEventListener("click", function (ev) {
-      if (ev.target.hasAttribute("data-close")) closeJournalDetailModal();
+      if (ev.target.hasAttribute("data-close")) { closeJournalDetailModal(); return; }
+      var aiBtn = ev.target.closest("#jdModalAiBtn");
+      if (aiBtn) {
+        var id = aiBtn.getAttribute("data-crew-id");
+        closeJournalDetailModal();
+        if (id) { crewDetailId = id; crewDetailTab = "ai"; go("crew"); }
+      }
     });
     return wrap;
   }

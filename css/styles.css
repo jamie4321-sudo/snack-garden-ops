@@ -1188,3 +1188,29 @@ html[data-authed="1"] .lock { display: none; }
 .toolbar-row--split .searchbox { margin-left: auto; }
 #journalTeamFilter { padding-left: 0; border-left: 0; }
 #journalTeamFilter .chip-mono { opacity: .7; margin-left: 2px; }
+
+/* AI 지원가이드 확장: 핵심 강점 · 위기신호 트리거 · 장애특성 팁 */
+.aisum__strengths{ display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 16px; }
+.aisum__strengths-lbl{ font-size:12px;font-weight:800;color:var(--accent-text);margin-right:2px; }
+.aisum__strength{
+  font-size:12.5px;padding:3px 10px;border-radius:999px;
+  background:color-mix(in srgb, var(--accent) 12%, var(--card-bg));
+  border:1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  color:var(--ink);
+}
+.aisum__triggers{ display:flex;flex-direction:column;gap:6px; }
+.aisum__trigger{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:color-mix(in srgb, var(--amber) 9%, var(--card-bg));
+  border:1px solid color-mix(in srgb, var(--amber) 28%, var(--line));
+  border-radius:var(--r-sm);padding:8px 12px;font-size:13px;
+}
+.aisum__trig-sig{ font-weight:700;color:var(--amber); }
+.aisum__trig-arrow{ color:var(--ink-2); }
+.aisum__trig-res{ color:var(--ink); }
+.aisum__dtype{
+  font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;
+  background:var(--panel-2);color:var(--ink-2);vertical-align:middle;
+}
+.aisum__tips{ margin:0;padding-left:18px; }
+.aisum__tips li{ margin:0 0 5px;font-size:13.5px;line-height:1.55;color:var(--ink); }

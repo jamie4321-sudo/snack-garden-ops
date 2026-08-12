@@ -534,3 +534,118 @@ window.CREW_SUMMARY = {
   }
 
 };
+
+/* =========================================================
+   확장 필드 (재활상담 관점): 핵심 강점 · 위기신호 트리거 · 장애특성 맞춤 팁
+   기존 엔트리에 병합. 예약 작업은 이 필드들을 인라인으로 재생성한다.
+   ========================================================= */
+(function () {
+  var T_발달 = ["한 번에 하나씩, 구체적·단계적으로 지시", "말보다 사진·시각적 체크리스트 활용", "예측 가능한 루틴 유지, 변경은 미리 안내"];
+  var T_정신 = ["컨디션·수면·약 복용 주기를 면담에서 정기 확인", "스트레스 신호를 조기에 포착해 과업·마감 압박 조절", "안정적이고 예측 가능한 환경 유지"];
+  var T_청각 = ["필담·메모·사진으로 소통, 정면에서 천천히 말하기", "동료들에게 사전 안내(‘가져가요’) 방식 교육", "시각적 신호·워크 메시지 적극 활용"];
+  var T_심장 = ["무거운 물건·급한 이동 등 신체 부담 작업 조절", "컨디션 이상 시 즉시 휴식·공유하도록 안내", "업무 과중·연속 근무 지양"];
+  var T_간 = ["피로·컨디션 관리, 정기 병원·약 복용 지원", "무리한 연속 근무 지양, 여유 있는 페이스", "증상 변화 시 즉시 공유하도록 안내"];
+  var T_뇌병변 = ["이동·균형 안전 우선(도구 사용 시 지원)", "신체 부담이 큰 작업은 조정·분담", "충분한 시간 확보, 재촉하지 않기"];
+
+  var EXT = {
+    "에바": { strengths: ["피드백을 즉시 적용", "진열 역량 성장(열맞춤 등)", "직장예절을 지키려는 노력"],
+      triggers: [{ signal: "지연·문제 상황 추궁", response: "비난 대신 사실 확인·짧은 약속으로 유도" }, { signal: "감정 저하('일하기 싫어요')", response: "업무 전환·성취 피드백으로 동기 부여" }],
+      disabilityTips: T_발달.concat(["위생·정직 관련은 반복적·일관되게 안내"]) },
+
+    "조이": { strengths: ["체크리스트로 독립 적재 수행", "연차도 상의해 결정하는 신중함", "부상을 성실히 공유"],
+      triggers: [{ signal: "조급함으로 과적재·실수", response: "천천히 하도록 안내, 수량 재확인 루틴" }],
+      disabilityTips: T_발달.concat(["부상 이력 고려해 이동 속도 조절 안내"]) },
+
+    "사무엘": { strengths: ["적재법 습득 후 복귀시간 단축", "부여된 업무를 성실히 수행"],
+      triggers: [{ signal: "미이행 시 '했다'는 보고", response: "비난 없이 함께 확인, 표본 점검" }, { signal: "동행자(감독) 의식으로 위축", response: "자연스러운 관찰로 신뢰 형성" }],
+      disabilityTips: T_발달.concat(["정직·자립을 단계적으로 코칭"]) },
+
+    "샐리": { strengths: ["캔디류 효율 적재·청소 우수", "취미(자수) 등 안정적 개인생활"],
+      triggers: [{ signal: "감정적 표현('알겠다고요')·짜증", response: "감정 인정 후 톤 코칭, 잠시 진정 시간" }],
+      disabilityTips: T_발달 },
+
+    "샘": { strengths: ["동료를 먼저 돕는 태도", "진열·청소 우수, 스스로 질문", "개선 목표에 적극 참여"],
+      triggers: [{ signal: "소음·혼잡·시간압박", response: "조용한 공간 이동, 시간압박 낮추고 격려" }, { signal: "반말 등 불쾌한 상황", response: "감정 경청·공감 후 상황 분리" }],
+      disabilityTips: T_발달.concat(["심리적 부담 신호를 조기에 살피고 안심시키기"]) },
+
+    "토마스": { strengths: ["6년차 경력으로 업무 이해도 높음"],
+      triggers: [{ signal: "핸드폰·혼잣말로 집중 저하", response: "업무 집중 재안내, 예절 코칭" }, { signal: "엘리베이터 등 응대 상황", response: "응대 매뉴얼 리마인드" }],
+      disabilityTips: T_발달.concat(["업무 완성도 기준을 시각적으로 명확히"]) },
+
+    "페스": { strengths: ["안정되면 먼저 사과·수용", "청소·진열 업무 수행"],
+      triggers: [{ signal: "감정 폭발 전조(숨 가쁨·헝클어진 모습·거친 동작)", response: "조용한 공간 이동·심호흡 유도, 보호자 연계" }, { signal: "특정 동료(에바 등)와 접촉", response: "동선 분리·사전 중재" }, { signal: "늦잠·수면부족으로 컨디션 저하", response: "컨디션 확인 후 업무 조정" }],
+      disabilityTips: T_발달.concat(["정서 안정 우선, 자해(손 뜯음) 시 장갑·핸드크림 지원"]) },
+
+    "스마일": { strengths: ["면담을 먼저 요청하는 협조성", "걷기를 좋아하고 체력 양호"],
+      triggers: [{ signal: "'노래 들려주기' 등 부적절 접근", response: "즉시 경계 안내, 일관된 재교육" }],
+      disabilityTips: T_발달.concat(["사회적 경계·상황별 행동을 구체 예시로 반복 교육"]) },
+
+    "에반": { strengths: ["병원·연차로 자기관리", "상태를 잘 공유함"],
+      triggers: [{ signal: "혈압 상승·불면 등 컨디션 난조", response: "무리한 업무 지양, 연차 권장" }, { signal: "특정 동료(리버) 시선에 불편", response: "동선 분리·안심 제공" }],
+      disabilityTips: T_정신 },
+
+    "사라": { strengths: ["부상 이슈를 공유함"],
+      triggers: [{ signal: "매뉴얼 이탈(멋쩍게 웃으며 회피)", response: "비난 없이 이유 확인, 단계 재안내" }],
+      disabilityTips: T_발달.concat(["청소 등은 기준을 시각적으로 보여주며 반복 안내"]) },
+
+    "튜브": { strengths: ["긍정적 태도로 업무에 임함", "업무 복귀 의지"],
+      triggers: [{ signal: "근무지 이동 등 업무 과중", response: "업무량 조절·컨디션 확인" }],
+      disabilityTips: T_심장 },
+
+    "니콜": { strengths: ["체력·업무가 향상세", "추가 업무를 잘 소화", "새 업무에 잘 적응"],
+      triggers: [{ signal: "동료가 말없이 물건을 가져감(소통 단절)", response: "동료에게 사전 안내·시각신호 교육" }],
+      disabilityTips: T_청각 },
+
+    "코니": { strengths: ["매뉴얼 준수·안정적 적응", "병원 방문으로 건강 관리"],
+      triggers: [{ signal: "동료 관계·업무경계 스트레스 누적", response: "조기 청취, EAP 상담 연계" }, { signal: "어깨·팔 통증 재발", response: "연차·병원 방문 권장" }],
+      disabilityTips: T_정신 },
+
+    "헤일로": { strengths: ["체크리스트로 효율적 적재"],
+      triggers: [{ signal: "거짓 보고 정황", response: "비난 없이 함께 확인·정직 코칭" }, { signal: "카트 이동 중 핸드폰(안전)", response: "안전 규칙 즉시 안내" }],
+      disabilityTips: T_발달.concat(["안전(핸드폰·이동)·정직을 반복 안내"]) },
+
+    "토리": { strengths: ["적극적 학습 태도", "진열 시간 점진 단축", "직무 실행 범위 확대"],
+      triggers: [{ signal: "수량 계산(덧셈뺄셈) 어려움", response: "시각적 보조·반복 연습" }],
+      disabilityTips: T_발달.concat(["신규 단계이므로 자립을 단계적으로 확대"]) },
+
+    "제티": { strengths: ["전산 트러블슈팅 자립도 높음", "지연분을 자발적으로 수행", "습득이 빠름"],
+      triggers: [{ signal: "출근 임박 불안·지각", response: "여유 있는 출근 루틴 함께 설계" }, { signal: "업무 개입 범위 갈등", response: "역할·개입 범위 명확화" }],
+      disabilityTips: T_간.concat(["밤낮 바뀐 수면 루틴 개선 지원"]) },
+
+    "카주": { strengths: ["루틴 업무 성실 수행", "시트 작업을 검색·고민으로 습득", "돌발상황에 침착"],
+      triggers: [{ signal: "공백시간 무기력(핸드폰·취침)", response: "공백용 지속 업무 세팅" }, { signal: "점심 취침 후 근무시작 지연", response: "기상 리마인드" }, { signal: "어려운 소통 회피('네~')", response: "쉬운 표현·재질문 독려" }],
+      disabilityTips: T_발달.concat(["근태(지각) 누적 관리, 소통은 쉬운 말로"]) },
+
+    "루카": { strengths: ["조경 업무 적응 양호(경험 활용)", "회사 생활을 긍정적으로 함"],
+      triggers: [],
+      disabilityTips: T_청각 },
+
+    "클로버": { strengths: ["식물 유지관리 기본기", "역량 확장 의지"],
+      triggers: [],
+      disabilityTips: T_뇌병변 },
+
+    "에릭": { strengths: [],
+      triggers: [],
+      disabilityTips: T_발달.concat(["신규 온보딩 — 예측 가능한 안내로 적응 지원"]) },
+
+    /* 비장애(관리·버디 크루) — 장애특성 팁 없음 */
+    "엘리": { strengths: ["크루에게 적극적으로 업무 코칭"],
+      triggers: [{ signal: "부정 우선·감정 섞인 소통", response: "객관적 사실 중심으로 재정리, 표현 정제 코칭" }] },
+    "린지": { strengths: ["능동적 업무 수행", "작년 대비 감정 컨트롤 향상"], triggers: [] },
+    "아셀라": { strengths: ["장애크루 응대를 고민하며 성장 중"],
+      triggers: [{ signal: "자책 스트레스·불면", response: "정서 지원·응원" }] },
+    "스완": { strengths: ["수량표앱 개선 기여", "장애크루에게 도구 사용 전파"], triggers: [] },
+    "헤이든": { strengths: ["체계적 소통(이슈 트래킹) 지향"], triggers: [] },
+    "엔조": { strengths: [], triggers: [] },
+    "찰스": { strengths: [], triggers: [] }
+  };
+
+  var CS = window.CREW_SUMMARY || {};
+  Object.keys(EXT).forEach(function (k) {
+    if (!CS[k]) return;
+    var e = EXT[k];
+    if (e.strengths && e.strengths.length) CS[k].strengths = e.strengths;
+    if (e.triggers && e.triggers.length) CS[k].triggers = e.triggers;
+    if (e.disabilityTips && e.disabilityTips.length) CS[k].disabilityTips = e.disabilityTips;
+  });
+})();

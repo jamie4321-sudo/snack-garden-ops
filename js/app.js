@@ -1300,7 +1300,7 @@
     }
 
     var head = '<button type="button" class="aisum__head" id="crewSummaryToggle" aria-expanded="' + (crewSummaryOpen ? "true" : "false") + '">'
-      + '<span class="aisum__title">🤖 AI 면담 요약'
+      + '<span class="aisum__title">🤖 AI 지원가이드'
       + (sum && sum.tag ? ' <span class="aisum__tag' + (sum.risk ? ' aisum__tag--risk' : '') + '">' + esc(sum.tag) + '</span>' : '')
       + '</span>';
 
@@ -1320,6 +1320,12 @@
     if (crewSummaryOpen) {
       body += '<div class="aisum__body">';
       if (sum && sum.headline) body += '<p class="aisum__headline">' + esc(sum.headline) + '</p>';
+      // 핵심 강점 (강점기반)
+      if (sum && sum.strengths && sum.strengths.length) {
+        body += '<div class="aisum__strengths"><span class="aisum__strengths-lbl">핵심 강점</span>'
+          + sum.strengths.map(function (s) { return '<span class="aisum__strength">★ ' + esc(s) + '</span>'; }).join("")
+          + '</div>';
+      }
       if (stats && stats.cats.length) {
         body += '<div class="aisum__cats">' + stats.cats.slice(0, 8).map(function (x) {
           return '<span class="aisum__cat">' + esc(x.k) + ' <b>' + x.v + '</b></span>';
@@ -1333,6 +1339,21 @@
               + esc(t.date) + '</span><span>' + esc(t.note) + '</span></p>';
           }).join("")
           + '</div>' + (a.summary ? '<p class="aisum__note">' + esc(a.summary) + '</p>' : '') + '</div>';
+      }
+      // 위기신호 · 트리거 & 대응
+      if (sum && sum.triggers && sum.triggers.length) {
+        body += '<div class="aisum__dim"><h4>⚠ 위기신호 · 트리거 &amp; 대응</h4><div class="aisum__triggers">'
+          + sum.triggers.map(function (t) {
+            return '<div class="aisum__trigger"><span class="aisum__trig-sig">' + esc(t.signal) + '</span>'
+              + '<span class="aisum__trig-arrow">→</span><span class="aisum__trig-res">' + esc(t.response) + '</span></div>';
+          }).join("") + '</div></div>';
+      }
+      // 장애특성 맞춤 지원
+      if (sum && sum.disabilityTips && sum.disabilityTips.length) {
+        var dtype = (c.disabilityType || c.disability || "").trim();
+        body += '<div class="aisum__dim"><h4>장애특성 맞춤 지원'
+          + (dtype ? ' <span class="aisum__dtype">' + esc(dtype) + '</span>' : '') + '</h4><ul class="aisum__tips">'
+          + sum.disabilityTips.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
       }
       if (sum && sum.dimensions) {
         var order = ["성향", "건강", "업무 발전도", "대인관계"];

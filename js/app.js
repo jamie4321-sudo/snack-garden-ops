@@ -1539,14 +1539,15 @@
         }).join("") + '</div>';
       }
 
-      // 2026년 성장 포인트 (25년 말 대비 · 장애/비장애 공통)
-      if (sum && sum.growth2026 && ((sum.growth2026.points && sum.growth2026.points.length) || sum.growth2026.summary)) {
-        var g26 = sum.growth2026;
+      // 성장 포인트 (직전 연말 대비 · 장애/비장애 공통 · 연도 자동)
+      var gY = (sum && (sum.growthYear || sum.growth2026)) || null; // growth2026: 구버전 폴백
+      if (gY && ((gY.points && gY.points.length) || gY.summary)) {
+        var gyr = parseInt(gY.year, 10) || (new Date()).getFullYear();
         body += '<div class="aisum__growth">'
-          + '<h4 class="aisum__growth-h">🌱 2026년 성장 포인트 <span class="aisum__dtype">’25년 말 대비</span></h4>';
-        if (g26.summary) body += '<p class="aisum__growth-sum">' + esc(g26.summary) + '</p>';
-        if (g26.points && g26.points.length) {
-          body += '<div class="aisum__growth-list">' + g26.points.map(function (p) {
+          + '<h4 class="aisum__growth-h">🌱 ' + gyr + '년 성장 포인트 <span class="aisum__dtype">’' + String(gyr - 1).slice(-2) + '년 말 대비</span></h4>';
+        if (gY.summary) body += '<p class="aisum__growth-sum">' + esc(gY.summary) + '</p>';
+        if (gY.points && gY.points.length) {
+          body += '<div class="aisum__growth-list">' + gY.points.map(function (p) {
             return '<div class="aisum__growth-row">'
               + (p.area ? '<span class="aisum__growth-area">' + esc(p.area) + '</span>' : '')
               + '<span class="aisum__growth-ba">'

@@ -1279,3 +1279,31 @@ html[data-authed="1"] .lock { display: none; }
 .aisum__eval-ind > b{ font-size:12.5px;color:var(--ink); }
 .aisum__eval-ind ul{ margin:3px 0 0;padding-left:16px; }
 .aisum__eval-ind li{ font-size:12px;line-height:1.5;color:var(--ink-2);margin:0 0 3px; }
+
+/* 평가 기준 · 면담 대조(evalMap) 배지 + 공통 역량 표 */
+.aisum__evbadge{ font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:999px;vertical-align:middle; }
+.aisum__evbadge--good{ background:color-mix(in srgb,var(--green) 18%,var(--card-bg));color:var(--green); }
+.aisum__evbadge--grow{ background:color-mix(in srgb,var(--amber) 18%,var(--card-bg));color:var(--amber); }
+.aisum__evbadge--obs{ background:var(--panel-2);color:var(--ink-2); }
+.aisum__evnote{ margin:3px 0 4px;font-size:11.5px;line-height:1.5;color:var(--ink-2);
+  background:var(--panel-2);border-radius:6px;padding:5px 9px; }
+.aisum__evtag{ margin-left:auto;font-size:11px;font-weight:700;color:var(--accent-ink);
+  background:var(--accent);border-radius:999px;padding:2px 9px; }
+.aisum__eval > summary{ display:flex;align-items:center;gap:6px; }
+
+/* 공통 역량 표 */
+.aisum__cmp-body{ padding:6px 14px 14px;display:flex;flex-direction:column;gap:14px; }
+.aisum__cmp{ border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;background:var(--card-bg); }
+.aisum__cmp-head{ display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px; }
+.aisum__cmp-head > b{ font-size:13px;color:var(--ink); }
+.aisum__cmp-def{ font-size:11.5px;color:var(--ink-2); }
+.aisum__cmp-lv{ border-left:3px solid var(--line);padding:2px 0 2px 10px;margin:5px 0; }
+.aisum__cmp-lv ul{ margin:2px 0 0;padding-left:16px; }
+.aisum__cmp-lv li{ font-size:11.5px;line-height:1.5;color:var(--ink-2);margin:0 0 2px; }
+.aisum__cmp-lvl{ font-size:11px;font-weight:800; }
+.aisum__cmp-lv--top{ border-left-color:var(--accent); }
+.aisum__cmp-lv--top .aisum__cmp-lvl{ color:var(--accent-text); }
+.aisum__cmp-lv--meet{ border-left-color:var(--green); }
+.aisum__cmp-lv--meet .aisum__cmp-lvl{ color:var(--green); }
+.aisum__cmp-lv--need{ border-left-color:var(--amber); }
+.aisum__cmp-lv--need .aisum__cmp-lvl{ color:var(--amber); }

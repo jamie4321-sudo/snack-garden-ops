@@ -1409,16 +1409,71 @@
     ]
   };
 
-  function evalRubricHtml(rubric, title) {
+  function evalStatusClass(s) {
+    return s === "강점" ? "good" : (s === "성장 필요" || s === "성장필요") ? "grow" : "obs";
+  }
+  function evalRubricHtml(rubric, title, evalMap) {
+    evalMap = evalMap || null;
+    var assessed = 0;
     function group(t, arr) {
       return '<div class="aisum__eval-group"><h5>' + t + '</h5>'
         + arr.map(function (ind) {
-          return '<div class="aisum__eval-ind"><b>' + esc(ind.name) + '</b><ul>'
-            + ind.items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+          var a = evalMap && evalMap[ind.name];
+          if (a) assessed++;
+          return '<div class="aisum__eval-ind"><b>' + esc(ind.name) + '</b>'
+            + (a ? ' <span class="aisum__evbadge aisum__evbadge--' + evalStatusClass(a.status) + '">' + esc(a.status) + '</span>' : '')
+            + (a && a.note ? '<p class="aisum__evnote">' + esc(a.note) + '</p>' : '')
+            + '<ul>' + ind.items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
         }).join("") + '</div>';
     }
-    return '<details class="aisum__eval"><summary>' + esc(title) + ' <span class="muted">(참고)</span></summary>'
-      + '<div class="aisum__eval-body">' + group("업무", rubric["업무"]) + group("역량", rubric["역량"]) + '</div></details>';
+    var bodyHtml = '<div class="aisum__eval-body">' + group("업무", rubric["업무"]) + group("역량", rubric["역량"]) + '</div>';
+    var note = evalMap ? ' <span class="aisum__evtag">면담기록 대조</span>' : ' <span class="muted">(참고)</span>';
+    return '<details class="aisum__eval"' + (evalMap ? ' open' : '') + '><summary>' + esc(title) + note + '</summary>' + bodyHtml + '</details>';
+  }
+
+  /* 전 크루 공통 역량 평가 기준 (탁월/충족/노력필요) */
+  var EVAL_COMMON = [
+    { name: "오픈마인드", def: "서로에 대한 이해와 존중을 바탕으로 소통하고 협력하는 사람", similar: "수용성, 이타적, 알아가기, 동료의식, 배려심, 협업, 커뮤니케이션, 착한화법, 장애감수성 등",
+      탁월: ["장애·장애인에 대한 지식·정보를 동료에게 긍정적으로 전파한다", "동료 입장에서 생각해 효과적으로 의사를 전달할 방법을 찾고 이해시킨다", "동료가 장애로 어려움 발생 시 장애 특성에 맞춘 문제해결 방법을 제시한다"],
+      충족: ["장애·장애인에 대해 이해하고 행동한다", "장애·장애인 관련 지식·정보를 계속 알아간다", "동료를 알아가고 서로 이해하기 위한 회사 행사 등에 적극 참여한다"],
+      노력필요: ["장애·장애인을 알아가고 이해하려 노력하지 않거나 관심이 없다", "특정 동료 외 다른 동료와 원만한 관계를 못 맺거나 동료를 비하한다", "동료의 이야기를 경청하지 않고 의견을 무시한 채 자기 주장만 한다"] },
+    { name: "성실성", def: "업무를 성실히 수행하는 모습으로 책임감을 보여주는 사람", similar: "기한 준수, 책임감, 자기관리 등",
+      탁월: ["솔선수범으로 동료의 모범이 되거나 동료가 업무를 잘하도록 돕는다", "회사와 자기 성장·발전을 위해 주도적으로 노력한다", "어려운 상황에서도 새로운 문제 해결방법을 적용해 임무를 완수한다"],
+      충족: ["부여된 업무 달성을 위해 실행계획을 스스로 세운다", "부여된 업무의 성과기준·일정을 준수한다", "예상 못한 상황·어려움이 발생해도 끝까지 포기하지 않는다"],
+      노력필요: ["업무의 달성수준·달성기간이 일정하지 않다", "주어진 업무를 미뤄둔다", "책임을 회피하며 타인에게 전가한다"] },
+    { name: "자기주도성", def: "담당 업무의 새로운 지식·기술 정보를 항상 찾고 배우고 도전하는 사람", similar: "적극성, 도전의식, 문제의식, 창의성, 학습지향성, 자기계발, 문제해결 능력 등",
+      탁월: ["부여 업무 외 다른 업무를 스스로 찾아 건의하거나 직접 수행한다", "관행적 방법의 문제점을 인식하고 개선점을 제시한다", "향후 상황을 예측하고 대응하기 위해 자발적으로 행동한다"],
+      충족: ["자신의 업무활동·결과를 개선하기 위한 방법을 찾는다", "새 지식·기술 정보를 업무에 반영해 적절한 결과물을 산출한다", "긴급 상황에서 문제를 미루지 않고 즉각 대응한다"],
+      노력필요: ["업무 관련 지식습득에 관심이 없고 교육 프로그램에 불참한다", "새 아이디어·기술 적용에 부정적이다", "리더가 요구한 것 외 별도 훈련·교육 실적이 없다"] },
+    { name: "실무지식", def: "본업에 경험과 지식을 가지고 업무를 수행하며 학습을 통해 성장", similar: "자기계발, 학습지향성, 적극성 등",
+      탁월: ["관련 경험·지식으로 복잡·광범위·예외적 업무를 정확히 처리한다", "동료 팀원(파트원)에게 지도·조언이 가능하다", "기본지식·경험 바탕으로 업무 프로세스 개선을 통해 동료·부서 성장에 기여한다"],
+      충족: ["본인 업무 관련 충분한 지식·기능을 보유하고 적절히 활용한다", "업무 처리능력이 다른 팀원과 비교해 평균 수준이다", "정확성·실수/누락 확인을 위해 매뉴얼을 참조하거나 타인과 공동 점검한다"],
+      노력필요: ["경험·지식 부족으로 실무처리 문제가 많고 업무 범위가 제한적이다", "일부 지식 부족으로 실무처리에 문제가 발생한다", "스스로 업무를 수행하는 것이 어렵다"] },
+    { name: "팀워크", def: "팀 목표·기능을 인식하고 구성원 상호간 지식·기술·정보를 공유해 조직 성과를 달성하려는 자세", similar: "동참, 협력, 수용성 등",
+      탁월: ["동료와 협력하며 개인 성과·이익보다 팀(파트) 목표 달성을 우선시한다", "동료 간 토론 기회 제공, 다양한 의견 제시 등 적극 참여·소통한다", "팀 내 인간관계·갈등을 앞장서 해결해 우호적이고 강한 팀 의식을 조성한다"],
+      충족: ["팀의 목표·기능을 정확히 이해한다", "수시로 아이디어·의견을 제시해 팀(파트) 의사결정·계획 수립을 돕는다", "회사·팀(파트)의 다양한 활동에 적극 참여한다", "팀이 효과적으로 일하도록 자발적으로 협력한다"],
+      노력필요: ["자신의 편익만 고려한다", "팀(파트)에서 발생한 갈등을 방치하고 모르는 척한다", "동료를 존중·배려하지 않고 부서 내 갈등을 유발한다"] }
+  ];
+
+  function evalCommonHtml(assess) {
+    assess = assess || null;
+    function lv(cls, label, arr) {
+      return '<div class="aisum__cmp-lv aisum__cmp-lv--' + cls + '"><span class="aisum__cmp-lvl">' + label + '</span><ul>'
+        + arr.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+    }
+    var body = EVAL_COMMON.map(function (c2) {
+      var a = assess && assess[c2.name];
+      return '<div class="aisum__cmp">'
+        + '<div class="aisum__cmp-head"><b>' + esc(c2.name) + '</b>'
+        + (a ? ' <span class="aisum__evbadge aisum__evbadge--' + (a.level === "탁월" ? "good" : a.level === "충족" ? "grow" : "obs") + '">' + esc(a.level) + '</span>' : '')
+        + '<span class="aisum__cmp-def">' + esc(c2.def) + '</span></div>'
+        + (a && a.note ? '<p class="aisum__evnote">' + esc(a.note) + '</p>' : '')
+        + lv("top", "탁월", c2["탁월"]) + lv("meet", "충족", c2["충족"]) + lv("need", "노력필요", c2["노력필요"])
+        + '</div>';
+    }).join("");
+    var note = assess ? ' <span class="aisum__evtag">면담기록 대조</span>' : ' <span class="muted">(참고)</span>';
+    return '<details class="aisum__eval aisum__eval--cmp"' + (assess ? ' open' : '') + '><summary>📋 공통 역량 평가 기준 (전 크루)' + note + '</summary>'
+      + '<div class="aisum__cmp-body">' + body + '</div></details>';
   }
 
   function summaryDimBlock(name, dm, labels) {
@@ -1561,12 +1616,13 @@
           }).forEach(function (k) { body += summaryDimBlock(k, sum.dimensions[k]); });
         }
       }
-      // 평가 기준(참고) 하단 접이식 — 파트·장애여부별
+      // 평가 기준(참고/면담대조) 하단 접이식 — 파트·장애여부별 + 전 크루 공통
       var evalR = null, evalT = "";
       if (c.group === "스낵" && isManager) { evalR = EVAL_SNACK; evalT = "📋 스낵 비장애 크루 평가 기준"; }
       else if (c.group === "스낵" && !isManager) { evalR = EVAL_SNACK_DIS; evalT = "📋 스낵 장애 크루 평가 기준 (수습·정규전환)"; }
       else if (c.group === "가든" && !isManager) { evalR = EVAL_GARDEN_DIS; evalT = "📋 가든(조경) 장애 크루 평가 기준 (수습)"; }
-      if (evalR) body += evalRubricHtml(evalR, evalT);
+      if (evalR) body += evalRubricHtml(evalR, evalT, sum && sum.evalMap);
+      body += evalCommonHtml(sum && sum.evalCommon);
       if (!sum) body += '<p class="aisum__pending">아직 이 크루의 AI 요약이 생성되지 않았습니다. 위 통계는 ' + srcLabel + '에서 실시간 집계한 값입니다.</p>';
       else if (sum.updated) body += '<p class="aisum__meta">요약 생성일 ' + esc(sum.updated) + ' · ' + srcLabel + ' 기반</p>';
       body += '</div>';

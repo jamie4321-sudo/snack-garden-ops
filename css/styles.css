@@ -1261,3 +1261,21 @@ html[data-authed="1"] .lock { display: none; }
 }
 .aisum__istep.is-past{ opacity:.5; }
 .aisum__istep.is-on{ background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:800; }
+
+/* AI 지원가이드 · 스낵 비장애 평가 기준 (접이식 참고) */
+.aisum__eval{ margin-top:16px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel-2); }
+.aisum__eval > summary{
+  cursor:pointer;list-style:none;padding:10px 14px;font-size:13px;font-weight:800;color:var(--ink);
+  display:flex;align-items:center;gap:6px;user-select:none;
+}
+.aisum__eval > summary::-webkit-details-marker{ display:none; }
+.aisum__eval > summary::after{ content:"펼치기";margin-left:auto;font-size:11.5px;font-weight:600;color:var(--ink-2); }
+.aisum__eval[open] > summary::after{ content:"접기"; }
+.aisum__eval-body{ padding:4px 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+@media(max-width:680px){ .aisum__eval-body{ grid-template-columns:1fr; } }
+.aisum__eval-group > h5{ margin:6px 0 8px;font-size:12px;font-weight:800;color:var(--accent-text);
+  border-bottom:1px solid var(--line);padding-bottom:4px; }
+.aisum__eval-ind{ margin:0 0 10px; }
+.aisum__eval-ind > b{ font-size:12.5px;color:var(--ink); }
+.aisum__eval-ind ul{ margin:3px 0 0;padding-left:16px; }
+.aisum__eval-ind li{ font-size:12px;line-height:1.5;color:var(--ink-2);margin:0 0 3px; }

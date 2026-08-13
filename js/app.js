@@ -4589,6 +4589,16 @@
      ROUTER
      ====================================================== */
   /* ---------- 2026 KPI ---------- */
+  function loadKpiOnce() {
+    if (window.KPI_PROGRESS) return Promise.resolve(window.KPI_PROGRESS);
+    var ep = endpoint();
+    if (!ep) { window.KPI_PROGRESS = {}; return Promise.resolve(window.KPI_PROGRESS); }
+    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=kpi&_ts=" + Date.now();
+    return fetch(url, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { window.KPI_PROGRESS = d || {}; return window.KPI_PROGRESS; })
+      .catch(function (e) { console.warn("[KPI 로드 실패]", e); window.KPI_PROGRESS = {}; return window.KPI_PROGRESS; });
+  }
   function kpiGradeClass(g) { return g === "탁월" ? "top" : g === "충족" ? "meet" : g === "노력필요" ? "need" : "na"; }
 
   function renderKpi() {
@@ -4658,6 +4668,11 @@
     }).join("") + '</div>';
 
     view.innerHTML = html;
+
+    // 라이브 모드: kpi 진행 데이터 로드 후 재렌더 (구조는 먼저 그려두고 진행률만 채움)
+    if (isLive() && !window.KPI_PROGRESS && typeof loadKpiOnce === "function") {
+      loadKpiOnce().then(function () { if (location.hash.slice(1) === "kpi") renderKpi(); });
+    }
   }
 
   var VIEWS = {

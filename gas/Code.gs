@@ -196,6 +196,7 @@ function doGet(e) {
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
   if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
   if (action === "journal")    return json_(getJournalData_());
+  if (action === "kpi")        return json_(getKpi_());
   if (action === "debug")      return json_(getDebugInfo_());
   return json_({
     crew: rows_("crew", CREW_FIELDS),
@@ -348,6 +349,38 @@ function readJournalSheet_(sh) {
     out.push(obj);
   }
   return { rows: out, preview: preview };
+}
+
+/** 2026 KPI 진행 데이터. 운영 스프레드시트의 "kpi" 탭을 읽는다.
+ *  헤더(1행): no | subIndex | grade | current | note
+ *  - subIndex 비어있는 행 = 목표 단위(grade=탁월/충족/노력필요, note=목표 메모)
+ *  - subIndex 1..N = 세부목표(순서, current=현재값/상태, note=세부 메모)
+ *  반환: { "<no>": { grade, note, sub: { "<0-based idx>": {current, note} } } } */
+function getKpi_() {
+  var ss;
+  try { ss = SpreadsheetApp.openById(SHEET_ID); } catch (e) { return {}; }
+  var sh = ss.getSheetByName("kpi");
+  if (!sh || sh.getLastRow() < 2) return {};
+  var vals = sh.getDataRange().getValues();
+  var out = {};
+  for (var i = 1; i < vals.length; i++) {
+    var r = vals[i];
+    var no = String(r[0] == null ? "" : r[0]).trim();
+    if (!no) continue;
+    out[no] = out[no] || { grade: "", note: "", sub: {} };
+    var subIdx = String(r[1] == null ? "" : r[1]).trim();
+    if (subIdx === "") {
+      var g = String(r[2] == null ? "" : r[2]).trim();
+      if (g) out[no].grade = g;
+      var gn = String(r[4] == null ? "" : r[4]).trim();
+      if (gn) out[no].note = gn;
+    } else {
+      var k = parseInt(subIdx, 10) - 1;
+      if (!(k >= 0)) continue;
+      out[no].sub[k] = { current: r[3], note: String(r[4] == null ? "" : r[4]).trim() };
+    }
+  }
+  return out;
 }
 
 function isDateLike_(v) { return Object.prototype.toString.call(v) === "[object Date]"; }

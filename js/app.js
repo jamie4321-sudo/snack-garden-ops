@@ -4643,16 +4643,19 @@
           + '<span class="kpi-no">' + g.no + '</span>'
           + '<b class="kpi-title">' + esc(g.title) + '</b>'
           + '<span class="kpi-weight">비중 ' + Math.round(g.weight * 100) + '%</span>'
-          + '<span class="kpi-grade kpi-grade--' + kpiGradeClass(grade) + '">' + esc(grade) + '</span>'
+          + '<span class="kpi-gradepick">' + ["탁월", "충족", "노력필요"].map(function (lv) {
+              return '<button type="button" class="kpi-gp' + (grade === lv ? " is-on kpi-gp--" + kpiGradeClass(lv) : "") + '" data-kpi-grade="' + g.no + "|" + lv + '">' + lv + '</button>';
+            }).join("") + '</span>'
         + '</div>'
         + '<div class="kpi-parts">' + Object.keys(parts).map(function (pt) {
           return '<div class="kpi-part"><span class="kpi-part__name">' + esc(pt) + '</span><ul>'
             + parts[pt].map(function (s) {
               var idx = g.subgoals.indexOf(s);
               var sp = (p.sub && p.sub[idx]) || null;
+              var curVal = sp && sp.current != null ? String(sp.current) : "";
               return '<li><span class="kpi-sub">' + esc(s.text) + '</span>'
                 + (s.target ? ' <span class="kpi-target">' + esc(s.target) + '</span>' : '')
-                + (sp && sp.current != null && sp.current !== "" ? ' <span class="kpi-cur">현재 ' + esc(String(sp.current)) + '</span>' : '')
+                + ' <input class="kpi-curin" type="text" data-kpi-cur="' + g.no + "|" + (idx + 1) + '" value="' + esc(curVal) + '" placeholder="현재값">'
                 + '</li>';
             }).join("") + '</ul></div>';
         }).join("") + '</div>'
@@ -4706,6 +4709,17 @@
   /* ---------- view 내부 이벤트 위임 (한 번만 등록) ---------- */
   function wireDelegation() {
     view.addEventListener("click", function (ev) {
+      var kpiGp = ev.target.closest(".kpi-gp[data-kpi-grade]");
+      if (kpiGp) {
+        var gp = kpiGp.getAttribute("data-kpi-grade").split("|");
+        var no = gp[0], lv = gp[1];
+        window.KPI_PROGRESS = window.KPI_PROGRESS || {};
+        var p = window.KPI_PROGRESS[no] = window.KPI_PROGRESS[no] || { grade: "", note: "", sub: {} };
+        p.grade = (p.grade === lv) ? "" : lv; // 같은 등급 다시 누르면 해제
+        saveToSheet({ type: "kpi", no: no, grade: p.grade });
+        renderKpi();
+        return;
+      }
       if (ev.target.closest("#addEventBtn")) { openEventModal({ date: TODAY }); return; }
       if (ev.target.closest("#addCrewBtn")) { openCrewModal(null); return; }
       if (ev.target.closest("#addInterviewBtn")) { openInterviewModal(null); return; }
@@ -5016,6 +5030,19 @@
 
       var groupFilterBtn = ev.target.closest("#crewGroupFilter button[data-g]");
       if (groupFilterBtn) { crewGroupFilter = groupFilterBtn.getAttribute("data-g"); renderCrew(); return; }
+    });
+
+    view.addEventListener("change", function (ev) {
+      if (ev.target.classList && ev.target.classList.contains("kpi-curin")) {
+        var kc = ev.target.getAttribute("data-kpi-cur").split("|");
+        var no = kc[0], sub = kc[1];
+        window.KPI_PROGRESS = window.KPI_PROGRESS || {};
+        var p = window.KPI_PROGRESS[no] = window.KPI_PROGRESS[no] || { grade: "", note: "", sub: {} };
+        var k = (+sub) - 1;
+        p.sub[k] = { current: ev.target.value, note: (p.sub[k] && p.sub[k].note) || "" };
+        saveToSheet({ type: "kpi", no: no, subIndex: sub, current: ev.target.value });
+        // 현재값은 달성도(등급 기반)에 영향 없어 재렌더 불필요(포커스 유지)
+      }
     });
 
     view.addEventListener("input", function (ev) {

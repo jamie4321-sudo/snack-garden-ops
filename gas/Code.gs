@@ -432,7 +432,39 @@ function doPost(e) {
   if (data.type === "note")     return handleNote_(action, data);
   if (data.type === "education") return handleEducation_(action, data);
   if (data.type === "hrchange") return handleHrChange_(action, data);
+  if (data.type === "kpi")      return handleKpi_(action, data);
   return json_({ ok: false, error: "unknown type" });
+}
+
+/** kpi 탭(header: no|subIndex|grade|current|note)을 확보. id 컬럼 강제 없이 그대로 둔다. */
+function kpiSheet_() {
+  var ss = ss_();
+  var sh = ss.getSheetByName("kpi");
+  if (!sh) { sh = ss.insertSheet("kpi"); sh.appendRow(["no", "subIndex", "grade", "current", "note"]); sh.setFrozenRows(1); }
+  if (sh.getLastRow() === 0) { sh.appendRow(["no", "subIndex", "grade", "current", "note"]); sh.setFrozenRows(1); }
+  return sh;
+}
+
+/** KPI 진행 저장(upsert). data: { no, subIndex(""|숫자), grade?, current?, note? }
+ *  (no, subIndex) 일치 행이 있으면 갱신, 없으면 추가. F열(설명) 등 뒤 컬럼은 건드리지 않음. */
+function handleKpi_(action, data) {
+  var sh = kpiSheet_();
+  var no = String(data.no == null ? "" : data.no).trim();
+  if (!no) return json_({ ok: false, error: "no required" });
+  var subIndex = (data.subIndex === undefined || data.subIndex === null) ? "" : String(data.subIndex).trim();
+  var last = sh.getLastRow();
+  var vals = last > 1 ? sh.getRange(2, 1, last - 1, 5).getValues() : [];
+  var rowNum = -1, cur = ["", "", "", "", ""];
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === no && String(vals[i][1]).trim() === subIndex) { rowNum = i + 2; cur = vals[i]; break; }
+  }
+  var grade = data.grade !== undefined ? data.grade : cur[2];
+  var current = data.current !== undefined ? data.current : cur[3];
+  var note = data.note !== undefined ? data.note : cur[4];
+  var row = [no, subIndex, grade, current, note];
+  if (rowNum > -1) sh.getRange(rowNum, 1, 1, 5).setValues([row]);
+  else sh.appendRow(row);
+  return json_({ ok: true });
 }
 
 function crewValuesObj_(data) {

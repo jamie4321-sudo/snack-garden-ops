@@ -778,3 +778,209 @@ window.CREW_SUMMARY = {
     ["dimensions", "attendance", "triggers", "disabilityTips", "roadmap", "competencies", "selfcare", "development", "risk"].forEach(function (f) { delete CS[k][f]; });
   });
 })();
+
+/* =========================================================
+   스낵 장애 크루 · 평가 대조(evalMap/evalCommon) + 상담 지원 멘트
+   (egress 차단으로 예약작업 대신 수동 생성 — 면담일지 기반)
+   ========================================================= */
+(function () {
+  var CS = window.CREW_SUMMARY; if (!CS) return;
+  var E = {
+    "에바": {
+      evalMap: {
+        "운영 수행도": { status: "강점", note: "음료·스낵 진열 열맞춤 등 수행력이 성장(25하반기~)" },
+        "회사의 규정/안전 준수 여부": { status: "성장 필요", note: "지각·쉬는시간 복귀 지연이 반복됨" }
+      },
+      evalCommon: {
+        "성실성": { level: "노력필요", note: "지각·복귀 지연 반복, 지연 사유 회피" },
+        "실무지식": { level: "충족", note: "진열 역량은 안정적으로 향상" }
+      },
+      supportScripts: [
+        { situation: "지각이 반복될 때", script: "에바님, 오는 길이 요즘 어때요? 힘든 부분이 있으면 같이 편하게 올 방법을 찾아봐요." },
+        { situation: "성장을 지지할 때", script: "요즘 진열 열 맞추는 게 확실히 좋아졌어요. 에바님이 신경 쓴 게 보여요." }
+      ]
+    },
+    "조이": {
+      supportScripts: [
+        { situation: "과적재 실수가 있을 때", script: "조이님, 우리 같이 체크리스트 수량만큼만 세어볼까요? 천천히 해도 괜찮아요." },
+        { situation: "부상을 공유했을 때", script: "발목 아픈 거 바로 알려줘서 고마워요. 무리하지 말고 천천히 움직여요." }
+      ]
+    },
+    "사무엘": {
+      evalMap: {
+        "매니저의 업무요청사항을 잘 따르는가?": { status: "성장 필요", note: "미이행 상태에서 '했다'는 보고가 확인됨" },
+        "운영 수행도": { status: "강점", note: "올바른 적재법 습득 후 복귀시간 단축" }
+      },
+      evalCommon: {
+        "실무지식": { level: "노력필요", note: "진열 수량 부정확, 재교육 반복 필요" },
+        "성실성": { level: "충족", note: "부여된 업무는 성실히 수행" }
+      },
+      supportScripts: [
+        { situation: "'했다'고 했으나 미흡할 때", script: "사무엘님, 같이 한 번만 확인해볼까요? 잘못돼도 괜찮으니 편하게 봐요." },
+        { situation: "관찰(참관)로 위축될 때", script: "옆에서 보는 건 사무엘님 잘하는 걸 보려는 거예요. 평소처럼 하면 돼요." }
+      ]
+    },
+    "샐리": {
+      evalMap: {
+        "운영 수행도": { status: "강점", note: "캔디류 효율 적재·크린콜 청소가 우수" },
+        "동료 존중·도움": { status: "성장 필요", note: "'알겠다고요' 등 감정적 표현·짜증 사례" }
+      },
+      evalCommon: {
+        "실무지식": { level: "충족", note: "청소·적재 기능 보유·활용" },
+        "오픈마인드": { level: "노력필요", note: "동료에게 감정적 표현이 확인됨" }
+      },
+      supportScripts: [
+        { situation: "감정적 표현이 나올 때", script: "샐리님, 잠깐 숨 한 번 쉬고 이야기해요. 무슨 일이 있었는지 천천히 들려줄래요?" },
+        { situation: "잘한 점을 지지할 때", script: "캔디류 정리하는 방법 정말 깔끔해요. 샐리님 방식이 도움이 많이 돼요." }
+      ]
+    },
+    "샘": {
+      evalMap: {
+        "운영 수행도": { status: "강점", note: "진열·청소 우수, 선입선출을 먼저 질문" },
+        "업무에 대한 주도성·집중력": { status: "성장 필요", note: "소음·시간압박에 집중이 흔들리는 사례" }
+      },
+      evalCommon: {
+        "팀워크": { level: "충족", note: "동료를 먼저 돕겠다고 나서는 태도" },
+        "성실성": { level: "충족", note: "노력하며 끝까지 수행하려 함" }
+      },
+      supportScripts: [
+        { situation: "소음·시간압박으로 힘들어할 때", script: "샘님, 지금 많이 정신없죠? 잠깐 조용한 데서 숨 고르고, 하나씩만 해봐요." },
+        { situation: "불쾌한 상황(반말 등) 뒤", script: "그런 말 들으면 속상했겠어요. 샘님 잘못 아니에요. 저한테 언제든 얘기해요." }
+      ]
+    },
+    "토마스": {
+      evalMap: {
+        "설비 관리": { status: "성장 필요", note: "커피찌꺼기 미수거로 곰팡이 발생 사례" },
+        "업무에 대한 주도성·집중력": { status: "성장 필요", note: "업무 중 핸드폰·혼잣말로 집중 저하" }
+      },
+      evalCommon: {
+        "실무지식": { level: "충족", note: "6년차 경력으로 업무 이해도 높음" },
+        "성실성": { level: "노력필요", note: "업무를 늦게 마치는 등 불성실 사례" }
+      },
+      supportScripts: [
+        { situation: "핸드폰·딴짓으로 집중이 흐트러질 때", script: "토마스님, 지금 이 업무 먼저 끝내고 쉴까요? 핸드폰은 쉬는 시간에 봐요." },
+        { situation: "응대 이슈 후", script: "엘리베이터에서 당황했죠? 이럴 땐 이렇게 해보면 돼요. 같이 연습해볼래요?" }
+      ]
+    },
+    "페스": {
+      evalMap: {
+        "동료 존중·도움": { status: "성장 필요", note: "감정 폭발·격앙된 소통 사례가 반복" },
+        "회사의 규정/안전 준수 여부": { status: "성장 필요", note: "물건 던지기·분리수거함 발로 참 등" }
+      },
+      evalCommon: {
+        "오픈마인드": { level: "노력필요", note: "감정 조절 어려움으로 관계 마찰" },
+        "성실성": { level: "충족", note: "안정되면 사과·수용하고 업무 수행" }
+      },
+      supportScripts: [
+        { situation: "감정 폭발 전조(숨 가쁨 등)가 보일 때", script: "페스님, 우리 잠깐 조용한 데로 가서 숨 좀 고를까요? 천천히요, 괜찮아요." },
+        { situation: "안정 후 돌아볼 때", script: "아까 스스로 진정한 거 정말 잘했어요. 다음엔 이렇게 미리 신호 주면 제가 도울게요." }
+      ]
+    },
+    "사라": {
+      evalMap: {
+        "매니저의 업무요청사항을 잘 따르는가?": { status: "성장 필요", note: "재안내에도 임의로 수행(멋쩍게 웃음)" },
+        "설비 관리": { status: "성장 필요", note: "큐커·제빙기 청소 미흡 반복" }
+      },
+      evalCommon: {
+        "실무지식": { level: "노력필요", note: "청소 완성도·매뉴얼 준수 보완 필요" }
+      },
+      supportScripts: [
+        { situation: "매뉴얼과 다르게 했을 때", script: "사라님, 이 부분은 이렇게 하기로 했었죠? 어떤 게 헷갈렸는지 같이 봐요." },
+        { situation: "청소 재안내 시", script: "여기 이렇게 닦으면 깨끗해져요. 제가 한 번 보여줄게요, 같이 해봐요." }
+      ]
+    },
+    "헤일로": {
+      evalMap: {
+        "운영 수행도": { status: "강점", note: "체크리스트를 활용해 효율적으로 적재" },
+        "회사의 규정/안전 준수 여부": { status: "성장 필요", note: "거짓 보고 정황, 카트 이동 중 핸드폰" }
+      },
+      evalCommon: {
+        "실무지식": { level: "충족", note: "적재 기능 보유·활용" }
+      },
+      supportScripts: [
+        { situation: "사실과 다른 보고가 있을 때", script: "헤일로님, 있는 그대로 말해줘도 괜찮아요. 같이 확인해서 고치면 돼요." },
+        { situation: "안전(핸드폰) 안내 시", script: "카트 옮길 땐 두 손으로, 핸드폰은 잠깐 넣어둬요. 다치면 안 되니까요." }
+      ]
+    },
+    "스마일": {
+      evalMap: {
+        "동료 존중·도움": { status: "성장 필요", note: "'노래 들려주기' 등 부적절한 접근 반복" }
+      },
+      evalCommon: {
+        "오픈마인드": { level: "노력필요", note: "상대가 불편해하는 접근이 반복됨" }
+      },
+      supportScripts: [
+        { situation: "부적절한 접근을 반복할 때", script: "스마일님, 상대가 원하지 않을 땐 멈춰야 해요. 이건 이렇게 하는 게 좋아요." },
+        { situation: "협조적으로 면담 요청할 때", script: "먼저 이야기하자고 와줘서 고마워요. 뭐가 궁금했어요?" }
+      ]
+    },
+    "에반": {
+      evalMap: {
+        "설비 관리": { status: "성장 필요", note: "청소 미흡(싱크대 물·커피찌꺼기 미수거) 반복" }
+      },
+      evalCommon: {
+        "성실성": { level: "충족", note: "병원·연차로 컨디션을 관리하며 공유" }
+      },
+      supportScripts: [
+        { situation: "컨디션(혈압·불면)이 안 좋을 때", script: "에반님, 오늘 컨디션 무리 안 되게 해요. 힘들면 바로 얘기하고 쉬어요." },
+        { situation: "청소 리마인드 시", script: "청소 끝나고 사진 한 번만 같이 볼까요? 이 부분만 신경 쓰면 완벽해요." }
+      ]
+    },
+    "코니": {
+      evalMap: {
+        "운영 수행도": { status: "성장 필요", note: "대체품목 확인 오류·진열 누락 사례" },
+        "동료 존중·도움": { status: "추가 관찰", note: "동료 관계 스트레스가 누적됨" }
+      },
+      evalCommon: {
+        "실무지식": { level: "충족", note: "초기 적응 후 매뉴얼 준수·안정" }
+      },
+      supportScripts: [
+        { situation: "관계 스트레스를 토로할 때", script: "코니님, 그동안 혼자 참았겠어요. 어떤 부분이 제일 힘들었는지 들려줄래요?" },
+        { situation: "통증으로 힘들 때", script: "아픈 거 참지 말고 병원 꼭 다녀와요. 연차 쓰는 거 전혀 눈치 볼 일 아니에요." }
+      ]
+    },
+    "토리": {
+      evalMap: {
+        "운영 수행도": { status: "성장 필요", note: "수량 계산(덧셈뺄셈) 인식 오류" },
+        "업무에 대한 주도성·집중력": { status: "강점", note: "적극적으로 배우려 하고 진열 시간 단축" }
+      },
+      evalCommon: {
+        "자기주도성": { level: "충족", note: "직무를 직접 해보려는 의지가 뚜렷" }
+      },
+      supportScripts: [
+        { situation: "수량을 헷갈려할 때", script: "토리님, 우리 손가락으로 같이 세어볼까요? 천천히 해도 다 할 수 있어요." },
+        { situation: "적극적으로 배울 때", script: "먼저 해보고 싶다고 말해줘서 좋아요. 토리님 늘 빠르게 늘고 있어요." }
+      ]
+    },
+    "니콜": {
+      evalMap: {
+        "동료 존중·도움": { status: "성장 필요", note: "동료가 말없이 물건을 가져가 서운함 표현" }
+      },
+      evalCommon: {
+        "자기주도성": { level: "충족", note: "체력·업무가 향상되고 추가 업무 소화" }
+      },
+      supportScripts: [
+        { situation: "소통 단절로 서운할 때", script: "니콜님, 불편했겠어요. 동료들에게 '가져가요' 신호 먼저 주도록 제가 안내할게요." },
+        { situation: "성장을 지지할 때", script: "회의실 업무까지 잘 해내고 있어요. 니콜님 정말 많이 늘었어요." }
+      ]
+    },
+    "튜브": {
+      evalMap: {
+        "회사의 규정/안전 준수 여부": { status: "추가 관찰", note: "2025 초 지각 2회(구두경고), 이후 반복 없음" }
+      },
+      evalCommon: {
+        "성실성": { level: "충족", note: "긍정적 태도로 업무에 임함" }
+      },
+      supportScripts: [
+        { situation: "근무지 이동으로 부담될 때", script: "튜브님, 업무 늘어난 거 힘들진 않아요? 무리되면 바로 조정할게요." }
+      ]
+    }
+  };
+  Object.keys(E).forEach(function (k) {
+    if (!CS[k]) return;
+    var e = E[k];
+    if (e.evalMap) CS[k].evalMap = Object.assign(CS[k].evalMap || {}, e.evalMap);
+    if (e.evalCommon) CS[k].evalCommon = Object.assign(CS[k].evalCommon || {}, e.evalCommon);
+    if (e.supportScripts) CS[k].supportScripts = e.supportScripts;
+  });
+})();

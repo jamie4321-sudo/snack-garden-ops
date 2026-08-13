@@ -1539,6 +1539,26 @@
         }).join("") + '</div>';
       }
 
+      // 2026년 성장 포인트 (25년 말 대비 · 장애/비장애 공통)
+      if (sum && sum.growth2026 && ((sum.growth2026.points && sum.growth2026.points.length) || sum.growth2026.summary)) {
+        var g26 = sum.growth2026;
+        body += '<div class="aisum__growth">'
+          + '<h4 class="aisum__growth-h">🌱 2026년 성장 포인트 <span class="aisum__dtype">’25년 말 대비</span></h4>';
+        if (g26.summary) body += '<p class="aisum__growth-sum">' + esc(g26.summary) + '</p>';
+        if (g26.points && g26.points.length) {
+          body += '<div class="aisum__growth-list">' + g26.points.map(function (p) {
+            return '<div class="aisum__growth-row">'
+              + (p.area ? '<span class="aisum__growth-area">' + esc(p.area) + '</span>' : '')
+              + '<span class="aisum__growth-ba">'
+              + '<span class="aisum__growth-before">' + esc(p.before || "—") + '</span>'
+              + '<span class="aisum__growth-arrow">→</span>'
+              + '<span class="aisum__growth-after">' + esc(p.after || "") + '</span>'
+              + '</span></div>';
+          }).join("") + '</div>';
+        }
+        body += '</div>';
+      }
+
       if (isManager) {
         /* ---- 비장애 = 직무지도·운영 관리자 성장 지원 가이드 (인사평가 아님) ---- */
         var hasNew = !!(sum && (sum.level || (sum.leaderSupport && sum.leaderSupport.length) || sum.coreGoal));

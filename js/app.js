@@ -4588,6 +4588,78 @@
   /* ======================================================
      ROUTER
      ====================================================== */
+  /* ---------- 2026 KPI ---------- */
+  function kpiGradeClass(g) { return g === "탁월" ? "top" : g === "충족" ? "meet" : g === "노력필요" ? "need" : "na"; }
+
+  function renderKpi() {
+    var data = window.KPI_DATA || [];
+    var prog = window.KPI_PROGRESS || {};
+    var scoreMap = { "탁월": 1, "충족": 0.7, "노력필요": 0.3 };
+    var wsum = 0, achieved = 0, weighted = 0;
+    data.forEach(function (g) {
+      wsum += g.weight;
+      var p = prog[g.no];
+      if (p && p.grade && scoreMap[p.grade] != null) { achieved++; weighted += g.weight * scoreMap[p.grade]; }
+    });
+    var pct = Math.round(weighted * 100);
+
+    var html = '<div class="page-head"><div><p class="eyebrow">Operation / KPI</p>'
+      + '<h2>' + (window.KPI_YEAR || 2026) + ' KPI</h2>'
+      + '<p class="sub">스낵앤가든 사업팀 성과목표 — 파트별 세부목표 진행과 등급 기준.</p></div></div>';
+
+    if (!data.length) {
+      html += '<div class="placeholder placeholder--sm"><p class="muted">KPI 데이터가 없습니다.</p></div>';
+      view.innerHTML = html; return;
+    }
+
+    html += '<div class="kpi-score">'
+      + '<div class="kpi-score__main"><span class="kpi-score__pct">' + pct + '<small>%</small></span>'
+      + '<span class="kpi-score__lbl">가중 달성도<br><span class="muted">등급 반영</span></span></div>'
+      + '<div class="kpi-score__bars">' + data.map(function (g) {
+        var p = prog[g.no] || {}; var s = (p.grade && scoreMap[p.grade] != null) ? scoreMap[p.grade] : 0;
+        return '<div class="kpi-score__bar" title="' + esc(g.title) + ' · 비중 ' + Math.round(g.weight * 100) + '%">'
+          + '<span class="kpi-score__fill kpi-score__fill--' + kpiGradeClass(p.grade || "") + '" style="height:' + Math.round(s * 100) + '%"></span></div>';
+      }).join("") + '</div>'
+      + '<div class="kpi-score__meta">' + achieved + ' / ' + data.length + ' 목표 등급 입력 · 비중 합 ' + Math.round(wsum * 100) + '%</div>'
+      + '</div>';
+
+    html += '<div class="kpi-list">' + data.map(function (g) {
+      var p = prog[g.no] || {};
+      var grade = p.grade || "미정";
+      var parts = {};
+      g.subgoals.forEach(function (s) { (parts[s.part] = parts[s.part] || []).push(s); });
+      return '<section class="kpi-card">'
+        + '<div class="kpi-card__head">'
+          + '<span class="kpi-no">' + g.no + '</span>'
+          + '<b class="kpi-title">' + esc(g.title) + '</b>'
+          + '<span class="kpi-weight">비중 ' + Math.round(g.weight * 100) + '%</span>'
+          + '<span class="kpi-grade kpi-grade--' + kpiGradeClass(grade) + '">' + esc(grade) + '</span>'
+        + '</div>'
+        + '<div class="kpi-parts">' + Object.keys(parts).map(function (pt) {
+          return '<div class="kpi-part"><span class="kpi-part__name">' + esc(pt) + '</span><ul>'
+            + parts[pt].map(function (s) {
+              var idx = g.subgoals.indexOf(s);
+              var sp = (p.sub && p.sub[idx]) || null;
+              return '<li><span class="kpi-sub">' + esc(s.text) + '</span>'
+                + (s.target ? ' <span class="kpi-target">' + esc(s.target) + '</span>' : '')
+                + (sp && sp.current != null && sp.current !== "" ? ' <span class="kpi-cur">현재 ' + esc(String(sp.current)) + '</span>' : '')
+                + '</li>';
+            }).join("") + '</ul></div>';
+        }).join("") + '</div>'
+        + (p.note ? '<p class="kpi-note">' + esc(p.note) + '</p>' : '')
+        + '<details class="kpi-more"><summary>등급 기준 · 실시일정 보기</summary><div class="kpi-grades">'
+          + ["탁월", "충족", "노력필요"].map(function (lv) {
+            return '<div class="kpi-gr kpi-gr--' + kpiGradeClass(lv) + '"><span class="kpi-gr__lbl">' + lv + '</span><ul>'
+              + (g.grades[lv] || []).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join("") + '</ul></div>';
+          }).join("") + '</div>'
+          + (g.schedule ? '<p class="kpi-sched">🗓 ' + esc(g.schedule) + '</p>' : '')
+        + '</details>'
+      + '</section>';
+    }).join("") + '</div>';
+
+    view.innerHTML = html;
+  }
+
   var VIEWS = {
     dashboard:   { title: "DASHBOARD", render: renderDashboard },
     crew:        { title: "CREW", render: renderCrew },
@@ -4600,6 +4672,7 @@
     note:        { title: "NOTE", render: renderNote },
     notify:      { title: "NOTIFY", render: renderNotify },
     workreport:  { title: "WORK REPORT", render: renderWorkReport },
+    kpi:         { title: "2026 KPI", render: renderKpi },
   };
 
   function go(name) {

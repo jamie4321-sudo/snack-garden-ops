@@ -1307,3 +1307,15 @@ html[data-authed="1"] .lock { display: none; }
 .aisum__cmp-lv--meet .aisum__cmp-lvl{ color:var(--green); }
 .aisum__cmp-lv--need{ border-left-color:var(--amber); }
 .aisum__cmp-lv--need .aisum__cmp-lvl{ color:var(--amber); }
+
+/* AI 지원가이드 · 상담/직무지도 지원 멘트 (장애 크루) */
+.aisum__scripts{ display:flex;flex-direction:column;gap:8px; }
+.aisum__script{
+  border-left:3px solid var(--accent);
+  background:color-mix(in srgb,var(--accent) 7%,var(--card-bg));
+  border-radius:0 var(--r-sm) var(--r-sm) 0;padding:8px 12px;
+}
+.aisum__script-sit{ font-size:11px;font-weight:800;color:var(--accent-text);display:block;margin-bottom:3px; }
+.aisum__script-line{ margin:0;font-size:13.5px;line-height:1.6;color:var(--ink); }
+.aisum__script-line::before{ content:"“";color:var(--ink-2); }
+.aisum__script-line::after{ content:"”";color:var(--ink-2); }

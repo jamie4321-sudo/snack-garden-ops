@@ -1615,6 +1615,15 @@
             return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
           }).forEach(function (k) { body += summaryDimBlock(k, sum.dimensions[k]); });
         }
+        // 상담·직무지도 지원 멘트 예시 (장애 크루)
+        if (sum && sum.supportScripts && sum.supportScripts.length) {
+          body += '<div class="aisum__dim"><h4>💬 지원 멘트 예시 <span class="aisum__dtype">상담·직무지도</span></h4><div class="aisum__scripts">'
+            + sum.supportScripts.map(function (s) {
+              return '<div class="aisum__script">'
+                + (s.situation ? '<span class="aisum__script-sit">' + esc(s.situation) + '</span>' : '')
+                + '<p class="aisum__script-line">' + esc(s.script) + '</p></div>';
+            }).join("") + '</div></div>';
+        }
       }
       // 평가 기준(참고/면담대조) 하단 접이식 — 파트·장애여부별 + 전 크루 공통
       var evalR = null, evalT = "";

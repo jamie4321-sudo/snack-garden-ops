@@ -433,6 +433,7 @@ function doPost(e) {
   if (data.type === "education") return handleEducation_(action, data);
   if (data.type === "hrchange") return handleHrChange_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
+  if (data.type === "summarize") return handleSummarize_(data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -845,4 +846,87 @@ function writeAll_(name, fields, data) {
 
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/* =========================================================
+   녹음 면담 · AI 정리 (Gemini)
+   ---------------------------------------------------------
+   · 프런트(voice-interview.js)가 전사 텍스트를 보내면
+     Gemini API로 면담 양식에 맞게 요약해 돌려준다.
+   · API 키는 코드에 절대 넣지 않는다:
+     Apps Script 편집기 → 프로젝트 설정 → 스크립트 속성에
+     GEMINI_API_KEY 로 저장 (키 발급: aistudio.google.com/apikey)
+   · 음성 원본은 서버로 오지 않으며, 전사 텍스트도 저장하지 않는다.
+   ========================================================= */
+function handleSummarize_(data) {
+  var key = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
+  if (!key) return json_({ ok: false, error: "GEMINI_API_KEY 스크립트 속성이 설정되지 않았어요." });
+
+  var transcript = String(data.transcript || "").slice(0, 60000);
+  if (!transcript.trim()) return json_({ ok: false, error: "정리할 텍스트가 비어 있어요." });
+
+  var ivType = String(data.ivType || "정기 면담");
+  var isMerge = data.mode === "merge" && data.draft;
+
+  var prompt =
+    "너는 장애인 표준사업장 팀리더의 크루(직원) 면담 기록 작성을 돕는 보조자다.\n" +
+    "아래 면담 전사 텍스트를 읽고, 반드시 다음 JSON 형식으로만 답하라. JSON 외 다른 텍스트·마크다운·백틱 금지.\n" +
+    '{"content":"주요 논의 내용 (\\n으로 구분된 · 불릿 3~6줄, 산문체 자연스러운 한국어)",' +
+    '"condition":"좋음|보통|우려됨 중 하나 (전사에서 드러난 크루 상태로 판단, 애매하면 보통)",' +
+    '"followUp":"필요|불필요",' +
+    '"followUpNote":"후속 조치가 필요하면 조치 내용을 · 불릿으로, 불필요하면 빈 문자열"}\n' +
+    "규칙:\n" +
+    "- 면담 유형: " + ivType + "\n" +
+    "- 전사에는 여러 앱의 텍스트가 섞여 있을 수 있다. 교차 확인해 겹치는 내용은 하나로 합쳐라.\n" +
+    "- 화자 표시(참석자1 등)가 없으면 질문-답변 문맥으로 추정하되, 불확실한 발언 귀속은 단정하지 마라.\n" +
+    "- 전사에 없는 내용을 지어내지 마라. 민감한 건강·개인 정보는 업무에 필요한 수준으로만 간결히.\n";
+
+  if (isMerge) {
+    prompt +=
+      "\n[통합 모드] 아래 '기존 초안'은 작성자가 이미 검토·수정한 내용이다. 초안의 내용과 표현을 최대한 유지하면서,\n" +
+      "- 전사 텍스트에만 있는 내용은 새 불릿으로 추가하고\n" +
+      "- 겹치는 내용은 중복 없이 하나로 병합하라.\n" +
+      "기존 초안:\n" + JSON.stringify(data.draft) + "\n";
+  }
+
+  prompt += "\n면담 전사 텍스트:\n" + transcript;
+
+  var res;
+  try {
+    res = UrlFetchApp.fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(key),
+      {
+        method: "post",
+        contentType: "application/json",
+        muteHttpExceptions: true,
+        payload: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
+        }),
+      }
+    );
+  } catch (e) {
+    return json_({ ok: false, error: "Gemini 호출 실패: " + e });
+  }
+
+  if (res.getResponseCode() !== 200) {
+    return json_({ ok: false, error: "Gemini 오류(" + res.getResponseCode() + "). 키·사용량을 확인해주세요." });
+  }
+
+  try {
+    var body = JSON.parse(res.getContentText());
+    var text = body.candidates[0].content.parts[0].text;
+    var out = JSON.parse(text.replace(/^```json|```$/g, "").trim());
+    return json_({
+      ok: true,
+      result: {
+        content: String(out.content || ""),
+        condition: ["좋음", "보통", "우려됨"].indexOf(out.condition) >= 0 ? out.condition : "보통",
+        followUp: out.followUp === "필요" ? "필요" : "불필요",
+        followUpNote: String(out.followUpNote || ""),
+      },
+    });
+  } catch (e) {
+    return json_({ ok: false, error: "AI 응답 해석 실패 — 다시 시도해주세요." });
+  }
 }

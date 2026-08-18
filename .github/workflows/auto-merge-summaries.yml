@@ -1,8 +1,8 @@
 name: Auto-merge AI summaries to main
 
 # 예약 작업(클라우드)은 프록시 제약으로 claude/* 브랜치에만 push할 수 있다.
-# 이 워크플로가 그 브랜치의 js/summaries.js 변경을 main에 자동 반영하고
-# 원본 claude/* 브랜치를 정리한다. (GitHub Pages는 main에서 배포)
+# 이 워크플로가 그 브랜치의 js/summaries.js(및 캐시 버전용 index.html) 변경을
+# main에 자동 반영하고 원본 claude/* 브랜치를 정리한다. (GitHub Pages는 main에서 배포)
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Bring js/summaries.js from pushed branch into main
+      - name: Bring js/summaries.js (and index.html) from pushed branch into main
         env:
           SRC_BRANCH: ${{ github.ref_name }}
         run: |
@@ -36,16 +36,16 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin "$SRC_BRANCH"
 
-          # 안전장치: summaries.js 외 다른 파일이 바뀌었으면 자동 반영하지 않고 종료
+          # 안전장치: js/summaries.js·index.html(캐시 버전) 외 다른 파일이 바뀌었으면 자동 반영하지 않고 종료
           CHANGED=$(git diff --name-only main "origin/$SRC_BRANCH" || true)
           echo "changed files: $CHANGED"
-          OTHER=$(echo "$CHANGED" | grep -v -e '^js/summaries.js$' -e '^$' || true)
+          OTHER=$(echo "$CHANGED" | grep -v -e '^js/summaries.js$' -e '^index.html$' -e '^$' || true)
           if [ -n "$OTHER" ]; then
-            echo "::warning::summaries.js 외 변경이 있어 자동 머지를 건너뜁니다: $OTHER"
+            echo "::warning::허용 목록(js/summaries.js·index.html) 외 변경이 있어 자동 머지를 건너뜁니다: $OTHER"
             exit 0
           fi
 
-          git checkout "origin/$SRC_BRANCH" -- js/summaries.js || { echo "no summaries.js on branch"; exit 0; }
+          git checkout "origin/$SRC_BRANCH" -- js/summaries.js index.html || { echo "no target files on branch"; exit 0; }
           if git diff --cached --quiet; then
             echo "변경 없음 — main 반영 스킵"
           else

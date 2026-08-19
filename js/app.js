@@ -169,30 +169,22 @@
   }
   function fmtLeave(n) { return (Math.round(n * 100) / 100).toString(); }
 
-  /** 입사일 기준 연차 발생 상세. joinDate 없으면 null.
-   *  입사년 재직일은 기존 시트 방식(입사월 1일~12/31)으로 계산해 표와 일치시킴. */
-  function annualLeaveInfo(c) {
-    if (!c || !c.joinDate) return null;
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  /** 특정 달력연도에 그 크루에게 발생하는 연차. stage: before|hireYear|secondYear|flat */
+  function leaveForYear(c, year) {
     var join = d(c.joinDate);
-    if (!join || isNaN(join.getTime())) return null;
-    var hy = join.getFullYear(), jm = join.getMonth();               // jm: 0=1월
-    var firstYearMonthly = 11 - jm;                                  // 입사한 해 월차(일)
-    var secondYearMonthly = jm;                                      // 2년차 계약연장 전 월차(일) — 합 11일
-    var daysWorked = Math.round((new Date(hy, 11, 31) - new Date(hy, jm, 1)) / 864e5); // 입사월 1일~12/31
-    var prorated = (daysWorked / 365) * 15;                          // 2년차 연차(계약연장 후)
-    var secondRaw = secondYearMonthly + prorated;
-    return {
-      hireYear: hy, hireMonth: jm + 1, joinDate: c.joinDate,
-      firstYear: firstYearMonthly,
-      secondYearLabel: hy + 1,
-      secondMonthly: secondYearMonthly,
-      daysWorked: daysWorked,
-      prorated: Math.round(prorated * 100) / 100,
-      secondRaw: Math.round(secondRaw * 100) / 100,
-      secondYear: fmtLeave(roundLeave(secondRaw, c.workHours)),
-      isFourHour: isFourHourCrew(c.workHours),
-      tenureYears: (d(TODAY) - join) / (365.25 * 24 * 3600 * 1000),
-    };
+    var hy = join.getFullYear(), jm = join.getMonth();
+    var rel = year - hy;
+    if (rel < 0) return { stage: "before", days: 0 };
+    if (rel === 0) { var m = 11 - jm; return { stage: "hireYear", days: m, monthly: m }; }
+    if (rel === 1) {
+      var secondMonthly = jm;
+      var dw = Math.round((new Date(hy, 11, 31) - new Date(hy, jm, 1)) / 864e5); // 입사월 1일~12/31
+      var pr = (dw / 365) * 15, raw = secondMonthly + pr;
+      return { stage: "secondYear", days: roundLeave(raw, c.workHours), monthly: secondMonthly, daysWorked: dw, prorated: round2(pr), raw: round2(raw) };
+    }
+    return { stage: "flat", days: 15 };
   }
 
   /** 구글시트에서 크루·일정 로드 (실패 시 데모 데이터 유지)
@@ -1732,55 +1724,73 @@
       + '<span class="detail-fld__value">' + esc(value || "—") + '</span></div>';
   }
 
-  /* ---------- 연차관리 탭 ---------- */
-  function crewLeaveBoard(c) {
-    var info = annualLeaveInfo(c);
-    if (!info) {
-      return '<div class="leave"><div class="leave__empty"><span>🗓️</span>'
-        + '<p>입사일 정보가 없어 연차를 계산할 수 없어요.<br>크루 정보 <b>수정</b>에서 입사일을 입력해주세요.</p></div></div>';
-    }
-    var hourTag = info.isFourHour ? '4시간 크루 · 반차 없음(1일 올림)' : '8시간 크루 · 반차 0.5일 올림';
-
-    // 3년차 이상 → 연 15일 정액
-    if (info.tenureYears >= 2) {
-      return '<div class="leave">'
-        + '<div class="leave__flat">'
-          + '<span class="leave__flatnum">15<em>일</em></span>'
-          + '<div class="leave__flatbody"><b>연 15일 정액 발생</b>'
-          + '<p class="muted">근속 2년 경과 — 3년차부터는 매년 동일하게 15일의 연차가 발생합니다. (근속 가산은 별도 규정)</p></div>'
-        + '</div>'
-        + leaveRulesHtml()
-        + '</div>';
-    }
-
-    return '<div class="leave">'
-      + '<div class="leave__hero">'
-        + '<div class="leave__card">'
-          + '<span class="leave__lbl">입사년 <b>' + info.hireYear + '</b> 사용 가능</span>'
-          + '<span class="leave__num">' + info.firstYear + '<em>일</em></span>'
-          + '<span class="leave__sub">만근 시 매월 1일씩 발생</span>'
-        + '</div>'
-        + '<div class="leave__card leave__card--hot">'
-          + '<span class="leave__lbl">2년차 <b>' + info.secondYearLabel + '</b> 사용 가능</span>'
-          + '<span class="leave__num">' + info.secondYear + '<em>일</em></span>'
-          + '<span class="leave__sub">' + hourTag + '</span>'
-        + '</div>'
-      + '</div>'
-      + '<div class="leave__facts">'
-        + leaveFact('입사일', info.joinDate)
-        + leaveFact('입사한 달', info.hireMonth + '월')
-        + leaveFact('입사년 재직일', info.daysWorked + '일')
-        + leaveFact('기준', '회계일 = 입사일')
-      + '</div>'
-      + '<h4 class="leave__h">📐 계산 근거</h4>'
+  /* ---------- 연차관리 탭 (올해 중심 + 작년 비교) ---------- */
+  function leaveStageSub(st, hourTag) {
+    if (st.stage === "hireYear") return "만근 시 매월 1일씩";
+    if (st.stage === "secondYear") return hourTag;
+    if (st.stage === "flat") return "3년차 이상 · 연 15일 정액";
+    return "입사 전";
+  }
+  function leaveHeroCard(label, num, sub, hot) {
+    return '<div class="leave__card' + (hot ? ' leave__card--hot' : '') + '">'
+      + '<span class="leave__lbl">' + label.replace(/(\d{4})/, '<b>$1</b>') + ' 사용 가능</span>'
+      + '<span class="leave__num">' + esc(num) + '<em>일</em></span>'
+      + '<span class="leave__sub">' + esc(sub) + '</span></div>';
+  }
+  function leaveBreakdown(c, secondYear, st, hourTag, title) {
+    var join = d(c.joinDate), jm = join.getMonth(), hireY = join.getFullYear();
+    return '<h4 class="leave__h">📐 ' + esc(title) + '</h4>'
       + '<div class="leave__steps">'
-        + leaveStep('①', '입사년 월차', '입사 후 만근 매월 1일씩 (' + info.hireYear + '년 내)', info.firstYear + '일', false)
-        + leaveStep('②', '2년차 월차 <em>계약연장 전</em>', info.secondYearLabel + '년 만근 매월 1일씩', info.secondMonthly + '일', false)
-        + leaveStep('③', '2년차 연차 <em>계약연장 후</em>', '(입사년 재직일 ' + info.daysWorked + ' ÷ 365) × 15', info.prorated + '일', false)
-        + leaveStep('=', '2년차 총 연차', '② + ③ = ' + info.secondRaw + '일 → ' + hourTag, info.secondYear + '일', true)
-      + '</div>'
-      + leaveRulesHtml()
+      + leaveStep("①", "입사년 월차", "입사 후 만근 매월 1일씩 (" + hireY + "년 내)", (11 - jm) + "일", false)
+      + leaveStep("②", "2년차 월차 <em>계약연장 전</em>", secondYear + "년 만근 매월 1일씩", st.monthly + "일", false)
+      + leaveStep("③", "2년차 연차 <em>계약연장 후</em>", "(입사년 재직일 " + st.daysWorked + " ÷ 365) × 15", st.prorated + "일", false)
+      + leaveStep("=", secondYear + "년 총 연차", "② + ③ = " + st.raw + "일 → " + hourTag, fmtLeave(st.days) + "일", true)
       + '</div>';
+  }
+
+  function crewLeaveBoard(c) {
+    if (!c || !c.joinDate) return '<div class="leave"><div class="leave__empty"><span>🗓️</span><p>입사일 정보가 없어 연차를 계산할 수 없어요.<br>크루 정보 <b>수정</b>에서 입사일을 입력해주세요.</p></div></div>';
+    var join = d(c.joinDate);
+    if (!join || isNaN(join.getTime())) return '<div class="leave"><div class="leave__empty"><span>🗓️</span><p>입사일 형식을 확인해주세요.</p></div></div>';
+
+    var curYear = d(TODAY).getFullYear(), prevYear = curYear - 1, hy = join.getFullYear();
+    var cur = leaveForYear(c, curYear), prev = leaveForYear(c, prevYear);
+    var hourTag = isFourHourCrew(c.workHours) ? "4시간 크루 · 반차 없음(1일 올림)" : "8시간 크루 · 반차 0.5일 올림";
+    var nthYear = curYear - hy + 1;
+
+    var hero;
+    if (prev.stage === "before") {
+      hero = '<div class="leave__hero leave__hero--solo">'
+        + leaveHeroCard("올해 " + curYear, fmtLeave(cur.days), leaveStageSub(cur, hourTag), true)
+        + '</div><div class="leave__delta">🎉 올해 입사 · 첫 해 연차입니다</div>';
+    } else {
+      var delta = round2(cur.days - prev.days), dtxt;
+      if (cur.stage === "flat" && prev.stage === "secondYear") dtxt = "🎉 올해부터 <b>연 15일 정액</b> (" + nthYear + "년차) · 작년 대비 +" + fmtLeave(delta) + "일";
+      else if (delta > 0) dtxt = "작년보다 <b>+" + fmtLeave(delta) + "일</b> 늘었어요";
+      else if (delta < 0) dtxt = "작년보다 <b>" + fmtLeave(delta) + "일</b>";
+      else dtxt = "작년과 <b>동일</b>";
+      hero = '<div class="leave__hero">'
+        + leaveHeroCard("작년 " + prevYear, fmtLeave(prev.days), leaveStageSub(prev, hourTag), false)
+        + leaveHeroCard("올해 " + curYear, fmtLeave(cur.days), leaveStageSub(cur, hourTag), true)
+        + '</div><div class="leave__delta">' + dtxt + '</div>';
+    }
+
+    var facts = '<div class="leave__facts">'
+      + leaveFact("입사일", c.joinDate)
+      + leaveFact("근속", tenureOf(c.joinDate))
+      + leaveFact("올해", nthYear + "년차")
+      + leaveFact("기준", "회계일 = 입사일")
+      + '</div>';
+
+    var breakdown;
+    if (cur.stage === "secondYear") breakdown = leaveBreakdown(c, curYear, cur, hourTag, "올해(" + curYear + ") 계산 근거");
+    else if (prev.stage === "secondYear") breakdown = leaveBreakdown(c, prevYear, prev, hourTag, "작년(" + prevYear + ") 계산 근거 · 참고");
+    else if (cur.stage === "hireYear") breakdown = '<h4 class="leave__h">📐 올해(' + curYear + ') 계산 근거</h4>'
+        + '<div class="leave__steps">' + leaveStep("①", "입사년 월차", "입사 후 만근 매월 1일씩 (" + curYear + "년 내)", cur.monthly + "일", true) + '</div>';
+    else breakdown = '<div class="leave__flat"><span class="leave__flatnum">15<em>일</em></span>'
+        + '<div class="leave__flatbody"><b>연 15일 정액</b><p class="muted">' + nthYear + '년차 — 매년 동일하게 15일의 연차가 발생합니다. (근속 가산은 별도 규정)</p></div></div>';
+
+    return '<div class="leave">' + hero + facts + breakdown + leaveRulesHtml() + '</div>';
   }
   function leaveFact(label, val) {
     return '<div class="leave__fact"><span>' + esc(label) + '</span><b>' + esc(val) + '</b></div>';

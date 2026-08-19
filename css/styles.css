@@ -1410,3 +1410,63 @@ html[data-authed="1"] .lock { display: none; }
   border:1px solid var(--line);background:var(--card-bg);color:var(--ink);margin-left:4px; }
 .kpi-curin:focus{ outline:none;border-color:var(--accent); }
 .kpi-curin::placeholder{ color:var(--ink-3,var(--ink-2));opacity:.6; }
+
+/* ---------- 연차관리 탭 ---------- */
+.leave{ display:flex; flex-direction:column; gap:18px; }
+.leave__empty{ display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;
+  padding:40px 20px; color:var(--ink-3); }
+.leave__empty span{ font-size:34px; }
+.leave__empty p{ font-size:13px; line-height:1.7; }
+.leave__empty b{ color:var(--ink-2); }
+
+.leave__hero{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:560px){ .leave__hero{ grid-template-columns:1fr; } }
+.leave__card{ position:relative; overflow:hidden; display:flex; flex-direction:column; gap:6px;
+  background:var(--panel-2); border:1px solid var(--line); border-radius:var(--r-lg); padding:18px 20px; }
+.leave__card--hot{ border-color:rgba(198,255,46,.38); background:rgba(198,255,46,.05); }
+.leave__card--hot::after{ content:""; position:absolute; top:0; bottom:0; left:0; width:3px; background:var(--accent); }
+.leave__lbl{ font-size:12px; color:var(--ink-3); letter-spacing:.02em; }
+.leave__lbl b{ color:var(--ink-2); font-weight:700; font-variant-numeric:tabular-nums; }
+.leave__num{ font-size:38px; font-weight:800; line-height:1; letter-spacing:-.02em; color:var(--ink);
+  font-variant-numeric:tabular-nums; }
+.leave__card--hot .leave__num{ color:var(--accent-text); }
+.leave__num em{ font-size:16px; font-weight:600; font-style:normal; color:var(--ink-3); margin-left:3px; }
+.leave__sub{ font-size:11.5px; color:var(--ink-3); }
+
+.leave__facts{ display:flex; flex-wrap:wrap; gap:8px; }
+.leave__fact{ display:flex; flex-direction:column; gap:2px; min-width:92px;
+  background:var(--panel-2); border:1px solid var(--line-soft); border-radius:var(--r-sm); padding:8px 12px; }
+.leave__fact span{ font-size:10.5px; color:var(--ink-3); letter-spacing:.03em; }
+.leave__fact b{ font-size:13.5px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+
+.leave__h{ font-size:12px; color:var(--ink-2); font-weight:700; letter-spacing:.04em; margin:4px 0 -6px; }
+.leave__steps{ display:flex; flex-direction:column; gap:8px; }
+.leave__step{ display:flex; align-items:center; gap:12px;
+  background:var(--panel-2); border:1px solid var(--line-soft); border-radius:var(--r); padding:12px 14px; }
+.leave__step--total{ border-color:rgba(198,255,46,.32); background:rgba(198,255,46,.05); }
+.leave__stepno{ flex-shrink:0; width:26px; height:26px; border-radius:50%; display:grid; place-items:center;
+  font-size:13px; font-weight:700; background:var(--line); color:var(--ink-2); }
+.leave__step--total .leave__stepno{ background:var(--accent); color:var(--accent-ink); }
+.leave__stepbody{ flex:1; min-width:0; }
+.leave__stepbody b{ font-size:13.5px; color:var(--ink); font-weight:600; }
+.leave__stepbody b em{ font-style:normal; font-size:10.5px; font-weight:600; color:var(--ink-3);
+  background:var(--line); padding:1px 6px; border-radius:99px; margin-left:5px; }
+.leave__stepbody p{ font-size:11.5px; color:var(--ink-3); margin:3px 0 0; font-variant-numeric:tabular-nums; }
+.leave__stepval{ flex-shrink:0; font-size:16px; font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; }
+.leave__step--total .leave__stepval{ color:var(--accent-text); font-size:18px; font-weight:800; }
+
+.leave__flat{ display:flex; align-items:center; gap:16px; background:var(--panel-2); border:1px solid var(--line);
+  border-radius:var(--r-lg); padding:20px; }
+.leave__flatnum{ flex-shrink:0; font-size:40px; font-weight:800; color:var(--accent-text); line-height:1;
+  font-variant-numeric:tabular-nums; }
+.leave__flatnum em{ font-size:16px; font-style:normal; color:var(--ink-3); margin-left:2px; }
+.leave__flatbody b{ font-size:14px; color:var(--ink); }
+.leave__flatbody p{ font-size:12px; margin:4px 0 0; line-height:1.6; }
+
+.leave__rules{ background:var(--panel-2); border:1px dashed var(--line); border-radius:var(--r); padding:14px 16px; }
+.leave__rulehead{ font-size:12.5px; font-weight:700; color:var(--ink); margin:0 0 8px; }
+.leave__rulehead span{ font-weight:500; color:var(--ink-3); font-size:11px; margin-left:6px; }
+.leave__rules ul{ margin:0; padding-left:18px; display:flex; flex-direction:column; gap:4px; }
+.leave__rules li{ font-size:12px; color:var(--ink-2); line-height:1.5; }
+.leave__note{ font-size:11px; color:var(--ink-3); margin:10px 0 0; line-height:1.6; }
+.leave__note b{ color:var(--ink-2); }

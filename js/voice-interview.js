@@ -137,7 +137,8 @@
       + "</div>"
       + '<div class="vi-foot"><button type="button" class="btn" id="viCancel1">취소</button>'
       + '<button type="button" class="btn btn--primary" id="viFinish" disabled>녹음 종료 → AI 정리</button></div>'
-      + '<div class="vi-skip">이미 클로바노트 등 다른 앱으로 녹음했나요? <a id="viGoPaste">녹음 없이 텍스트만 붙여넣기 →</a></div>'
+      + '<div class="vi-skip">🎧 녹음 <b style="color:var(--ink-2)">파일</b>(mp3·m4a)이 있나요? <a id="viGoAudio">파일 올려서 AI가 직접 듣기 →</a><br>'
+      + '📋 이미 전사한 <b style="color:var(--ink-2)">텍스트</b>가 있나요? <a id="viGoPaste">텍스트만 붙여넣기 →</a></div>'
       + "</div>"
 
       /* STEP 1-B — 텍스트 전용 */
@@ -149,6 +150,17 @@
       + '<textarea id="viPasteOnly" rows="7" placeholder="클로바노트·다글로·음성메모 등에서 변환한 텍스트를 붙여넣으세요.\n여러 앱의 텍스트를 이어 붙여넣어도 됩니다 — AI가 교차 확인해 통합 정리해요."></textarea></div>'
       + '<div class="vi-foot"><button type="button" class="btn" id="viBackToRec">← 녹음 화면으로</button>'
       + '<button type="button" class="btn btn--primary" id="viSumB">✦ AI 정리</button></div>'
+      + "</div>"
+
+      /* STEP 1-C — 오디오 파일 업로드 (Gemini 직접 분석) */
+      + '<div id="viStep1c" hidden>'
+      + '<div class="vi-fld"><span>크루 선택</span><select id="viCrewC"><option value="">크루 선택</option>' + crews + "</select></div>"
+      + '<div class="vi-fld"><span>면담 유형</span><select id="viTypeC">' + types + "</select></div>"
+      + '<label class="vi-consent"><input type="checkbox" id="viConsentC"> 크루에게 녹음 및 기록 활용에 대한 동의를 받았습니다. <span style="color:var(--ink-3)">(음성이 AI(Gemini)로 전송·처리되며 서버에 저장되지 않습니다)</span></label>'
+      + '<div class="vi-fld"><span>녹음 파일 선택</span><input type="file" id="viAudioFile" accept="audio/*,.m4a,.mp3,.wav,.ogg,.aac"></div>'
+      + '<p class="vi-subnote">· 폰 음성메모·녹음기 파일(mp3·m4a·wav) 그대로 OK · 25분(약 15MB) 이내 권장 · AI가 파일을 직접 듣고 받아쓰기+요약을 한 번에 해요.</p>'
+      + '<div class="vi-foot"><button type="button" class="btn" id="viBackToRec2">← 처음으로</button>'
+      + '<button type="button" class="btn btn--primary" id="viSumC">✦ 파일 올려서 AI 정리</button></div>'
       + "</div>"
 
       /* STEP 2 — 정리 중 */
@@ -184,8 +196,11 @@
     byId("viConsent").addEventListener("change", syncConsent);
     byId("viFinish").addEventListener("click", finishAndSummarize);
     byId("viGoPaste").addEventListener("click", function () { showStep("1b"); });
+    byId("viGoAudio").addEventListener("click", function () { showStep("1c"); });
     byId("viBackToRec").addEventListener("click", function () { showStep(1); });
+    byId("viBackToRec2").addEventListener("click", function () { showStep(1); });
     byId("viSumB").addEventListener("click", summarizeFromPaste);
+    byId("viSumC").addEventListener("click", summarizeFromAudio);
     byId("viBack1").addEventListener("click", function () { stopRecog(); showStep(1); });
     byId("viToForm").addEventListener("click", pushToForm);
     byId("viMerge").addEventListener("click", mergeExtra);
@@ -217,12 +232,12 @@
   }
 
   function showStep(n) {
-    ["1", "1b", "2", "3"].forEach(function (k) { byId("viStep" + k).hidden = (String(n) !== k); });
-    var order = { "1": 1, "1b": 1, "2": 2, "3": 3 };
+    ["1", "1b", "1c", "2", "3"].forEach(function (k) { byId("viStep" + k).hidden = (String(n) !== k); });
+    var order = { "1": 1, "1b": 1, "1c": 1, "2": 2, "3": 3 };
     var cur = order[String(n)];
     for (var i = 1; i <= 4; i++) byId("viS" + i).classList.toggle("on", i <= cur);
-    var labels = { "1": "STEP 1 · 4 — 녹음", "1b": "STEP 1 · 4 — 텍스트 붙여넣기", "2": "STEP 2 · 4 — AI 정리", "3": "STEP 3 · 4 — 검토 & 수정" };
-    var titles = { "1": "🎙️ 녹음 면담", "1b": "📋 녹음 없이 시작", "2": "✦ 정리 중", "3": "📝 검토 후 폼으로" };
+    var labels = { "1": "STEP 1 · 4 — 녹음", "1b": "STEP 1 · 4 — 텍스트 붙여넣기", "1c": "STEP 1 · 4 — 녹음 파일 올리기", "2": "STEP 2 · 4 — AI 정리", "3": "STEP 3 · 4 — 검토 & 수정" };
+    var titles = { "1": "🎙️ 녹음 면담", "1b": "📋 녹음 없이 시작", "1c": "🎧 녹음 파일 분석", "2": "✦ 정리 중", "3": "📝 검토 후 폼으로" };
     byId("viStepLabel").textContent = labels[String(n)];
     byId("viTitle").textContent = titles[String(n)];
     S.step = n;
@@ -332,7 +347,7 @@
     var back = document.createElement("div");
     back.style.marginTop = "10px";
     back.innerHTML = '<button type="button" class="btn">← 돌아가기</button>';
-    back.querySelector("button").addEventListener("click", function () { back.remove(); showStep(S.lastInput === "paste" ? "1b" : 1); });
+    back.querySelector("button").addEventListener("click", function () { back.remove(); showStep(S.lastInput === "paste" ? "1b" : S.lastInput === "audio" ? "1c" : 1); });
     el.appendChild(back);
   }
 
@@ -355,6 +370,57 @@
     S.crewSel = byId("viCrewB").value; S.typeSel = byId("viTypeB").value;
     byId("viProcMsg").textContent = "붙여넣은 텍스트를 정리하고 있어요…";
     callSummarize({ transcript: txt, ivType: S.typeSel }, function (r) { S.result = r; fillReview("✦ AI 정리 결과 — 외부 전사 텍스트 기반"); });
+  }
+
+  /* ---------------- 오디오 파일 → Gemini 직접 분석 ---------------- */
+  function guessMime(name) {
+    var n = (name || "").toLowerCase();
+    if (n.slice(-4) === ".mp3") return "audio/mpeg";
+    if (n.slice(-4) === ".wav") return "audio/wav";
+    if (n.slice(-4) === ".ogg") return "audio/ogg";
+    if (n.slice(-4) === ".aac") return "audio/aac";
+    if (n.slice(-4) === ".m4a") return "audio/mp4";
+    return "audio/mp4";
+  }
+
+  function summarizeFromAudio() {
+    if (!byId("viConsentC").checked) { alert("동의 체크가 필요합니다."); return; }
+    var f = byId("viAudioFile").files[0];
+    if (!f) { alert("녹음 파일을 먼저 선택해주세요."); return; }
+    var MAX = 15 * 1024 * 1024; // 15MB (약 25분) — Gemini inline 한도 고려
+    if (f.size > MAX) {
+      alert("파일이 너무 커요 (" + Math.round(f.size / 1024 / 1024) + "MB).\n25분·15MB 이내로 줄이거나 나눠서 올려주세요. (긴 회의는 Meeting Notes 권장)");
+      return;
+    }
+    S.lastInput = "audio";
+    S.crewSel = byId("viCrewC").value; S.typeSel = byId("viTypeC").value;
+    var mime = f.type || guessMime(f.name);
+    showStep(2);
+    byId("viProcMsg").textContent = "AI가 녹음을 직접 듣고 정리하고 있어요…";
+    byId("viProcMini").textContent = "받아쓰기 + 요약을 한 번에 · 길이에 따라 30초~1분 걸릴 수 있어요";
+    var reader = new FileReader();
+    reader.onload = function () {
+      var b64 = String(reader.result).split(",")[1] || "";
+      if (!b64) { showErr("파일을 읽지 못했어요. 다른 파일로 다시 시도해주세요."); return; }
+      callSummarizeAudio({ audioBase64: b64, mimeType: mime, ivType: S.typeSel }, function (r) {
+        S.result = r; fillReview("✦ AI 정리 결과 — 녹음 파일 직접 분석");
+      });
+    };
+    reader.onerror = function () { showErr("파일을 읽지 못했어요. 다시 시도해주세요."); };
+    reader.readAsDataURL(f);
+  }
+
+  function callSummarizeAudio(payload, onOK) {
+    var ep = endpoint();
+    byId("viErr").hidden = true;
+    if (!ep) { showErr("구글시트 연동(endpoint)이 설정되지 않았어요. js/config.js 확인 후 이용해주세요."); return; }
+    fetch(ep, { method: "POST", body: JSON.stringify(Object.assign({ type: "summarizeAudio" }, payload)) })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || !data.ok) { showErr((data && data.error) || "정리에 실패했어요. 잠시 후 다시 시도해주세요."); return; }
+        onOK(data.result || {});
+      })
+      .catch(function () { showErr("서버 호출에 실패했어요. 파일이 너무 크거나 네트워크 문제일 수 있어요."); });
   }
 
   function mergeExtra() {

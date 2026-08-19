@@ -434,6 +434,7 @@ function doPost(e) {
   if (data.type === "hrchange") return handleHrChange_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
+  if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -911,6 +912,79 @@ function handleSummarize_(data) {
 
   if (res.getResponseCode() !== 200) {
     return json_({ ok: false, error: "Gemini 오류(" + res.getResponseCode() + "). 키·사용량을 확인해주세요." });
+  }
+
+  try {
+    var body = JSON.parse(res.getContentText());
+    var text = body.candidates[0].content.parts[0].text;
+    var out = JSON.parse(text.replace(/^```json|```$/g, "").trim());
+    return json_({
+      ok: true,
+      result: {
+        content: String(out.content || ""),
+        condition: ["좋음", "보통", "우려됨"].indexOf(out.condition) >= 0 ? out.condition : "보통",
+        followUp: out.followUp === "필요" ? "필요" : "불필요",
+        followUpNote: String(out.followUpNote || ""),
+      },
+    });
+  } catch (e) {
+    return json_({ ok: false, error: "AI 응답 해석 실패 — 다시 시도해주세요." });
+  }
+}
+
+/* =========================================================
+   녹음 파일 직접 분석 (Gemini 멀티모달)
+   ---------------------------------------------------------
+   · 프런트가 오디오 파일(base64) + mimeType 를 보내면
+     Gemini 가 음성을 직접 듣고(받아쓰기) 면담 양식으로 요약한다.
+   · 클로바노트처럼 "파일 전체를 통째로" 처리 → 실시간 받아쓰기보다 정확.
+   · 음성은 Gemini(구글)로 전송되어 처리되며, 서버에 저장하지 않는다.
+   ========================================================= */
+function handleSummarizeAudio_(data) {
+  var key = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
+  if (!key) return json_({ ok: false, error: "GEMINI_API_KEY 스크립트 속성이 설정되지 않았어요." });
+
+  var b64 = String(data.audioBase64 || "");
+  if (!b64) return json_({ ok: false, error: "오디오 데이터가 비어 있어요." });
+  var mime = String(data.mimeType || "audio/mp4");
+  var ivType = String(data.ivType || "정기 면담");
+
+  var prompt =
+    "너는 장애인 표준사업장 팀리더의 크루(직원) 면담 기록 작성을 돕는 보조자다.\n" +
+    "첨부된 면담 녹음(오디오)을 끝까지 듣고, 반드시 다음 JSON 형식으로만 답하라. JSON 외 다른 텍스트·마크다운·백틱 금지.\n" +
+    '{"content":"주요 논의 내용 (\\n으로 구분된 · 불릿 3~6줄, 산문체 자연스러운 한국어)",' +
+    '"condition":"좋음|보통|우려됨 중 하나 (녹음에서 드러난 크루 상태로 판단, 애매하면 보통)",' +
+    '"followUp":"필요|불필요",' +
+    '"followUpNote":"후속 조치가 필요하면 조치 내용을 · 불릿으로, 불필요하면 빈 문자열"}\n' +
+    "규칙:\n" +
+    "- 면담 유형: " + ivType + "\n" +
+    "- 오디오에서 실제로 들린 내용만 근거로 삼고, 안 들린 내용을 지어내지 마라.\n" +
+    "- 화자가 여럿이면 질문-답변 맥락으로 크루(직원)의 상태·발언을 판단하되, 불확실한 귀속은 단정하지 마라.\n" +
+    "- 민감한 건강·개인 정보는 업무에 필요한 수준으로만 간결히.\n";
+
+  var res;
+  try {
+    res = UrlFetchApp.fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(key),
+      {
+        method: "post",
+        contentType: "application/json",
+        muteHttpExceptions: true,
+        payload: JSON.stringify({
+          contents: [{ parts: [
+            { inline_data: { mime_type: mime, data: b64 } },
+            { text: prompt },
+          ] }],
+          generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
+        }),
+      }
+    );
+  } catch (e) {
+    return json_({ ok: false, error: "Gemini 호출 실패: " + e });
+  }
+
+  if (res.getResponseCode() !== 200) {
+    return json_({ ok: false, error: "Gemini 오류(" + res.getResponseCode() + "). 파일 형식(mp3·m4a·wav)·크기·사용량을 확인해주세요." });
   }
 
   try {

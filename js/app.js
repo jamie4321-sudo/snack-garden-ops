@@ -156,6 +156,43 @@
     return m + "개월";
   }
 
+  /* ---------- 연차 발생 (2년차 미만, 입사일·만근·회계일=입사일 기준) ----------
+     이미지 규칙: ① 입사년 만근 매월 1일씩  ② 2년차 월차(계약연장 전) 매월 1일씩(총 11일 채움)
+                 ③ 2년차 연차(계약연장 후) = (입사년 재직일 ÷ 365) × 15
+     4시간 크루(반차 없음)=1일 올림 / 8시간 크루(반차 있음)=0.5일 올림 */
+  function isFourHourCrew(workHours) {
+    return /\(\s*4\s*h/i.test(String(workHours || "")) || /4\s*시간/.test(String(workHours || ""));
+  }
+  function roundLeave(days, workHours) {
+    if (isFourHourCrew(workHours)) return Math.ceil(days - 1e-9);   // 반차 없음 → 1일 단위 올림
+    return Math.ceil(days * 2 - 1e-9) / 2;                          // 반차 있음 → 0.5일 단위 올림
+  }
+  function fmtLeave(n) { return (Math.round(n * 100) / 100).toString(); }
+
+  /** 반환: { hireYear, firstYear, secondYearLabel, secondYear } · 2년차 미만 재직 크루가 아니면 null */
+  function annualLeaveInfo(c) {
+    if (!c || !c.joinDate || c.status === "퇴사") return null;
+    var join = d(c.joinDate);
+    if (!join || isNaN(join.getTime())) return null;
+    var years = (d(TODAY) - join) / (365.25 * 24 * 3600 * 1000);
+    if (years >= 2) return null; // 3년차부터는 15일 정액 → 표시 생략
+
+    var hy = join.getFullYear(), jm = join.getMonth();               // jm: 0=1월
+    var firstYearMonthly = 11 - jm;                                  // 입사한 해 월차(일)
+    var secondYearMonthly = jm;                                      // 2년차 계약연장 전 월차(일) (합 11일)
+    var daysWorked = Math.round((new Date(hy, 11, 31) - join) / (24 * 3600 * 1000)) + 1; // 입사년 재직일
+    var proratedAnnual = (daysWorked / 365) * 15;                    // 2년차 연차(계약연장 후)
+    var secondYearTotal = roundLeave(secondYearMonthly + proratedAnnual, c.workHours);
+
+    return { hireYear: hy, firstYear: firstYearMonthly, secondYearLabel: hy + 1, secondYear: fmtLeave(secondYearTotal) };
+  }
+  function annualLeaveField(c) {
+    var info = annualLeaveInfo(c);
+    if (!info) return "";
+    return detailField("연차 발생(만근 기준)",
+      "입사년(" + info.hireYear + ") " + info.firstYear + "일 · 2년차(" + info.secondYearLabel + ") " + info.secondYear + "일");
+  }
+
   /** 구글시트에서 크루·일정 로드 (실패 시 데모 데이터 유지)
    *  Apps Script /exec 응답이 브라우저·중간 캐시에 잡히는 걸 막기 위해 매번 캐시버스팅 */
   function loadData() {
@@ -1118,7 +1155,7 @@
       + '</div>';
 
     html += '<div class="table-wrap"><table class="crew-table"><thead><tr>'
-      + '<th>크루</th><th>상태</th><th>입사일</th><th>근무지</th><th>장애유형</th><th>담당 업무</th><th>비고</th>'
+      + '<th>크루</th><th>상태</th><th>입사일</th><th>청구사</th><th>장애유형</th><th>담당 업무</th><th>비고</th>'
       + '</tr></thead><tbody id="crewBody">' + tbodyHTML() + '</tbody></table></div>';
 
     view.innerHTML = html;
@@ -1676,6 +1713,7 @@
       + detailField("업무시간", c.workHours)
       + detailField("입사일", c.joinDate)
       + detailField("근속", tenureOf(c.joinDate))
+      + annualLeaveField(c)
       + detailField("생년월일", c.birthDate)
       + detailField("연락처", c.phone)
       + detailField("장애여부", c.disability)
@@ -1836,7 +1874,7 @@
         + '<label class="fld"><span>장애유형 <em>(선택)</em></span><input type="text" name="disabilityType" placeholder="발달장애 등"></label>'
       + '</div>'
       + '<div class="fld-row--3">'
-        + '<label class="fld"><span>근무지</span><input type="text" name="site" maxlength="30" placeholder="판교 오아시스"></label>'
+        + '<label class="fld"><span>청구사</span><input type="text" name="site" maxlength="30" placeholder="판교 오아시스"></label>'
         + '<label class="fld"><span>출입증번호 <em>(선택)</em></span><input type="text" name="badgeNumber" placeholder="O0000"></label>'
         + '<label class="fld"><span>담당 업무 <em>(쉼표로 구분)</em></span><input type="text" name="duties" placeholder="발주, 온보딩"></label>'
       + '</div>'

@@ -239,8 +239,9 @@
   function updateModeBadge() {
     var foot = document.querySelector(".side__foot");
     if (!foot) return;
+    var status = foot.querySelector(".side__foot-status") || foot;
     var live = isLive();
-    foot.innerHTML = '<span class="dot"></span> ' + (live ? "LIVE · 구글시트 연동" : "DEMO · 목업 데이터");
+    status.innerHTML = '<span class="dot"></span> ' + (live ? "LIVE · 구글시트 연동" : "DEMO · 목업 데이터");
     foot.classList.toggle("is-live", live);
   }
 
@@ -5369,48 +5370,81 @@
     setInterval(checkEventAlarms, 20000);
   }
 
-  /* ---------- lock : 접속 시 4자리 비밀번호 확인 ---------- */
-  function unlock() {
-    try { localStorage.setItem("sg-auth", "ok"); } catch (e) {}
+  /* ---------- 관리자 로그인 : 아이디 + 비밀번호(SHA-256) ---------- */
+  function sha256Hex(str) {
+    var enc = new TextEncoder();
+    return crypto.subtle.digest("SHA-256", enc.encode(str)).then(function (buf) {
+      return Array.prototype.map
+        .call(new Uint8Array(buf), function (b) { return b.toString(16).padStart(2, "0"); })
+        .join("");
+    });
+  }
+
+  function unlock(remember) {
+    try {
+      if (remember) localStorage.setItem("sg-auth", "ok");
+      else { localStorage.removeItem("sg-auth"); sessionStorage.setItem("sg-auth", "ok"); }
+    } catch (e) {}
     document.documentElement.setAttribute("data-authed", "1");
     boot();
   }
 
+  function logout() {
+    try { localStorage.removeItem("sg-auth"); sessionStorage.removeItem("sg-auth"); } catch (e) {}
+    location.reload();
+  }
+
   function wireLock() {
-    var dots = document.getElementById("lockDots");
-    var dotEls = dots.querySelectorAll(".lock__dot");
-    var input = document.getElementById("lockInput");
+    var form = document.getElementById("lockForm");
+    var idInput = document.getElementById("loginId");
+    var pwInput = document.getElementById("loginPw");
+    var remember = document.getElementById("loginRemember");
+    var btn = document.getElementById("loginBtn");
     var err = document.getElementById("lockError");
+    if (!form) return;
 
-    function paintDots(len) {
-      Array.prototype.forEach.call(dotEls, function (d, i) { d.classList.toggle("is-filled", i < len); });
-    }
     function shake() {
-      dots.classList.add("is-shake");
-      setTimeout(function () { dots.classList.remove("is-shake"); }, 400);
+      form.classList.add("is-shake");
+      setTimeout(function () { form.classList.remove("is-shake"); }, 400);
     }
 
-    input.addEventListener("input", function () {
-      input.value = input.value.replace(/\D/g, "").slice(0, 4);
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
       err.hidden = true;
-      paintDots(input.value.length);
-      if (input.value.length === 4) {
-        var pin = (window.CONFIG && window.CONFIG.pin) || "";
-        if (pin && input.value === pin) {
-          unlock();
+      var id = (idInput.value || "").trim();
+      var pw = pwInput.value || "";
+      var cfg = (window.CONFIG && window.CONFIG.auth) || {};
+      if (!id || !pw || !cfg.idHash || !cfg.pwHash) { err.hidden = false; shake(); return; }
+
+      btn.disabled = true;
+      Promise.all([sha256Hex(id.toLowerCase()), sha256Hex(pw)]).then(function (h) {
+        btn.disabled = false;
+        if (h[0] === cfg.idHash && h[1] === cfg.pwHash) {
+          unlock(remember ? remember.checked : true);
         } else {
           err.hidden = false;
           shake();
-          setTimeout(function () { input.value = ""; paintDots(0); input.focus(); }, 300);
+          pwInput.value = "";
+          pwInput.focus();
         }
-      }
+      }).catch(function () { btn.disabled = false; err.hidden = false; shake(); });
     });
-    dots.addEventListener("click", function () { input.focus(); });
-    setTimeout(function () { input.focus(); }, 60);
+
+    setTimeout(function () { idInput.focus(); }, 60);
   }
 
-  var alreadyAuthed = document.documentElement.getAttribute("data-authed") === "1";
+  function wireLogout() {
+    var btn = document.getElementById("logoutBtn");
+    if (btn) btn.addEventListener("click", logout);
+  }
+
+  var alreadyAuthed =
+    document.documentElement.getAttribute("data-authed") === "1" ||
+    (function () { try { return sessionStorage.getItem("sg-auth") === "ok"; } catch (e) { return false; } })();
+
+  wireLogout();
   if (alreadyAuthed) {
+    document.documentElement.setAttribute("data-authed", "1");
     boot();
   } else {
     wireLock();

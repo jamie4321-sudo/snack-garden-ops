@@ -130,6 +130,59 @@ html[data-authed="1"] .lock { display: none; }
 }
 .lock__error { color: var(--red); font-size: 12px; margin: 18px 0 0; min-height: 15px; }
 .lock__error[hidden] { display: none; }
+
+/* --- 관리자 로그인 폼 --- */
+.lock__form { display: flex; flex-direction: column; align-items: stretch; }
+.lock__form.is-shake { animation: lockShake .4s; }
+.lock__form .lock__label { margin-bottom: 24px; }
+.lock__field {
+  position: relative; display: flex; align-items: center;
+  margin-bottom: 10px; text-align: left;
+}
+.lock__ficon {
+  position: absolute; left: 13px; display: flex; color: var(--ink-3);
+  pointer-events: none;
+}
+.lock__text {
+  width: 100%; height: 46px; padding: 0 14px 0 40px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); color: var(--ink);
+  font-size: 14px; font-family: inherit; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.lock__text::placeholder { color: var(--ink-3); }
+.lock__text:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.lock__submit {
+  height: 46px; margin-top: 8px; border: none; border-radius: 10px;
+  background: var(--accent); color: var(--accent-ink, #fff);
+  font-size: 14px; font-weight: 700; font-family: inherit; letter-spacing: -.2px;
+  cursor: pointer; transition: filter .15s, opacity .15s;
+}
+.lock__submit:hover { filter: brightness(1.05); }
+.lock__submit:active { filter: brightness(.96); }
+.lock__submit:disabled { opacity: .6; cursor: default; }
+.lock__remember {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  margin-top: 16px; color: var(--ink-3); font-size: 12px; cursor: pointer;
+  user-select: none;
+}
+.lock__remember input { accent-color: var(--accent); cursor: pointer; }
+
+/* --- 로그아웃 버튼 (사이드바 하단) --- */
+.side__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.side__foot-status { display: inline-flex; align-items: center; }
+.side__logout {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 9px; border: 1px solid var(--line-soft); border-radius: 8px;
+  background: transparent; color: var(--ink-3);
+  font-size: 11px; font-family: inherit; cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.side__logout:hover { color: var(--red); border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+
 @keyframes lockShake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-8px); }

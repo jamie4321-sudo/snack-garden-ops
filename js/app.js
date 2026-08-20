@@ -3586,10 +3586,44 @@
         _alarmAudioEl = new Audio("assets/sound/alarm.mp3");
         _alarmAudioEl.preload = "auto";
       }
+      _alarmAudioEl.muted = false;
+      _alarmAudioEl.volume = 1;
       _alarmAudioEl.currentTime = 0;
       var p = _alarmAudioEl.play();
       if (p && p.catch) p.catch(function () { playAlarmChime_(); });
     } catch (err) { playAlarmChime_(); }
+  }
+
+  /** 페이지에서 첫 클릭/터치/키 입력이 발생하는 순간, 소리를 '무음으로 살짝 재생 후 정지'해
+   *  브라우저의 자동재생 잠금을 미리 풀어둔다. 이후 알림 시간엔 클릭 없이도 소리가 난다.
+   *  (브라우저 정책상 최초 상호작용 1회는 반드시 필요 — 그 1회를 이 unlock에 활용) */
+  var _alarmPrimed = false;
+  function primeAlarmSound_() {
+    if (_alarmPrimed) return;
+    _alarmPrimed = true;
+    try {
+      // Web Audio 컨텍스트 깨우기
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        if (!_alarmAudioCtx) _alarmAudioCtx = new AC();
+        if (_alarmAudioCtx.state === "suspended" && _alarmAudioCtx.resume) _alarmAudioCtx.resume();
+      }
+      // mp3 엘리먼트 unlock (무음 재생 → 즉시 정지)
+      if (!_alarmAudioEl) {
+        _alarmAudioEl = new Audio("assets/sound/alarm.mp3");
+        _alarmAudioEl.preload = "auto";
+      }
+      _alarmAudioEl.muted = true;
+      var p = _alarmAudioEl.play();
+      var reset = function () {
+        try {
+          _alarmAudioEl.pause();
+          _alarmAudioEl.currentTime = 0;
+          _alarmAudioEl.muted = false;
+        } catch (e) {}
+      };
+      if (p && p.then) p.then(reset, reset); else reset();
+    } catch (err) { /* 무시 */ }
   }
 
   function openEventAlarmModal(e) {
@@ -5288,6 +5322,16 @@
     });
   }
   wireDelegation();
+
+  /* ---------- 알림음 사전 준비 (첫 상호작용 시 자동 unlock) ---------- */
+  (function initAlarmSoundPriming() {
+    var evs = ["pointerdown", "click", "keydown", "touchstart"];
+    var onFirst = function () {
+      primeAlarmSound_();
+      evs.forEach(function (t) { document.removeEventListener(t, onFirst, true); });
+    };
+    evs.forEach(function (t) { document.addEventListener(t, onFirst, true); });
+  })();
 
   /* ---------- theme toggle ---------- */
   (function initTheme() {

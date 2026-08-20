@@ -3550,7 +3550,50 @@
     });
   }
 
+  /** 알림음 — 지정된 mp3 파일(assets/sound/alarm.mp3)을 재생.
+   *  브라우저는 사용자가 페이지를 한 번이라도 클릭/터치해야 소리를 허용하므로,
+   *  대개 화면을 조작한 뒤라면 정상 재생되고, 아니면 조용히 무시된다.
+   *  파일 재생이 막히면 Web Audio 차임으로 대체한다. */
+  var _alarmAudioEl = null;
+  var _alarmAudioCtx = null;
+  function playAlarmChime_() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!_alarmAudioCtx) _alarmAudioCtx = new AC();
+      var ctx = _alarmAudioCtx;
+      if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+      var chime = function (freq, startAt, dur) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        var t0 = ctx.currentTime + startAt;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.35, t0 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.05);
+      };
+      chime(880, 0, 0.5);
+      chime(660, 0.45, 0.7);
+    } catch (err) { /* 소리 재생 불가 시 무시 */ }
+  }
+  function playAlarmSound_() {
+    try {
+      if (!_alarmAudioEl) {
+        _alarmAudioEl = new Audio("assets/sound/alarm.mp3");
+        _alarmAudioEl.preload = "auto";
+      }
+      _alarmAudioEl.currentTime = 0;
+      var p = _alarmAudioEl.play();
+      if (p && p.catch) p.catch(function () { playAlarmChime_(); });
+    } catch (err) { playAlarmChime_(); }
+  }
+
   function openEventAlarmModal(e) {
+    playAlarmSound_();
     var el = document.getElementById("alarmModal");
     if (el) el.remove();
     el = document.createElement("div");

@@ -54,6 +54,9 @@ var NOTE_FIELDS = ["id","date","time","part","text","author","link","deletedAt"]
 var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
+// 거래명세서 : items 는 품목 배열의 JSON 문자열로 저장한다.
+var STATEMENT_FIELDS = ["id","date","docNo","supplierName","supplierBizNo","supplierCeo","supplierAddr","clientName","items","supplyAmount","vat","total","memo","status","createdAt"];
+var PARTNER_FIELDS = ["id","name","bizNo","ceo","addr"];
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
@@ -195,6 +198,8 @@ function doGet(e) {
   if (action === "notes")      return json_(mapNotes_(rows_notesFresh_()));
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
   if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
+  if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
+  if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["date"]));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
   if (action === "debug")      return json_(getDebugInfo_());
@@ -208,7 +213,9 @@ function doGet(e) {
     attendance: mapAttendance_(rows_("attendance", ATTENDANCE_FIELDS)),
     notes: mapNotes_(rows_notesFresh_()),
     education: mapEducation_(rows_("education", EDUCATION_FIELDS)),
-    hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"])
+    hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]),
+    partners: rows_("partners", PARTNER_FIELDS),
+    statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["date"])
   });
 }
 
@@ -432,6 +439,8 @@ function doPost(e) {
   if (data.type === "note")     return handleNote_(action, data);
   if (data.type === "education") return handleEducation_(action, data);
   if (data.type === "hrchange") return handleHrChange_(action, data);
+  if (data.type === "partner")  return handlePartner_(action, data);
+  if (data.type === "statement") return handleStatement_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
   if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
@@ -637,6 +646,57 @@ function noteValuesObj_(data) {
     part: data.part || "전체", text: data.text || "", author: data.author || "",
     link: data.link || "", deletedAt: data.deletedAt || ""
   };
+}
+
+function partnerValuesObj_(data) {
+  return {
+    id: data.id, name: data.name || "", bizNo: data.bizNo || "",
+    ceo: data.ceo || "", addr: data.addr || ""
+  };
+}
+
+function handlePartner_(action, data) {
+  var sh = sheet_("partners", PARTNER_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, partnerValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
+function statementValuesObj_(data) {
+  return {
+    id: data.id, date: data.date || "", docNo: data.docNo || "",
+    supplierName: data.supplierName || "", supplierBizNo: data.supplierBizNo || "",
+    supplierCeo: data.supplierCeo || "", supplierAddr: data.supplierAddr || "",
+    clientName: data.clientName || "",
+    items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
+    supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
+    memo: data.memo || "", status: data.status || "작성", createdAt: data.createdAt || ""
+  };
+}
+
+function handleStatement_(action, data) {
+  var sh = sheet_("statements", STATEMENT_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, statementValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
 }
 
 /** 헤더 이름 기준으로 특정 행의 값을 { 헤더명: 값 } 객체로 읽어온다. */

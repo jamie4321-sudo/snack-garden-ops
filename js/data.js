@@ -137,6 +137,31 @@ window.EDUCATION = [
     date:"2026-05-14", dueDate:"", status:"완료", provider:"외부 강사", hours:"2시간", note:"" },
 ];
 
+/* --- 거래처(공급자) : 시트 "partners" (헤더 = id,name,bizNo,ceo,addr)
+   명세서 등록 시 거래처를 선택하면 사업자번호·대표자·주소가 자동 입력됩니다. --- */
+window.PARTNERS = [
+  { id:"p1", name:"뚜레주르 판교대장점", bizNo:"506-36-01205", ceo:"이혁진", addr:"경기도 성남시 분당구 판교대장로7길 6-32, 1층(대장동)" },
+];
+
+/* --- 거래명세서 : 시트 "statements"
+   (헤더 = id,date,docNo,supplierName,supplierBizNo,supplierCeo,supplierAddr,clientName,items,supplyAmount,vat,total,memo,status,createdAt)
+   items : 품목 배열의 JSON 문자열. 각 품목 = { name, unit, price(단가·부가세포함), qty }
+   status : 작성 | 확정
+   계산규칙(이미지 기준) : 단가는 부가세 포함가.
+     합계금액 = round(단가 × 수량)  /  공급가액 = round(합계 ÷ 1.1)  /  부가세액 = 합계 − 공급가액 --- */
+window.STATEMENTS = [
+  { id:"st1", date:"2024-07-02", docNo:"",
+    supplierName:"뚜레주르 판교대장점", supplierBizNo:"506-36-01205", supplierCeo:"이혁진",
+    supplierAddr:"경기도 성남시 분당구 판교대장로7길 6-32, 1층(대장동)",
+    clientName:"주식회사 링키지랩 貴下",
+    items:[
+      { name:"데일리 우유식빵",       unit:"1ea", price:3500, qty:408 },
+      { name:"바로굽는토스트식빵",     unit:"1ea", price:3900, qty:420 },
+    ],
+    supplyAmount:2787273, vat:278727, total:3066000,
+    memo:"", status:"확정", createdAt:"2024-07-02T00:00:00.000Z" },
+];
+
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */
 window.SUMMARY = {
   monthLabel: "2026년 7월",

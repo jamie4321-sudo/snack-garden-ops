@@ -143,6 +143,55 @@
     };
   }
 
+  function normPartner(r) {
+    return {
+      id: r.id || "", name: r.name || "", bizNo: r.bizNo || "",
+      ceo: r.ceo || "", addr: r.addr || "",
+    };
+  }
+
+  /** items 는 시트에서 JSON 문자열로 내려올 수 있어 배열로 파싱 */
+  function parseItems_(v) {
+    if (Array.isArray(v)) return v;
+    if (!v) return [];
+    try { var a = JSON.parse(v); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  function normStatement(r) {
+    var items = parseItems_(r.items).map(function (it) {
+      return { name: it.name || "", unit: it.unit || "", price: +it.price || 0, qty: +it.qty || 0 };
+    });
+    var t = stmtTotals(items);
+    return {
+      id: r.id || "", date: fmtDay(r.date), docNo: r.docNo || "",
+      supplierName: r.supplierName || "", supplierBizNo: r.supplierBizNo || "",
+      supplierCeo: r.supplierCeo || "", supplierAddr: r.supplierAddr || "",
+      clientName: r.clientName || "주식회사 링키지랩 貴下",
+      items: items,
+      supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : t.supply,
+      vat: r.vat != null && r.vat !== "" ? +r.vat : t.vat,
+      total: r.total != null && r.total !== "" ? +r.total : t.total,
+      memo: r.memo || "", status: r.status || "작성",
+      createdAt: r.createdAt || "",
+    };
+  }
+
+  /* ---------- 거래명세서 계산 (단가 = 부가세 포함가) ----------
+     합계금액 = round(단가 × 수량) / 공급가액 = round(합계 ÷ 1.1) / 부가세액 = 합계 − 공급가액 */
+  function stmtLine(it) {
+    var lineTotal = Math.round((+it.price || 0) * (+it.qty || 0));
+    var supply = Math.round(lineTotal / 1.1);
+    return { total: lineTotal, supply: supply, vat: lineTotal - supply };
+  }
+  function stmtTotals(items) {
+    return (items || []).reduce(function (acc, it) {
+      var l = stmtLine(it);
+      acc.supply += l.supply; acc.vat += l.vat; acc.total += l.total;
+      return acc;
+    }, { supply: 0, vat: 0, total: 0 });
+  }
+  /** 천 단위 콤마 (원화) */
+  function won(n) { return (Math.round(+n || 0)).toLocaleString("en-US"); }
+
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
     if (!iso) return "—";
@@ -206,6 +255,8 @@
         if (d && d.education) window.EDUCATION = d.education.map(normEducation);
         if (d && d.notes) window.NOTES = d.notes.map(normNote);
         if (d && d.hrChanges) window.HR_CHANGES = d.hrChanges.map(normHrChange);
+        if (d && d.partners) window.PARTNERS = d.partners.map(normPartner);
+        if (d && d.statements) window.STATEMENTS = d.statements.map(normStatement);
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -4919,7 +4970,395 @@
     }
   }
 
+  /* ======================================================
+     청구 관리 — 거래명세서 (STATEMENT)
+     ====================================================== */
+  var stmtMode = null;      // null=목록 | "edit"=편집기 | "view"=보기
+  var stmtEditId = null;    // 편집/보기 대상 id ("" = 신규)
+  var stmtDraft = null;     // 편집 중 임시 명세서 객체
+  var CLIENT_DEFAULT = "주식회사 링키지랩 貴下";
+
+  function stmtQ(sel) { return view.querySelector(sel); }
+  function stmtOn(sel, evt, fn) { var el = view.querySelector(sel); if (el) el.addEventListener(evt, fn); }
+  function stmtOnAll(sel, evt, fn) { Array.prototype.forEach.call(view.querySelectorAll(sel), function (el) { el.addEventListener(evt, fn); }); }
+
+  function renderStatement() {
+    if (stmtMode === "edit") { renderStatementEditor(); return; }
+    if (stmtMode === "view") {
+      var vs = findById(window.STATEMENTS || [], stmtEditId);
+      if (vs) { renderStatementView(vs); return; }
+      stmtMode = null;
+    }
+    renderStatementList();
+  }
+
+  function renderStatementList() {
+    var list = (window.STATEMENTS || []).slice().sort(function (a, b) {
+      return (b.date || "") < (a.date || "") ? -1 : (b.date || "") > (a.date || "") ? 1 : 0;
+    });
+    var yr = d(TODAY).getFullYear();
+    var thisYear = list.filter(function (s) { return (s.date || "").slice(0, 4) === String(yr); });
+    var sumTotal = thisYear.reduce(function (a, s) { return a + (+s.total || 0); }, 0);
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Billing / Statement</p>'
+      + '<h2>청구 관리 · 거래명세서</h2>'
+      + '<p class="sub">거래처별 명세서를 등록·관리하고 인쇄/PDF로 출력합니다. <span class="muted">행을 클릭하면 명세서를 볼 수 있어요.</span></p></div>'
+      + '<button class="btn btn--primary" id="stmtAddBtn">+ 명세서 등록</button>'
+      + '</div>';
+
+    html += '<div class="stats">'
+      + statCard("acid", list.length, "건", "Total", "전체 명세서")
+      + statCard("green", thisYear.length, "건", "This year", yr + "년 등록")
+      + statCard("", won(sumTotal), "원", "Amount", yr + "년 합계금액")
+      + '</div>';
+
+    html += '<div class="table-wrap"><table class="crew-table stmt-list"><thead><tr>'
+      + '<th>날짜</th><th>거래처(공급자)</th><th>품목</th><th class="num">공급가액</th><th class="num">부가세</th><th class="num">합계금액</th><th>상태</th><th></th>'
+      + '</tr></thead><tbody>';
+    if (!list.length) {
+      html += '<tr><td colspan="8" class="muted" style="text-align:center;padding:36px">등록된 명세서가 없습니다. <b>+ 명세서 등록</b>으로 시작하세요.</td></tr>';
+    } else {
+      html += list.map(function (s) {
+        var first = (s.items[0] && s.items[0].name) || "—";
+        var more = s.items.length > 1 ? ' <span class="muted">외 ' + (s.items.length - 1) + '건</span>' : '';
+        var stCls = s.status === "확정" ? "badge--active" : "badge--leave";
+        return '<tr data-id="' + esc(s.id) + '">'
+          + '<td class="mono-cell">' + esc(s.date || "—") + '</td>'
+          + '<td><b>' + esc(s.supplierName || "—") + '</b></td>'
+          + '<td>' + esc(first) + more + '</td>'
+          + '<td class="num">' + won(s.supplyAmount) + '</td>'
+          + '<td class="num">' + won(s.vat) + '</td>'
+          + '<td class="num"><b>' + won(s.total) + '</b></td>'
+          + '<td><span class="badge ' + stCls + '">' + esc(s.status) + '</span></td>'
+          + '<td class="stmt-rowact">'
+            + '<button class="btn btn--xs" data-act="edit" data-id="' + esc(s.id) + '">수정</button>'
+            + '<button class="btn btn--xs" data-act="del" data-id="' + esc(s.id) + '">삭제</button>'
+          + '</td>'
+          + '</tr>';
+      }).join("");
+    }
+    html += '</tbody></table></div>';
+    view.innerHTML = html;
+
+    stmtOn("#stmtAddBtn", "click", function () { openStatementEditor(null); });
+    stmtOnAll(".stmt-list tbody tr[data-id]", "click", function (ev) {
+      if (ev.target.closest("button")) return;
+      stmtMode = "view"; stmtEditId = this.getAttribute("data-id"); renderStatement();
+    });
+    stmtOnAll('.stmt-rowact button[data-act="edit"]', "click", function () { openStatementEditor(this.getAttribute("data-id")); });
+    stmtOnAll('.stmt-rowact button[data-act="del"]', "click", function () { deleteStatement(this.getAttribute("data-id")); });
+  }
+
+  function openStatementEditor(id) {
+    var src = id ? findById(window.STATEMENTS || [], id) : null;
+    stmtDraft = src ? JSON.parse(JSON.stringify(src)) : {
+      id: "", date: TODAY, docNo: "",
+      supplierName: "", supplierBizNo: "", supplierCeo: "", supplierAddr: "",
+      clientName: CLIENT_DEFAULT,
+      items: [{ name: "", unit: "1ea", price: 0, qty: 0 }],
+      memo: "", status: "작성",
+    };
+    stmtEditId = id || "";
+    stmtMode = "edit";
+    renderStatement();
+  }
+
+  function stmtItemRowHTML(it, i) {
+    var l = stmtLine(it);
+    return '<tr data-i="' + i + '">'
+      + '<td class="stmt-idx">' + (i + 1) + '</td>'
+      + '<td><input class="stmt-in" data-f="name" data-i="' + i + '" value="' + esc(it.name || "") + '" placeholder="품목명"></td>'
+      + '<td><input class="stmt-in stmt-in--sm" data-f="unit" data-i="' + i + '" value="' + esc(it.unit || "") + '" placeholder="1ea"></td>'
+      + '<td><input class="stmt-in stmt-in--num" data-f="price" data-i="' + i + '" type="number" min="0" value="' + (it.price || "") + '" placeholder="0"></td>'
+      + '<td><input class="stmt-in stmt-in--num stmt-in--qty" data-f="qty" data-i="' + i + '" type="number" min="0" value="' + (it.qty || "") + '" placeholder="0"></td>'
+      + '<td class="num stmt-cell-supply">' + won(l.supply) + '</td>'
+      + '<td class="num stmt-cell-vat">' + won(l.vat) + '</td>'
+      + '<td class="num stmt-cell-total"><b>' + won(l.total) + '</b></td>'
+      + '<td><button class="btn btn--xs stmt-del-item" data-i="' + i + '" title="행 삭제" aria-label="행 삭제">&times;</button></td>'
+      + '</tr>';
+  }
+
+  function renderStatementEditor() {
+    var s = stmtDraft;
+    var t = stmtTotals(s.items);
+    var partners = window.PARTNERS || [];
+    var partnerOpts = '<option value="">거래처 선택 / 직접입력</option>'
+      + partners.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Billing / Statement</p>'
+      + '<h2>' + (stmtEditId ? "명세서 수정" : "명세서 등록") + '</h2>'
+      + '<p class="sub">단가는 <b>부가세 포함가</b>로 입력하세요. 공급가액·부가세·합계는 자동 계산됩니다.</p></div>'
+      + '<div class="page-head__actions">'
+        + '<button class="btn" id="stmtCancelBtn">목록으로</button>'
+        + '<button class="btn btn--primary" id="stmtSaveBtn">저장</button>'
+      + '</div>'
+      + '</div>';
+
+    html += '<div class="stmt-editor">';
+
+    // 상단 메타
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>날짜</span><input class="stmt-in" id="stmtDate" type="date" value="' + esc(s.date || "") + '"></label>'
+      + '<label class="stmt-field"><span>상태</span><select class="stmt-in" id="stmtStatus">'
+        + ['작성', '확정'].map(function (o) { return '<option' + (s.status === o ? ' selected' : '') + '>' + o + '</option>'; }).join("")
+      + '</select></label>'
+      + '<label class="stmt-field"><span>공급받는자 (상호)</span><input class="stmt-in" id="stmtClient" value="' + esc(s.clientName || CLIENT_DEFAULT) + '"></label>'
+      + '</div>';
+
+    // 거래처(공급자)
+    html += '<div class="stmt-section-label">공급자 (거래처)</div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>거래처 불러오기</span><select class="stmt-in" id="stmtPartnerSel">' + partnerOpts + '</select></label>'
+      + '<label class="stmt-field"><span>상호</span><input class="stmt-in" id="stmtSupName" value="' + esc(s.supplierName || "") + '" placeholder="예: 뚜레주르 판교대장점"></label>'
+      + '<label class="stmt-field"><span>사업자등록번호</span><input class="stmt-in" id="stmtSupBiz" value="' + esc(s.supplierBizNo || "") + '" placeholder="000-00-00000"></label>'
+      + '<label class="stmt-field"><span>대표자</span><input class="stmt-in" id="stmtSupCeo" value="' + esc(s.supplierCeo || "") + '" placeholder="대표자명"></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>사업장소재지</span><input class="stmt-in" id="stmtSupAddr" value="' + esc(s.supplierAddr || "") + '" placeholder="주소"></label>'
+      + '</div>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="stmtSavePartner" checked> 이 거래처 정보를 저장/갱신해서 다음에 재사용</label>';
+
+    // 품목 테이블
+    html += '<div class="stmt-section-label">품목</div>';
+    html += '<div class="table-wrap"><table class="crew-table stmt-item-table"><thead><tr>'
+      + '<th class="stmt-idx">구분</th><th>품목</th><th>단위</th><th class="num">단가(VAT포함)</th><th class="num">수량</th>'
+      + '<th class="num">공급가액</th><th class="num">부가세액</th><th class="num">합계금액</th><th></th>'
+      + '</tr></thead><tbody id="stmtItemBody">'
+      + s.items.map(stmtItemRowHTML).join("")
+      + '</tbody><tfoot><tr class="stmt-total-row">'
+      + '<td colspan="5">합계</td>'
+      + '<td class="num" id="stmtTotSupply">' + won(t.supply) + '</td>'
+      + '<td class="num" id="stmtTotVat">' + won(t.vat) + '</td>'
+      + '<td class="num" id="stmtTotTotal"><b>' + won(t.total) + '</b></td>'
+      + '<td></td>'
+      + '</tr></tfoot></table></div>';
+    html += '<button class="btn btn--sm" id="stmtAddItemBtn">+ 품목 추가</button>';
+
+    // 메모
+    html += '<label class="stmt-field stmt-field--wide" style="margin-top:16px"><span>메모 (선택)</span>'
+      + '<input class="stmt-in" id="stmtMemo" value="' + esc(s.memo || "") + '" placeholder="비고"></label>';
+
+    html += '</div>'; // .stmt-editor
+
+    view.innerHTML = html;
+    bindStatementEditor();
+  }
+
+  function bindStatementEditor() {
+    stmtOn("#stmtCancelBtn", "click", function () { stmtMode = null; stmtDraft = null; renderStatement(); });
+    stmtOn("#stmtSaveBtn", "click", saveStatement);
+    stmtOn("#stmtAddItemBtn", "click", function () {
+      syncDraftMeta();
+      stmtDraft.items.push({ name: "", unit: "1ea", price: 0, qty: 0 });
+      renderStatementEditor();
+    });
+
+    // 메타 입력
+    ["#stmtDate", "#stmtStatus", "#stmtClient", "#stmtSupName", "#stmtSupBiz", "#stmtSupCeo", "#stmtSupAddr", "#stmtMemo"].forEach(function (sel) {
+      stmtOn(sel, "input", syncDraftMeta);
+    });
+
+    // 거래처 선택 → 자동 채움
+    stmtOn("#stmtPartnerSel", "change", function () {
+      var p = findById(window.PARTNERS || [], this.value);
+      if (!p) return;
+      stmtQ("#stmtSupName").value = p.name;
+      stmtQ("#stmtSupBiz").value = p.bizNo;
+      stmtQ("#stmtSupCeo").value = p.ceo;
+      stmtQ("#stmtSupAddr").value = p.addr;
+      syncDraftMeta();
+    });
+
+    // 품목 입력 → 해당 행/합계만 갱신 (포커스 유지)
+    stmtOnAll(".stmt-item-table input.stmt-in", "input", function () {
+      var i = +this.getAttribute("data-i"), f = this.getAttribute("data-f");
+      var val = (f === "price" || f === "qty") ? (+this.value || 0) : this.value;
+      stmtDraft.items[i][f] = val;
+      if (f === "price" || f === "qty") recomputeStatementRow(i);
+    });
+
+    // 행 삭제
+    stmtOnAll(".stmt-del-item", "click", function () {
+      var i = +this.getAttribute("data-i");
+      syncDraftMeta();
+      stmtDraft.items.splice(i, 1);
+      if (!stmtDraft.items.length) stmtDraft.items.push({ name: "", unit: "1ea", price: 0, qty: 0 });
+      renderStatementEditor();
+    });
+  }
+
+  /** 품목 이외의 상단/거래처/메모 입력값을 draft 로 동기화 (재렌더 전 호출) */
+  function syncDraftMeta() {
+    if (!stmtDraft) return;
+    var g = function (sel) { var el = stmtQ(sel); return el ? el.value : ""; };
+    stmtDraft.date = g("#stmtDate");
+    stmtDraft.status = g("#stmtStatus");
+    stmtDraft.clientName = g("#stmtClient");
+    stmtDraft.supplierName = g("#stmtSupName");
+    stmtDraft.supplierBizNo = g("#stmtSupBiz");
+    stmtDraft.supplierCeo = g("#stmtSupCeo");
+    stmtDraft.supplierAddr = g("#stmtSupAddr");
+    stmtDraft.memo = g("#stmtMemo");
+  }
+
+  function recomputeStatementRow(i) {
+    var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
+    if (row) {
+      var l = stmtLine(stmtDraft.items[i]);
+      row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
+      row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
+      row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
+    }
+    var t = stmtTotals(stmtDraft.items);
+    if (stmtQ("#stmtTotSupply")) stmtQ("#stmtTotSupply").textContent = won(t.supply);
+    if (stmtQ("#stmtTotVat")) stmtQ("#stmtTotVat").textContent = won(t.vat);
+    if (stmtQ("#stmtTotTotal")) stmtQ("#stmtTotTotal").innerHTML = "<b>" + won(t.total) + "</b>";
+  }
+
+  function saveStatement() {
+    syncDraftMeta();
+    var s = stmtDraft;
+    if (!s.supplierName.trim()) { alert("거래처(공급자) 상호를 입력하세요."); if (stmtQ("#stmtSupName")) stmtQ("#stmtSupName").focus(); return; }
+    var validItems = s.items.filter(function (it) { return (it.name || "").trim() || (+it.price) || (+it.qty); });
+    if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
+    s.items = validItems;
+
+    var t = stmtTotals(s.items);
+    s.supplyAmount = t.supply; s.vat = t.vat; s.total = t.total;
+    if (!s.id) s.id = newId("st");
+    if (!s.createdAt) s.createdAt = s.date ? (s.date + "T00:00:00.000Z") : "";
+
+    var rec = normStatement(s);
+    if (!window.STATEMENTS) window.STATEMENTS = [];
+    var idx = indexById(window.STATEMENTS, rec.id);
+    if (idx > -1) window.STATEMENTS[idx] = rec; else window.STATEMENTS.push(rec);
+
+    saveToSheet({
+      type: "statement", action: (idx > -1 ? "update" : "add"),
+      id: rec.id, date: rec.date, docNo: rec.docNo,
+      supplierName: rec.supplierName, supplierBizNo: rec.supplierBizNo,
+      supplierCeo: rec.supplierCeo, supplierAddr: rec.supplierAddr,
+      clientName: rec.clientName, items: JSON.stringify(rec.items),
+      supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
+      memo: rec.memo, status: rec.status, createdAt: rec.createdAt,
+    });
+
+    // 거래처 저장/갱신
+    if (stmtQ("#stmtSavePartner") && stmtQ("#stmtSavePartner").checked) {
+      upsertPartner({ name: rec.supplierName, bizNo: rec.supplierBizNo, ceo: rec.supplierCeo, addr: rec.supplierAddr });
+    }
+
+    stmtDraft = null;
+    stmtMode = "view"; stmtEditId = rec.id;
+    renderStatement();
+  }
+
+  function upsertPartner(p) {
+    if (!p.name) return;
+    if (!window.PARTNERS) window.PARTNERS = [];
+    var existing = null;
+    for (var i = 0; i < window.PARTNERS.length; i++) {
+      if (window.PARTNERS[i].name === p.name) { existing = window.PARTNERS[i]; break; }
+    }
+    var rec = normPartner({
+      id: existing ? existing.id : newId("p"),
+      name: p.name, bizNo: p.bizNo, ceo: p.ceo, addr: p.addr,
+    });
+    if (existing) { var ix = indexById(window.PARTNERS, existing.id); window.PARTNERS[ix] = rec; }
+    else window.PARTNERS.push(rec);
+    saveToSheet({ type: "partner", action: existing ? "update" : "add", id: rec.id, name: rec.name, bizNo: rec.bizNo, ceo: rec.ceo, addr: rec.addr });
+  }
+
+  function deleteStatement(id) {
+    var s = findById(window.STATEMENTS || [], id);
+    if (!s) return;
+    if (!confirm((s.date || "") + " · " + (s.supplierName || "") + " 명세서를 삭제할까요?")) return;
+    window.STATEMENTS = (window.STATEMENTS || []).filter(function (x) { return String(x.id) !== String(id); });
+    saveToSheet({ type: "statement", action: "delete", id: id });
+    stmtMode = null; renderStatement();
+  }
+
+  /** 이미지와 동일한 거래명세서 레이아웃 (보기/인쇄 공용) */
+  function statementSheetHTML(s) {
+    var rows = "";
+    var maxRows = Math.max(s.items.length, 8); // 빈 줄 포함(이미지처럼)
+    for (var i = 0; i < maxRows; i++) {
+      var it = s.items[i];
+      if (it) {
+        var l = stmtLine(it);
+        rows += '<tr>'
+          + '<td class="c">' + (i + 1) + '</td>'
+          + '<td class="l">' + esc(it.name || "") + '</td>'
+          + '<td class="c">' + esc(it.unit || "") + '</td>'
+          + '<td class="r">' + won(it.price) + '</td>'
+          + '<td class="r">' + won(it.qty) + '</td>'
+          + '<td class="r">' + won(l.supply) + '</td>'
+          + '<td class="r">' + won(l.vat) + '</td>'
+          + '<td class="r">' + won(l.total) + '</td>'
+          + '</tr>';
+      } else {
+        rows += '<tr><td class="c">&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      }
+    }
+    return '<div class="stmt-sheet" id="stmtPrintArea">'
+      + '<div class="stmt-sheet__title">거래명세서</div>'
+      + '<table class="stmt-sheet__head"><tbody>'
+        + '<tr>'
+          + '<th class="k">날짜</th><td class="v vc">' + esc(s.date || "") + '</td>'
+          + '<td class="sup" rowspan="3">공<br>급<br>자</td>'
+          + '<th class="k">사업자<br>등록번호</th><td class="v" colspan="1">' + esc(s.supplierBizNo || "") + '</td>'
+          + '<th class="k">대표자</th><td class="v vc">' + esc(s.supplierCeo || "") + '</td>'
+        + '</tr>'
+        + '<tr>'
+          + '<td class="v vc client" rowspan="2">' + esc(s.clientName || "") + '</td>'
+          + '<th class="k">상호</th><td class="v" colspan="3">' + esc(s.supplierName || "") + '</td>'
+        + '</tr>'
+        + '<tr>'
+          + '<th class="k">사업장<br>소재지</th><td class="v" colspan="3">' + esc(s.supplierAddr || "") + '</td>'
+        + '</tr>'
+      + '</tbody></table>'
+      + '<table class="stmt-sheet__sum"><tbody>'
+        + '<tr><th class="grp" colspan="3">과세</th><th class="grp grp--total" rowspan="1">합계</th></tr>'
+        + '<tr><th class="sk">공급가액</th><th class="sk">부가세</th><th class="sk">합계</th><td class="st r" rowspan="2">' + won(s.total) + '</td></tr>'
+        + '<tr><td class="r">' + won(s.supplyAmount) + '</td><td class="r">' + won(s.vat) + '</td><td class="r blue">' + won(s.total) + '</td></tr>'
+      + '</tbody></table>'
+      + '<table class="stmt-sheet__items"><thead><tr>'
+        + '<th>구분</th><th>품목</th><th>단위</th><th>단가</th><th>수량</th><th>공급가액</th><th>부가세액</th><th>합계금액</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody>'
+      + '<tfoot><tr class="stmt-sheet__foot">'
+        + '<td colspan="5">합계</td>'
+        + '<td class="r">' + won(s.supplyAmount) + '</td>'
+        + '<td class="r">' + won(s.vat) + '</td>'
+        + '<td class="r">' + won(s.total) + '</td>'
+      + '</tr></tfoot></table>'
+      + (s.memo ? '<div class="stmt-sheet__memo">비고 : ' + esc(s.memo) + '</div>' : '')
+      + '</div>';
+  }
+
+  function renderStatementView(s) {
+    var html = "";
+    html += '<div class="page-head stmt-actions">'
+      + '<div><p class="eyebrow">Billing / Statement</p>'
+      + '<h2>거래명세서 보기</h2>'
+      + '<p class="sub">' + esc(s.date || "") + ' · ' + esc(s.supplierName || "") + '</p></div>'
+      + '<div class="page-head__actions">'
+        + '<button class="btn" id="stmtBackBtn">목록으로</button>'
+        + '<button class="btn" id="stmtEditBtn2">수정</button>'
+        + '<button class="btn btn--primary" id="stmtPrintBtn">🖨 인쇄 / PDF</button>'
+      + '</div>'
+      + '</div>';
+    html += statementSheetHTML(s);
+    view.innerHTML = html;
+
+    stmtOn("#stmtBackBtn", "click", function () { stmtMode = null; renderStatement(); });
+    stmtOn("#stmtEditBtn2", "click", function () { openStatementEditor(s.id); });
+    stmtOn("#stmtPrintBtn", "click", function () { window.print(); });
+  }
+
   var VIEWS = {
+    statement:   { title: "BILLING", render: renderStatement },
     dashboard:   { title: "DASHBOARD", render: renderDashboard },
     crew:        { title: "CREW", render: renderCrew },
     interview:   { title: "INTERVIEW", render: renderInterview },
@@ -4936,6 +5375,8 @@
 
   function go(name) {
     if (!VIEWS[name]) name = "schedule";
+    // 사이드바로 청구관리 진입 시 항상 목록부터 (이전 보기/편집 상태 초기화)
+    if (name === "statement") { stmtMode = null; stmtEditId = null; stmtDraft = null; }
     navItems.forEach(function (a) { a.classList.toggle("is-active", a.getAttribute("data-view") === name); });
     viewTitle.textContent = VIEWS[name].title;
     if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
@@ -5205,7 +5646,7 @@
       }
 
       var crewRowEl = ev.target.closest(".crew-table tbody tr[data-id]");
-      if (crewRowEl) { crewDetailId = crewRowEl.getAttribute("data-id"); crewDetailTab = "basic"; renderCrew(); return; }
+      if (crewRowEl && !crewRowEl.closest(".stmt-list, .stmt-item-table")) { crewDetailId = crewRowEl.getAttribute("data-id"); crewDetailTab = "basic"; renderCrew(); return; }
 
       var crewBackBtn = ev.target.closest("#crewBackBtn");
       if (crewBackBtn) { crewDetailId = null; renderCrew(); return; }

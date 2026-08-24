@@ -137,29 +137,39 @@ window.EDUCATION = [
     date:"2026-05-14", dueDate:"", status:"완료", provider:"외부 강사", hours:"2시간", note:"" },
 ];
 
-/* --- 거래처(공급자) : 시트 "partners" (헤더 = id,name,bizNo,ceo,addr)
-   명세서 등록 시 거래처를 선택하면 사업자번호·대표자·주소가 자동 입력됩니다. --- */
+/* --- 발행처(공급자) : 주식회사 링키지랩 (고정) ---
+   전화·이메일·입금계좌는 명세서 편집 화면에서 입력하면 다음 명세서에 자동으로 채워집니다.
+   logo : assets/logo.png 에 파일을 넣으면 자동으로 표시됩니다(없으면 회사명 텍스트). */
+window.COMPANY = {
+  name: "주식회사 링키지랩",
+  bizNo: "235-88-00278",
+  ceo: "박대영",
+  addr: "서울특별시 성동구 성수동2가 314-37번지 3층",
+  logo: "./assets/logo.png",
+};
+
+/* --- 거래처(고객) : 시트 "partners" (헤더 = id,name,contact,bizNo,ceo,addr)
+   name=고객명(상호), contact=담당자명. 명세서 등록 시 선택하면 자동 입력됩니다. --- */
 window.PARTNERS = [
-  { id:"p1", name:"뚜레주르 판교대장점", bizNo:"506-36-01205", ceo:"이혁진", addr:"경기도 성남시 분당구 판교대장로7길 6-32, 1층(대장동)" },
+  { id:"p1", name:"카카오페이", contact:"김담당", bizNo:"", ceo:"", addr:"" },
 ];
 
 /* --- 거래명세서 : 시트 "statements"
-   (헤더 = id,date,docNo,supplierName,supplierBizNo,supplierCeo,supplierAddr,clientName,items,supplyAmount,vat,total,memo,status,createdAt)
-   items : 품목 배열의 JSON 문자열. 각 품목 = { name, unit, price(단가·부가세포함), qty }
+   (헤더 = id,docNo,billDate,dueDate,customerName,contactName,bankName,accountNo,accountHolder,phone,email,items,supplyAmount,vat,total,memo,status,createdAt)
+   공급자 = 주식회사 링키지랩(고정) / items = 품목 배열 JSON. 각 품목 = { name, price(단가·부가세별도), qty }
    status : 작성 | 확정
-   계산규칙(이미지 기준) : 단가는 부가세 포함가.
-     합계금액 = round(단가 × 수량)  /  공급가액 = round(합계 ÷ 1.1)  /  부가세액 = 합계 − 공급가액 --- */
+   계산규칙 : 단가는 부가세 별도.
+     공급가액 = round(단가 × 수량)  /  세액 = round(공급가액 × 0.1)  /  합계 = 공급가액 + 세액 --- */
 window.STATEMENTS = [
-  { id:"st1", date:"2024-07-02", docNo:"",
-    supplierName:"뚜레주르 판교대장점", supplierBizNo:"506-36-01205", supplierCeo:"이혁진",
-    supplierAddr:"경기도 성남시 분당구 판교대장로7길 6-32, 1층(대장동)",
-    clientName:"주식회사 링키지랩 貴下",
+  { id:"st1", docNo:"25010001", billDate:"2025-01-14", dueDate:"2025-01-30",
+    customerName:"카카오페이", contactName:"김담당",
+    bankName:"", accountNo:"", accountHolder:"주식회사 링키지랩", phone:"", email:"",
     items:[
-      { name:"데일리 우유식빵",       unit:"1ea", price:3500, qty:408 },
-      { name:"바로굽는토스트식빵",     unit:"1ea", price:3900, qty:420 },
+      { name:"스낵 큐레이션 (1월)", price:1500000, qty:1 },
+      { name:"운영 관리비",         price:500000,  qty:1 },
     ],
-    supplyAmount:2787273, vat:278727, total:3066000,
-    memo:"", status:"확정", createdAt:"2024-07-02T00:00:00.000Z" },
+    supplyAmount:2000000, vat:200000, total:2200000,
+    memo:"", status:"확정", createdAt:"2025-01-14T00:00:00.000Z" },
 ];
 
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */

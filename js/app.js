@@ -143,10 +143,11 @@
     };
   }
 
+  /* 거래처 = 고객(공급받는자). name=고객명(상호), contact=담당자명 */
   function normPartner(r) {
     return {
-      id: r.id || "", name: r.name || "", bizNo: r.bizNo || "",
-      ceo: r.ceo || "", addr: r.addr || "",
+      id: r.id || "", name: r.name || "", contact: r.contact || "",
+      bizNo: r.bizNo || "", ceo: r.ceo || "", addr: r.addr || "",
     };
   }
 
@@ -158,14 +159,15 @@
   }
   function normStatement(r) {
     var items = parseItems_(r.items).map(function (it) {
-      return { name: it.name || "", unit: it.unit || "", price: +it.price || 0, qty: +it.qty || 0 };
+      return { name: it.name || "", price: +it.price || 0, qty: +it.qty || 0 };
     });
     var t = stmtTotals(items);
     return {
-      id: r.id || "", date: fmtDay(r.date), docNo: r.docNo || "",
-      supplierName: r.supplierName || "", supplierBizNo: r.supplierBizNo || "",
-      supplierCeo: r.supplierCeo || "", supplierAddr: r.supplierAddr || "",
-      clientName: r.clientName || "주식회사 링키지랩 貴下",
+      id: r.id || "", docNo: r.docNo || "",
+      billDate: fmtDay(r.billDate || r.date), dueDate: fmtDay(r.dueDate),
+      customerName: r.customerName || "", contactName: r.contactName || "",
+      bankName: r.bankName || "", accountNo: r.accountNo || "", accountHolder: r.accountHolder || "",
+      phone: r.phone || "", email: r.email || "",
       items: items,
       supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : t.supply,
       vat: r.vat != null && r.vat !== "" ? +r.vat : t.vat,
@@ -175,12 +177,12 @@
     };
   }
 
-  /* ---------- 거래명세서 계산 (단가 = 부가세 포함가) ----------
-     합계금액 = round(단가 × 수량) / 공급가액 = round(합계 ÷ 1.1) / 부가세액 = 합계 − 공급가액 */
+  /* ---------- 거래명세서 계산 (공급자=링키지랩, 단가 = 부가세 별도) ----------
+     공급가액 = round(단가 × 수량) / 세액 = round(공급가액 × 0.1) / 합계 = 공급가액 + 세액 */
   function stmtLine(it) {
-    var lineTotal = Math.round((+it.price || 0) * (+it.qty || 0));
-    var supply = Math.round(lineTotal / 1.1);
-    return { total: lineTotal, supply: supply, vat: lineTotal - supply };
+    var supply = Math.round((+it.price || 0) * (+it.qty || 0));
+    var vat = Math.round(supply * 0.1);
+    return { supply: supply, vat: vat, total: supply + vat };
   }
   function stmtTotals(items) {
     return (items || []).reduce(function (acc, it) {
@@ -191,6 +193,25 @@
   }
   /** 천 단위 콤마 (원화) */
   function won(n) { return (Math.round(+n || 0)).toLocaleString("en-US"); }
+
+  /* 발행처(공급자) = 주식회사 링키지랩 — 고정 정보 */
+  function company() {
+    var base = (window.COMPANY || {});
+    return {
+      name: base.name || "주식회사 링키지랩",
+      bizNo: base.bizNo || "235-88-00278",
+      ceo: base.ceo || "박대영",
+      addr: base.addr || "서울특별시 성동구 성수동2가 314-37번지 3층",
+      logo: base.logo || "./assets/logo.png",
+    };
+  }
+  /* 최근 입력한 연락처·입금계좌를 기억해 다음 명세서에 자동 채움 */
+  function loadCompanyExtra() {
+    try { return JSON.parse(localStorage.getItem("sg-company-extra") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveCompanyExtra(e) {
+    try { localStorage.setItem("sg-company-extra", JSON.stringify(e)); } catch (x) {}
+  }
 
   /** 입사일 기준 근속기간을 "N년 M개월" 형태로 계산 */
   function tenureOf(iso) {
@@ -4976,7 +4997,6 @@
   var stmtMode = null;      // null=목록 | "edit"=편집기 | "view"=보기
   var stmtEditId = null;    // 편집/보기 대상 id ("" = 신규)
   var stmtDraft = null;     // 편집 중 임시 명세서 객체
-  var CLIENT_DEFAULT = "주식회사 링키지랩 貴下";
 
   function stmtQ(sel) { return view.querySelector(sel); }
   function stmtOn(sel, evt, fn) { var el = view.querySelector(sel); if (el) el.addEventListener(evt, fn); }
@@ -4994,10 +5014,10 @@
 
   function renderStatementList() {
     var list = (window.STATEMENTS || []).slice().sort(function (a, b) {
-      return (b.date || "") < (a.date || "") ? -1 : (b.date || "") > (a.date || "") ? 1 : 0;
+      return (b.billDate || "") < (a.billDate || "") ? -1 : (b.billDate || "") > (a.billDate || "") ? 1 : 0;
     });
     var yr = d(TODAY).getFullYear();
-    var thisYear = list.filter(function (s) { return (s.date || "").slice(0, 4) === String(yr); });
+    var thisYear = list.filter(function (s) { return (s.billDate || "").slice(0, 4) === String(yr); });
     var sumTotal = thisYear.reduce(function (a, s) { return a + (+s.total || 0); }, 0);
 
     var html = "";
@@ -5026,8 +5046,9 @@
         var stCls = s.status === "확정" ? "badge--active" : "badge--leave";
         return '<tr class="board__row" data-st-id="' + esc(s.id) + '">'
           + '<td class="board__no">' + (list.length - i) + '</td>'
-          + '<td class="board__date mono">' + esc(s.date || "—") + '</td>'
-          + '<td class="board__supplier"><b>' + esc(s.supplierName || "—") + '</b></td>'
+          + '<td class="board__no mono">' + esc(s.docNo || "—") + '</td>'
+          + '<td class="board__date mono">' + esc(s.billDate || "—") + '</td>'
+          + '<td class="board__supplier"><b>' + esc(s.customerName || "—") + '</b>' + (s.contactName ? ' <span class="muted">(' + esc(s.contactName) + ')</span>' : '') + '</td>'
           + '<td class="board__prod">' + esc(first) + more + '</td>'
           + '<td class="board__amt mono">' + won(s.supplyAmount) + '</td>'
           + '<td class="board__amt mono">' + won(s.vat) + '</td>'
@@ -5041,7 +5062,7 @@
       }).join("");
       html += '<div class="board">'
         + '<div class="board__scroll"><table class="board__table board__table--stmt"><thead><tr>'
-        + '<th>번호</th><th>날짜</th><th>거래처(공급자)</th><th>품목</th><th class="num">공급가액</th><th class="num">부가세</th><th class="num">합계금액</th><th>상태</th><th></th>'
+        + '<th>번호</th><th>문서번호</th><th>청구일</th><th>고객명</th><th>품목</th><th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th>상태</th><th></th>'
         + '</tr></thead><tbody>' + body + '</tbody></table></div>'
         + '</div>';
     }
@@ -5056,15 +5077,33 @@
     stmtOnAll('.board__act button[data-act="del"]', "click", function () { deleteStatement(this.getAttribute("data-id")); });
   }
 
+  /** 문서번호 자동 생성 : YYMM + 4자리 순번 (예: 25010001) */
+  function genDocNo() {
+    var prefix = TODAY.slice(2, 4) + TODAY.slice(5, 7); // YYMM
+    var max = 0;
+    (window.STATEMENTS || []).forEach(function (s) {
+      var dn = String(s.docNo || "");
+      if (dn.slice(0, 4) === prefix) { var n = +dn.slice(4); if (n > max) max = n; }
+    });
+    return prefix + ("000" + (max + 1)).slice(-4);
+  }
+
   function openStatementEditor(id) {
     var src = id ? findById(window.STATEMENTS || [], id) : null;
-    stmtDraft = src ? JSON.parse(JSON.stringify(src)) : {
-      id: "", date: TODAY, docNo: "",
-      supplierName: "", supplierBizNo: "", supplierCeo: "", supplierAddr: "",
-      clientName: CLIENT_DEFAULT,
-      items: [{ name: "", unit: "1ea", price: 0, qty: 0 }],
-      memo: "", status: "작성",
-    };
+    if (src) {
+      stmtDraft = JSON.parse(JSON.stringify(src));
+    } else {
+      var extra = loadCompanyExtra();
+      stmtDraft = {
+        id: "", docNo: genDocNo(), billDate: TODAY, dueDate: "",
+        customerName: "", contactName: "",
+        bankName: extra.bankName || "", accountNo: extra.accountNo || "",
+        accountHolder: extra.accountHolder || company().name,
+        phone: extra.phone || "", email: extra.email || "",
+        items: [{ name: "", price: 0, qty: 0 }],
+        memo: "", status: "작성",
+      };
+    }
     stmtEditId = id || "";
     stmtMode = "edit";
     renderStatement();
@@ -5075,7 +5114,6 @@
     return '<tr data-i="' + i + '">'
       + '<td class="stmt-idx">' + (i + 1) + '</td>'
       + '<td><input class="stmt-in" data-f="name" data-i="' + i + '" value="' + esc(it.name || "") + '" placeholder="품목명"></td>'
-      + '<td><input class="stmt-in stmt-in--sm" data-f="unit" data-i="' + i + '" value="' + esc(it.unit || "") + '" placeholder="1ea"></td>'
       + '<td><input class="stmt-in stmt-in--num" data-f="price" data-i="' + i + '" type="number" min="0" value="' + (it.price || "") + '" placeholder="0"></td>'
       + '<td><input class="stmt-in stmt-in--num stmt-in--qty" data-f="qty" data-i="' + i + '" type="number" min="0" value="' + (it.qty || "") + '" placeholder="0"></td>'
       + '<td class="num stmt-cell-supply">' + won(l.supply) + '</td>'
@@ -5089,16 +5127,17 @@
     var s = stmtDraft;
     var t = stmtTotals(s.items);
     var partners = window.PARTNERS || [];
-    var curPartner = null;
-    for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.supplierName) { curPartner = partners[pi]; break; } }
-    var partnerOpts = '<option value="">거래처 선택 / 직접입력</option>'
-      + partners.map(function (p) { return '<option value="' + esc(p.id) + '"' + (curPartner && curPartner.id === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join("");
+    var curCust = null;
+    for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.customerName) { curCust = partners[pi]; break; } }
+    var custOpts = '<option value="">거래처 선택 / 직접입력</option>'
+      + partners.map(function (p) { return '<option value="' + esc(p.id) + '"' + (curCust && curCust.id === p.id ? ' selected' : '') + '>' + esc(p.name) + (p.contact ? ' (' + esc(p.contact) + ')' : '') + '</option>'; }).join("");
+    var co = company();
 
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Billing / Statement</p>'
       + '<h2>' + (stmtEditId ? "명세서 수정" : "명세서 등록") + '</h2>'
-      + '<p class="sub">단가는 <b>부가세 포함가</b>로 입력하세요. 공급가액·부가세·합계는 자동 계산됩니다.</p></div>'
+      + '<p class="sub">공급자는 <b>' + esc(co.name) + '</b>. 단가는 <b>부가세 별도</b>로 입력하면 공급가액·세액·합계가 자동 계산됩니다.</p></div>'
       + '<div class="page-head__actions">'
         + '<button class="btn" id="stmtCancelBtn">목록으로</button>'
         + '<button class="btn btn--primary" id="stmtSaveBtn">저장</button>'
@@ -5107,35 +5146,45 @@
 
     html += '<div class="stmt-editor">';
 
-    // 상단 메타
+    // 문서 정보
+    html += '<div class="stmt-section-label">문서 정보</div>';
     html += '<div class="stmt-form-grid">'
-      + '<label class="stmt-field"><span>날짜</span><input class="stmt-in" id="stmtDate" type="date" value="' + esc(s.date || "") + '"></label>'
+      + '<label class="stmt-field"><span>문서번호</span><input class="stmt-in" id="stmtDocNo" value="' + esc(s.docNo || "") + '" placeholder="25010001"></label>'
+      + '<label class="stmt-field"><span>청구일</span><input class="stmt-in" id="stmtBillDate" type="date" value="' + esc(s.billDate || "") + '"></label>'
+      + '<label class="stmt-field"><span>납부기한</span><input class="stmt-in" id="stmtDueDate" type="date" value="' + esc(s.dueDate || "") + '"></label>'
       + '<label class="stmt-field"><span>상태</span><select class="stmt-in" id="stmtStatus">'
         + ['작성', '확정'].map(function (o) { return '<option' + (s.status === o ? ' selected' : '') + '>' + o + '</option>'; }).join("")
       + '</select></label>'
-      + '<label class="stmt-field"><span>공급받는자 (상호)</span><input class="stmt-in" id="stmtClient" value="' + esc(s.clientName || CLIENT_DEFAULT) + '"></label>'
       + '</div>';
 
-    // 거래처(공급자)
-    html += '<div class="stmt-section-label">공급자 (거래처) <span class="stmt-hint">거래처 관리에 등록한 사업장을 선택하면 자동 입력됩니다</span></div>';
+    // 고객 정보
+    html += '<div class="stmt-section-label">고객 정보 (공급받는자) <span class="stmt-hint">거래처 관리에 등록한 고객을 선택하면 자동 입력됩니다</span></div>';
     html += '<div class="stmt-form-grid">'
-      + '<label class="stmt-field stmt-field--wide"><span>거래처 선택</span><select class="stmt-in" id="stmtPartnerSel">' + partnerOpts + '</select></label>'
-      + '<label class="stmt-field"><span>상호</span><input class="stmt-in" id="stmtSupName" value="' + esc(s.supplierName || "") + '" placeholder="예: 뚜레주르 판교대장점"></label>'
-      + '<label class="stmt-field"><span>사업자등록번호</span><input class="stmt-in" id="stmtSupBiz" value="' + esc(s.supplierBizNo || "") + '" placeholder="000-00-00000"></label>'
-      + '<label class="stmt-field"><span>대표자</span><input class="stmt-in" id="stmtSupCeo" value="' + esc(s.supplierCeo || "") + '" placeholder="대표자명"></label>'
-      + '<label class="stmt-field stmt-field--wide"><span>사업장소재지</span><input class="stmt-in" id="stmtSupAddr" value="' + esc(s.supplierAddr || "") + '" placeholder="주소"></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>거래처 선택</span><select class="stmt-in" id="stmtCustSel">' + custOpts + '</select></label>'
+      + '<label class="stmt-field"><span>고객명 (상호)</span><input class="stmt-in" id="stmtCustName" value="' + esc(s.customerName || "") + '" placeholder="예: 카카오페이"></label>'
+      + '<label class="stmt-field"><span>담당자명</span><input class="stmt-in" id="stmtContact" value="' + esc(s.contactName || "") + '" placeholder="담당자"></label>'
       + '</div>';
-    html += '<label class="stmt-partner-save"><input type="checkbox" id="stmtSavePartner" checked> 이 거래처 정보를 저장/갱신해서 다음에 재사용</label>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="stmtSaveCust" checked> 이 고객 정보를 거래처 관리에 저장/갱신</label>';
+
+    // 입금 계좌 · 발행처 연락처
+    html += '<div class="stmt-section-label">입금 계좌 · 발행처 연락처 <span class="stmt-hint">한 번 입력하면 다음 명세서에 자동으로 채워집니다</span></div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>은행명</span><input class="stmt-in" id="stmtBank" value="' + esc(s.bankName || "") + '" placeholder="예: 국민은행"></label>'
+      + '<label class="stmt-field"><span>계좌번호</span><input class="stmt-in" id="stmtAccNo" value="' + esc(s.accountNo || "") + '" placeholder="000-00-000000"></label>'
+      + '<label class="stmt-field"><span>예금주</span><input class="stmt-in" id="stmtAccHolder" value="' + esc(s.accountHolder || "") + '" placeholder="' + esc(co.name) + '"></label>'
+      + '<label class="stmt-field"><span>전화번호</span><input class="stmt-in" id="stmtPhone" value="' + esc(s.phone || "") + '" placeholder="02-0000-0000"></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>이메일</span><input class="stmt-in" id="stmtEmail" value="' + esc(s.email || "") + '" placeholder="billing@linkagelab.co.kr"></label>'
+      + '</div>';
 
     // 품목 테이블
-    html += '<div class="stmt-section-label">품목</div>';
+    html += '<div class="stmt-section-label">품목 <span class="stmt-hint">단가는 부가세 별도 금액</span></div>';
     html += '<div class="table-wrap"><table class="crew-table stmt-item-table"><thead><tr>'
-      + '<th class="stmt-idx">구분</th><th>품목</th><th>단위</th><th class="num">단가(VAT포함)</th><th class="num">수량</th>'
-      + '<th class="num">공급가액</th><th class="num">부가세액</th><th class="num">합계금액</th><th></th>'
+      + '<th class="stmt-idx">구분</th><th>품목</th><th class="num">단가</th><th class="num">수량</th>'
+      + '<th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th></th>'
       + '</tr></thead><tbody id="stmtItemBody">'
       + s.items.map(stmtItemRowHTML).join("")
       + '</tbody><tfoot><tr class="stmt-total-row">'
-      + '<td colspan="5">합계</td>'
+      + '<td colspan="4">합계</td>'
       + '<td class="num" id="stmtTotSupply">' + won(t.supply) + '</td>'
       + '<td class="num" id="stmtTotVat">' + won(t.vat) + '</td>'
       + '<td class="num" id="stmtTotTotal"><b>' + won(t.total) + '</b></td>'
@@ -5143,9 +5192,9 @@
       + '</tr></tfoot></table></div>';
     html += '<button class="btn btn--sm" id="stmtAddItemBtn">+ 품목 추가</button>';
 
-    // 메모
-    html += '<label class="stmt-field stmt-field--wide" style="margin-top:16px"><span>메모 (선택)</span>'
-      + '<input class="stmt-in" id="stmtMemo" value="' + esc(s.memo || "") + '" placeholder="비고"></label>';
+    // 비고
+    html += '<label class="stmt-field stmt-field--wide" style="margin-top:16px"><span>비고 (선택)</span>'
+      + '<input class="stmt-in" id="stmtMemo" value="' + esc(s.memo || "") + '" placeholder="비고를 입력해주세요."></label>';
 
     html += '</div>'; // .stmt-editor
 
@@ -5158,23 +5207,22 @@
     stmtOn("#stmtSaveBtn", "click", saveStatement);
     stmtOn("#stmtAddItemBtn", "click", function () {
       syncDraftMeta();
-      stmtDraft.items.push({ name: "", unit: "1ea", price: 0, qty: 0 });
+      stmtDraft.items.push({ name: "", price: 0, qty: 0 });
       renderStatementEditor();
     });
 
     // 메타 입력
-    ["#stmtDate", "#stmtStatus", "#stmtClient", "#stmtSupName", "#stmtSupBiz", "#stmtSupCeo", "#stmtSupAddr", "#stmtMemo"].forEach(function (sel) {
+    ["#stmtDocNo", "#stmtBillDate", "#stmtDueDate", "#stmtStatus", "#stmtCustName", "#stmtContact",
+     "#stmtBank", "#stmtAccNo", "#stmtAccHolder", "#stmtPhone", "#stmtEmail", "#stmtMemo"].forEach(function (sel) {
       stmtOn(sel, "input", syncDraftMeta);
     });
 
-    // 거래처 선택 → 자동 채움
-    stmtOn("#stmtPartnerSel", "change", function () {
+    // 고객(거래처) 선택 → 자동 채움
+    stmtOn("#stmtCustSel", "change", function () {
       var p = findById(window.PARTNERS || [], this.value);
       if (!p) return;
-      stmtQ("#stmtSupName").value = p.name;
-      stmtQ("#stmtSupBiz").value = p.bizNo;
-      stmtQ("#stmtSupCeo").value = p.ceo;
-      stmtQ("#stmtSupAddr").value = p.addr;
+      stmtQ("#stmtCustName").value = p.name;
+      stmtQ("#stmtContact").value = p.contact || "";
       syncDraftMeta();
     });
 
@@ -5191,22 +5239,26 @@
       var i = +this.getAttribute("data-i");
       syncDraftMeta();
       stmtDraft.items.splice(i, 1);
-      if (!stmtDraft.items.length) stmtDraft.items.push({ name: "", unit: "1ea", price: 0, qty: 0 });
+      if (!stmtDraft.items.length) stmtDraft.items.push({ name: "", price: 0, qty: 0 });
       renderStatementEditor();
     });
   }
 
-  /** 품목 이외의 상단/거래처/메모 입력값을 draft 로 동기화 (재렌더 전 호출) */
+  /** 품목 이외의 입력값을 draft 로 동기화 (재렌더 전 호출) */
   function syncDraftMeta() {
     if (!stmtDraft) return;
     var g = function (sel) { var el = stmtQ(sel); return el ? el.value : ""; };
-    stmtDraft.date = g("#stmtDate");
+    stmtDraft.docNo = g("#stmtDocNo");
+    stmtDraft.billDate = g("#stmtBillDate");
+    stmtDraft.dueDate = g("#stmtDueDate");
     stmtDraft.status = g("#stmtStatus");
-    stmtDraft.clientName = g("#stmtClient");
-    stmtDraft.supplierName = g("#stmtSupName");
-    stmtDraft.supplierBizNo = g("#stmtSupBiz");
-    stmtDraft.supplierCeo = g("#stmtSupCeo");
-    stmtDraft.supplierAddr = g("#stmtSupAddr");
+    stmtDraft.customerName = g("#stmtCustName");
+    stmtDraft.contactName = g("#stmtContact");
+    stmtDraft.bankName = g("#stmtBank");
+    stmtDraft.accountNo = g("#stmtAccNo");
+    stmtDraft.accountHolder = g("#stmtAccHolder");
+    stmtDraft.phone = g("#stmtPhone");
+    stmtDraft.email = g("#stmtEmail");
     stmtDraft.memo = g("#stmtMemo");
   }
 
@@ -5227,7 +5279,7 @@
   function saveStatement() {
     syncDraftMeta();
     var s = stmtDraft;
-    if (!s.supplierName.trim()) { alert("거래처(공급자) 상호를 입력하세요."); if (stmtQ("#stmtSupName")) stmtQ("#stmtSupName").focus(); return; }
+    if (!s.customerName.trim()) { alert("고객명을 입력하세요."); if (stmtQ("#stmtCustName")) stmtQ("#stmtCustName").focus(); return; }
     var validItems = s.items.filter(function (it) { return (it.name || "").trim() || (+it.price) || (+it.qty); });
     if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
     s.items = validItems;
@@ -5235,7 +5287,7 @@
     var t = stmtTotals(s.items);
     s.supplyAmount = t.supply; s.vat = t.vat; s.total = t.total;
     if (!s.id) s.id = newId("st");
-    if (!s.createdAt) s.createdAt = s.date ? (s.date + "T00:00:00.000Z") : "";
+    if (!s.createdAt) s.createdAt = s.billDate ? (s.billDate + "T00:00:00.000Z") : "";
 
     var rec = normStatement(s);
     if (!window.STATEMENTS) window.STATEMENTS = [];
@@ -5244,17 +5296,21 @@
 
     saveToSheet({
       type: "statement", action: (idx > -1 ? "update" : "add"),
-      id: rec.id, date: rec.date, docNo: rec.docNo,
-      supplierName: rec.supplierName, supplierBizNo: rec.supplierBizNo,
-      supplierCeo: rec.supplierCeo, supplierAddr: rec.supplierAddr,
-      clientName: rec.clientName, items: JSON.stringify(rec.items),
+      id: rec.id, docNo: rec.docNo, billDate: rec.billDate, dueDate: rec.dueDate,
+      customerName: rec.customerName, contactName: rec.contactName,
+      bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
+      phone: rec.phone, email: rec.email,
+      items: JSON.stringify(rec.items),
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
       memo: rec.memo, status: rec.status, createdAt: rec.createdAt,
     });
 
-    // 거래처 저장/갱신
-    if (stmtQ("#stmtSavePartner") && stmtQ("#stmtSavePartner").checked) {
-      upsertPartner({ name: rec.supplierName, bizNo: rec.supplierBizNo, ceo: rec.supplierCeo, addr: rec.supplierAddr });
+    // 연락처·입금계좌 기억
+    saveCompanyExtra({ bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder, phone: rec.phone, email: rec.email });
+
+    // 고객(거래처) 저장/갱신
+    if (stmtQ("#stmtSaveCust") && stmtQ("#stmtSaveCust").checked) {
+      upsertPartner({ name: rec.customerName, contact: rec.contactName });
     }
 
     stmtDraft = null;
@@ -5271,34 +5327,36 @@
     }
     var rec = normPartner({
       id: existing ? existing.id : newId("p"),
-      name: p.name, bizNo: p.bizNo, ceo: p.ceo, addr: p.addr,
+      name: p.name, contact: p.contact != null ? p.contact : (existing ? existing.contact : ""),
+      bizNo: p.bizNo != null ? p.bizNo : (existing ? existing.bizNo : ""),
+      ceo: p.ceo != null ? p.ceo : (existing ? existing.ceo : ""),
+      addr: p.addr != null ? p.addr : (existing ? existing.addr : ""),
     });
     if (existing) { var ix = indexById(window.PARTNERS, existing.id); window.PARTNERS[ix] = rec; }
     else window.PARTNERS.push(rec);
-    saveToSheet({ type: "partner", action: existing ? "update" : "add", id: rec.id, name: rec.name, bizNo: rec.bizNo, ceo: rec.ceo, addr: rec.addr });
+    saveToSheet({ type: "partner", action: existing ? "update" : "add", id: rec.id, name: rec.name, contact: rec.contact, bizNo: rec.bizNo, ceo: rec.ceo, addr: rec.addr });
   }
 
   function deleteStatement(id) {
     var s = findById(window.STATEMENTS || [], id);
     if (!s) return;
-    if (!confirm((s.date || "") + " · " + (s.supplierName || "") + " 명세서를 삭제할까요?")) return;
+    if (!confirm((s.billDate || "") + " · " + (s.customerName || "") + " 명세서를 삭제할까요?")) return;
     window.STATEMENTS = (window.STATEMENTS || []).filter(function (x) { return String(x.id) !== String(id); });
     saveToSheet({ type: "statement", action: "delete", id: id });
     stmtMode = null; renderStatement();
   }
 
-  /** 이미지와 동일한 거래명세서 레이아웃 (보기/인쇄 공용) */
+  /** 거래명세서 레이아웃 (보기/인쇄 공용) — 링키지랩(공급자) 발행 양식 */
   function statementSheetHTML(s) {
+    var co = company();
     var rows = "";
-    var maxRows = Math.max(s.items.length, 8); // 빈 줄 포함(이미지처럼)
+    var maxRows = Math.max(s.items.length, 4); // 빈 줄 포함
     for (var i = 0; i < maxRows; i++) {
       var it = s.items[i];
       if (it) {
         var l = stmtLine(it);
         rows += '<tr>'
-          + '<td class="c">' + (i + 1) + '</td>'
           + '<td class="l">' + esc(it.name || "") + '</td>'
-          + '<td class="c">' + esc(it.unit || "") + '</td>'
           + '<td class="r">' + won(it.price) + '</td>'
           + '<td class="r">' + won(it.qty) + '</td>'
           + '<td class="r">' + won(l.supply) + '</td>'
@@ -5306,41 +5364,58 @@
           + '<td class="r">' + won(l.total) + '</td>'
           + '</tr>';
       } else {
-        rows += '<tr><td class="c">&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+        rows += '<tr class="stmt-sheet__blank"><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
       }
     }
-    return '<div class="stmt-sheet" id="stmtPrintArea">'
-      + '<div class="stmt-sheet__title">거래명세서</div>'
-      + '<table class="stmt-sheet__head"><tbody>'
-        + '<tr>'
-          + '<th class="k">날짜</th><td class="v vc">' + esc(s.date || "") + '</td>'
-          + '<td class="sup" rowspan="3">공<br>급<br>자</td>'
-          + '<th class="k">사업자<br>등록번호</th><td class="v" colspan="1">' + esc(s.supplierBizNo || "") + '</td>'
-          + '<th class="k">대표자</th><td class="v vc">' + esc(s.supplierCeo || "") + '</td>'
-        + '</tr>'
-        + '<tr>'
-          + '<td class="v vc client" rowspan="2">' + esc(s.clientName || "") + '</td>'
-          + '<th class="k">상호</th><td class="v" colspan="3">' + esc(s.supplierName || "") + '</td>'
-        + '</tr>'
-        + '<tr>'
-          + '<th class="k">사업장<br>소재지</th><td class="v" colspan="3">' + esc(s.supplierAddr || "") + '</td>'
-        + '</tr>'
-      + '</tbody></table>'
-      + '<table class="stmt-sheet__sum"><tbody>'
-        + '<tr><th class="grp" colspan="3">과세</th><th class="grp grp--total" rowspan="1">합계</th></tr>'
-        + '<tr><th class="sk">공급가액</th><th class="sk">부가세</th><th class="sk">합계</th><td class="st r" rowspan="2">' + won(s.total) + '</td></tr>'
-        + '<tr><td class="r">' + won(s.supplyAmount) + '</td><td class="r">' + won(s.vat) + '</td><td class="r blue">' + won(s.total) + '</td></tr>'
-      + '</tbody></table>'
+    // 로고: 파일 있으면 이미지, 없으면 회사명 텍스트로 대체
+    var logo = '<img class="stmt-sheet__logo" src="' + esc(co.logo) + '" alt="' + esc(co.name) + '" '
+      + 'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'inline-block\';">'
+      + '<span class="stmt-sheet__logo-fallback" style="display:none">' + esc(co.name) + '</span>';
+
+    return '<div class="stmt-sheet stmt-sheet--v2" id="stmtPrintArea">'
+      // 헤더 : 좌측 제목+로고 / 우측 회사정보
+      + '<div class="stmt-sheet__top">'
+        + '<div class="stmt-sheet__brand">'
+          + '<div class="stmt-sheet__title">거래명세서</div>'
+          + '<div class="stmt-sheet__logowrap">' + logo + '</div>'
+        + '</div>'
+        + '<div class="stmt-sheet__co">'
+          + '<div class="stmt-sheet__co-name">' + esc(co.name) + '</div>'
+          + '<div class="stmt-sheet__co-line">' + esc(co.addr) + '</div>'
+          + '<div class="stmt-sheet__co-line">사업자등록번호 ' + esc(co.bizNo) + ' · 대표 ' + esc(co.ceo) + '</div>'
+          + (s.phone ? '<div class="stmt-sheet__co-line">' + esc(s.phone) + '</div>' : '')
+          + (s.email ? '<div class="stmt-sheet__co-line">' + esc(s.email) + '</div>' : '')
+        + '</div>'
+      + '</div>'
+      + '<div class="stmt-sheet__rule"></div>'
+      // 고객 / 입금계좌
+      + '<div class="stmt-sheet__meta">'
+        + '<div class="stmt-sheet__meta-col">'
+          + '<div class="stmt-sheet__meta-h">고객명 (담당자명)</div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">고객명</span><span class="mv">' + esc(s.customerName || "") + (s.contactName ? ' (' + esc(s.contactName) + ')' : '') + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">문서번호</span><span class="mv">' + esc(s.docNo || "") + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">청구일</span><span class="mv">' + esc(s.billDate || "") + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">납부기한</span><span class="mv">' + esc(s.dueDate || "") + '</span></div>'
+        + '</div>'
+        + '<div class="stmt-sheet__meta-col stmt-sheet__meta-col--r">'
+          + '<div class="stmt-sheet__meta-h">입금 계좌 정보</div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">은행명</span><span class="mv">' + esc(s.bankName || "") + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">계좌번호</span><span class="mv">' + esc(s.accountNo || "") + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">예금주</span><span class="mv">' + esc(s.accountHolder || "") + '</span></div>'
+        + '</div>'
+      + '</div>'
+      // 품목 표
       + '<table class="stmt-sheet__items"><thead><tr>'
-        + '<th>구분</th><th>품목</th><th>단위</th><th>단가</th><th>수량</th><th>공급가액</th><th>부가세액</th><th>합계금액</th>'
-      + '</tr></thead><tbody>' + rows + '</tbody>'
-      + '<tfoot><tr class="stmt-sheet__foot">'
-        + '<td colspan="5">합계</td>'
-        + '<td class="r">' + won(s.supplyAmount) + '</td>'
-        + '<td class="r">' + won(s.vat) + '</td>'
-        + '<td class="r">' + won(s.total) + '</td>'
-      + '</tr></tfoot></table>'
-      + (s.memo ? '<div class="stmt-sheet__memo">비고 : ' + esc(s.memo) + '</div>' : '')
+        + '<th class="l">품목</th><th class="r">단가</th><th class="r">수량</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      // 합계
+      + '<div class="stmt-sheet__totals">'
+        + '<div class="stmt-sheet__trow"><span class="tk">총 공급가액</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">총 세액</span><span class="tv">' + won(s.vat) + '</span></div>'
+        + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">총 합계</span><span class="tv">' + won(s.total) + '</span></div>'
+      + '</div>'
+      // 비고
+      + '<div class="stmt-sheet__memo"><div class="stmt-sheet__memo-h">비고</div><div class="stmt-sheet__memo-b">' + (s.memo ? esc(s.memo) : '<span class="muted">비고를 입력해주세요.</span>') + '</div></div>'
       + '</div>';
   }
 
@@ -5349,7 +5424,7 @@
     html += '<div class="page-head stmt-actions">'
       + '<div><p class="eyebrow">Billing / Statement</p>'
       + '<h2>거래명세서 보기</h2>'
-      + '<p class="sub">' + esc(s.date || "") + ' · ' + esc(s.supplierName || "") + '</p></div>'
+      + '<p class="sub">' + esc(s.docNo || "") + ' · ' + esc(s.billDate || "") + ' · ' + esc(s.customerName || "") + '</p></div>'
       + '<div class="page-head__actions">'
         + '<button class="btn" id="stmtBackBtn">목록으로</button>'
         + '<button class="btn" id="stmtEditBtn2">수정</button>'
@@ -5374,28 +5449,28 @@
 
     var html = "";
     html += '<div class="page-head">'
-      + '<div><p class="eyebrow">Billing / Partner</p>'
+      + '<div><p class="eyebrow">Billing / Customer</p>'
       + '<h2>거래처 관리</h2>'
-      + '<p class="sub">거래처(공급자) 사업장을 등록해두면 명세서 작성 시 선택만으로 자동 입력됩니다. <span class="muted">행을 클릭하면 수정할 수 있어요.</span></p></div>'
+      + '<p class="sub">고객사를 등록해두면 명세서 작성 시 선택만으로 자동 입력됩니다. <span class="muted">행을 클릭하면 수정할 수 있어요.</span></p></div>'
       + '<button class="btn btn--primary" id="partnerAddBtn">+ 거래처 등록</button>'
       + '</div>';
 
     html += '<div class="stats">'
-      + statCard("acid", list.length, "곳", "Total", "등록 거래처")
+      + statCard("acid", list.length, "곳", "Total", "등록 고객사")
       + '</div>';
 
     // 크루 목록과 동일한 간격(page-head 단일 헤더)
     if (!list.length) {
       html += '<div class="board">'
-        + '<div class="board__empty">아직 등록된 거래처가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 거래처 등록</b>으로 사업장을 추가하세요.</span></div>'
+        + '<div class="board__empty">아직 등록된 거래처가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 거래처 등록</b>으로 고객사를 추가하세요.</span></div>'
         + '</div>';
     } else {
       var body = list.map(function (p, i) {
         return '<tr class="board__row" data-pt-id="' + esc(p.id) + '">'
           + '<td class="board__no">' + (i + 1) + '</td>'
           + '<td class="board__supplier"><b>' + esc(p.name || "—") + '</b></td>'
+          + '<td>' + esc(p.contact || "—") + '</td>'
           + '<td class="mono">' + esc(p.bizNo || "—") + '</td>'
-          + '<td>' + esc(p.ceo || "—") + '</td>'
           + '<td class="board__addr">' + esc(p.addr || "—") + '</td>'
           + '<td class="board__act">'
             + '<button class="btn btn--xs" data-act="pedit" data-id="' + esc(p.id) + '">수정</button>'
@@ -5405,7 +5480,7 @@
       }).join("");
       html += '<div class="board">'
         + '<div class="board__scroll"><table class="board__table board__table--partner"><thead><tr>'
-        + '<th>번호</th><th>상호</th><th>사업자등록번호</th><th>대표자</th><th>사업장소재지</th><th></th>'
+        + '<th>번호</th><th>고객명 (상호)</th><th>담당자</th><th>사업자등록번호</th><th>주소</th><th></th>'
         + '</tr></thead><tbody>' + body + '</tbody></table></div>'
         + '</div>';
     }
@@ -5430,6 +5505,7 @@
     el.querySelector("#partnerModalTitle").textContent = editing ? "거래처 정보 수정" : "신규 거래처 등록";
     el.querySelector("#partnerDelBtn").hidden = !editing;
     form.name.value = (prefill && prefill.name) || "";
+    form.contact.value = (prefill && prefill.contact) || "";
     form.bizNo.value = (prefill && prefill.bizNo) || "";
     form.ceo.value = (prefill && prefill.ceo) || "";
     form.addr.value = (prefill && prefill.addr) || "";
@@ -5450,12 +5526,15 @@
       + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="거래처 등록">'
       + '<div class="modal__head"><h3 id="partnerModalTitle">신규 거래처 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="partnerForm">'
-      + '<label class="fld"><span>상호</span><input type="text" name="name" maxlength="40" required placeholder="예: 뚜레주르 판교대장점"></label>'
       + '<div class="fld-row--2">'
-        + '<label class="fld"><span>사업자등록번호</span><input type="text" name="bizNo" maxlength="20" placeholder="000-00-00000"></label>'
-        + '<label class="fld"><span>대표자</span><input type="text" name="ceo" maxlength="20" placeholder="대표자명"></label>'
+        + '<label class="fld"><span>고객명 (상호)</span><input type="text" name="name" maxlength="40" required placeholder="예: 카카오페이"></label>'
+        + '<label class="fld"><span>담당자명</span><input type="text" name="contact" maxlength="20" placeholder="담당자"></label>'
       + '</div>'
-      + '<label class="fld"><span>사업장소재지</span><input type="text" name="addr" maxlength="120" placeholder="주소"></label>'
+      + '<div class="fld-row--2">'
+        + '<label class="fld"><span>사업자등록번호 <em>(선택)</em></span><input type="text" name="bizNo" maxlength="20" placeholder="000-00-00000"></label>'
+        + '<label class="fld"><span>대표자 <em>(선택)</em></span><input type="text" name="ceo" maxlength="20" placeholder="대표자명"></label>'
+      + '</div>'
+      + '<label class="fld"><span>주소 <em>(선택)</em></span><input type="text" name="addr" maxlength="120" placeholder="주소"></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="partnerDelBtn" hidden>삭제</button>'
         + '<div class="modal__spacer"></div>'
@@ -5475,13 +5554,13 @@
       if (!name) return;
       var id = f.dataset.id;
       var rec = normPartner({
-        id: id || newId("p"), name: name,
+        id: id || newId("p"), name: name, contact: f.contact.value.trim(),
         bizNo: f.bizNo.value.trim(), ceo: f.ceo.value.trim(), addr: f.addr.value.trim(),
       });
       if (!window.PARTNERS) window.PARTNERS = [];
       var idx = id ? indexById(window.PARTNERS, id) : -1;
       if (idx > -1) window.PARTNERS[idx] = rec; else window.PARTNERS.push(rec);
-      saveToSheet({ type: "partner", action: id ? "update" : "add", id: rec.id, name: rec.name, bizNo: rec.bizNo, ceo: rec.ceo, addr: rec.addr });
+      saveToSheet({ type: "partner", action: id ? "update" : "add", id: rec.id, name: rec.name, contact: rec.contact, bizNo: rec.bizNo, ceo: rec.ceo, addr: rec.addr });
       closePartnerModal();
       renderPartner();
     });

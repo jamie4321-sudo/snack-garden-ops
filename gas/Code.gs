@@ -54,9 +54,9 @@ var NOTE_FIELDS = ["id","date","time","part","text","author","link","deletedAt"]
 var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
-// 거래명세서 : items 는 품목 배열의 JSON 문자열로 저장한다.
-var STATEMENT_FIELDS = ["id","date","docNo","supplierName","supplierBizNo","supplierCeo","supplierAddr","clientName","items","supplyAmount","vat","total","memo","status","createdAt"];
-var PARTNER_FIELDS = ["id","name","bizNo","ceo","addr"];
+// 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
+var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","supplyAmount","vat","total","memo","status","createdAt"];
+var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
@@ -199,7 +199,7 @@ function doGet(e) {
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
   if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
   if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
-  if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["date"]));
+  if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
   if (action === "debug")      return json_(getDebugInfo_());
@@ -215,7 +215,7 @@ function doGet(e) {
     education: mapEducation_(rows_("education", EDUCATION_FIELDS)),
     hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]),
     partners: rows_("partners", PARTNER_FIELDS),
-    statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["date"])
+    statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"])
   });
 }
 
@@ -650,8 +650,8 @@ function noteValuesObj_(data) {
 
 function partnerValuesObj_(data) {
   return {
-    id: data.id, name: data.name || "", bizNo: data.bizNo || "",
-    ceo: data.ceo || "", addr: data.addr || ""
+    id: data.id, name: data.name || "", contact: data.contact || "",
+    bizNo: data.bizNo || "", ceo: data.ceo || "", addr: data.addr || ""
   };
 }
 
@@ -673,10 +673,10 @@ function handlePartner_(action, data) {
 
 function statementValuesObj_(data) {
   return {
-    id: data.id, date: data.date || "", docNo: data.docNo || "",
-    supplierName: data.supplierName || "", supplierBizNo: data.supplierBizNo || "",
-    supplierCeo: data.supplierCeo || "", supplierAddr: data.supplierAddr || "",
-    clientName: data.clientName || "",
+    id: data.id, docNo: data.docNo || "", billDate: data.billDate || "", dueDate: data.dueDate || "",
+    customerName: data.customerName || "", contactName: data.contactName || "",
+    bankName: data.bankName || "", accountNo: data.accountNo || "", accountHolder: data.accountHolder || "",
+    phone: data.phone || "", email: data.email || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
     supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
     memo: data.memo || "", status: data.status || "작성", createdAt: data.createdAt || ""

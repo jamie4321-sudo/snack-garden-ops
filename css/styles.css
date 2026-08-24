@@ -1570,61 +1570,68 @@ html[data-authed="1"] .lock { display: none; }
 .stmt-total-row td { background: var(--panel-2); font-weight: 700; border-top: 2px solid var(--line); }
 .stmt-total-row td.num { font-family: var(--mono); }
 
-/* ---- 보기/인쇄용 거래명세서 시트 (이미지 레이아웃) ---- */
+/* ---- 보기/인쇄용 거래명세서 시트 (링키지랩 발행 양식) ---- */
 .stmt-sheet {
-  background: #fff; color: #111; max-width: 900px; margin: 6px 0 0;
-  padding: 22px 26px 26px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; color: #1a1a1a; max-width: 900px; margin: 6px 0 0;
+  padding: 40px 44px; border: 1px solid var(--line); border-radius: 10px;
 }
-.stmt-sheet table { width: 100%; border-collapse: collapse; }
-.stmt-sheet__title { text-align: center; font-size: 24px; font-weight: 800; letter-spacing: 6px; margin: 4px 0 18px; color: #111; }
-.stmt-sheet th, .stmt-sheet td { border: 1px solid #333; padding: 7px 9px; font-size: 12.5px; }
-.stmt-sheet .k { background: #f3f3f3; text-align: center; font-weight: 700; white-space: nowrap; width: 76px; }
-.stmt-sheet .v { text-align: center; }
-.stmt-sheet .vc { text-align: center; font-weight: 700; }
-.stmt-sheet .client { font-size: 14px; }
-.stmt-sheet .sup { width: 34px; background: #f3f3f3; text-align: center; font-weight: 700; letter-spacing: 2px; }
-.stmt-sheet__head { margin-bottom: 0; }
-.stmt-sheet__sum { margin-top: -1px; }
-.stmt-sheet__sum .grp { background: #eee; text-align: center; font-weight: 700; }
-.stmt-sheet__sum .grp--total { width: 180px; }
-.stmt-sheet__sum .sk { background: #f7f7f7; text-align: center; font-weight: 600; font-size: 11.5px; }
-.stmt-sheet__sum .r, .stmt-sheet .r { text-align: right; font-variant-numeric: tabular-nums; }
-.stmt-sheet__sum .l { text-align: left; }
-.stmt-sheet__sum .c { text-align: center; }
-.stmt-sheet__sum .st { text-align: right; font-weight: 800; font-size: 15px; color: #1155cc; }
-.stmt-sheet__sum .blue { color: #1155cc; font-weight: 700; }
-.stmt-sheet__items { margin-top: 14px; }
-.stmt-sheet__items thead th { background: #f3f3f3; text-align: center; font-weight: 700; }
-.stmt-sheet__items td.l { text-align: left; }
-.stmt-sheet__items td.c { text-align: center; }
-.stmt-sheet__items td.r { text-align: right; font-variant-numeric: tabular-nums; }
-.stmt-sheet__foot td { background: #ffff00; font-weight: 800; text-align: center; }
-.stmt-sheet__foot td.r { text-align: right; }
-.stmt-sheet__memo { margin-top: 12px; font-size: 12px; color: #333; }
+.stmt-sheet--v2 { font-size: 13px; }
+.stmt-sheet__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.stmt-sheet__brand { display: flex; flex-direction: column; gap: 14px; }
+.stmt-sheet__title { font-size: 30px; font-weight: 800; letter-spacing: -.5px; color: #111; }
+.stmt-sheet__logowrap { min-height: 20px; }
+.stmt-sheet__logo { max-height: 46px; max-width: 240px; display: block; }
+.stmt-sheet__logo-fallback { font-size: 18px; font-weight: 700; color: #111; }
+.stmt-sheet__co { text-align: right; line-height: 1.7; }
+.stmt-sheet__co-name { font-weight: 700; font-size: 14px; color: #111; }
+.stmt-sheet__co-line { font-size: 11.5px; color: #555; }
+.stmt-sheet__rule { height: 2px; background: #222; margin: 22px 0 20px; }
+.stmt-sheet__meta { display: flex; justify-content: space-between; gap: 40px; margin-bottom: 26px; }
+.stmt-sheet__meta-col { flex: 1; min-width: 0; }
+.stmt-sheet__meta-col--r { max-width: 300px; }
+.stmt-sheet__meta-h { font-weight: 700; color: #111; font-size: 12.5px; margin-bottom: 10px; }
+.stmt-sheet__mrow { display: flex; gap: 12px; padding: 3px 0; font-size: 12.5px; }
+.stmt-sheet__mrow .mk { color: #888; min-width: 66px; }
+.stmt-sheet__mrow .mv { color: #222; word-break: break-word; }
+.stmt-sheet__items { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+.stmt-sheet__items th { font-size: 12px; color: #555; font-weight: 700; padding: 10px 8px; border-top: 1.5px solid #222; border-bottom: 1.5px solid #222; }
+.stmt-sheet__items td { font-size: 12.5px; color: #222; padding: 11px 8px; border-bottom: 1px solid #e6e6e6; }
+.stmt-sheet__items th.l, .stmt-sheet__items td.l { text-align: left; word-break: break-word; }
+.stmt-sheet__items th.r, .stmt-sheet__items td.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stmt-sheet__blank td { height: 30px; }
+.stmt-sheet__totals { margin-left: auto; width: 260px; }
+.stmt-sheet__trow { display: flex; justify-content: space-between; padding: 7px 0; font-size: 12.5px; color: #333; border-bottom: 1px solid #eee; }
+.stmt-sheet__trow .tk { color: #666; }
+.stmt-sheet__trow .tv { font-variant-numeric: tabular-nums; font-weight: 600; }
+.stmt-sheet__trow--grand { border-bottom: none; border-top: 2px solid #222; margin-top: 2px; padding-top: 10px; font-size: 15px; font-weight: 800; color: #111; }
+.stmt-sheet__trow--grand .tk { color: #111; }
+.stmt-sheet__memo { margin-top: 30px; }
+.stmt-sheet__memo-h { font-weight: 700; color: #111; font-size: 12.5px; margin-bottom: 6px; }
+.stmt-sheet__memo-b { font-size: 12px; color: #444; word-break: break-word; }
+.stmt-sheet__memo-b .muted { color: #aaa; }
 
-/* ---- 인쇄 ---- */
+/* ---- 인쇄 : 화면의 명세서 시트 그대로 출력 ---- */
 @media print {
   .side, .topbar, .lock, .stmt-actions, .side__foot { display: none !important; }
   .layout, .main, .view { display: block !important; margin: 0 !important; padding: 0 !important; max-width: none !important; }
   body { background: #fff !important; }
-  .stmt-sheet { border: none; border-radius: 0; max-width: none; margin: 0; padding: 0; }
-  .stmt-sheet__foot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .stmt-sheet .k, .stmt-sheet .sup, .stmt-sheet__sum .grp, .stmt-sheet__items thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .stmt-sheet { border: none; border-radius: 0; max-width: none; margin: 0; padding: 10mm; }
+  .stmt-sheet, .stmt-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
 /* ---- 명세서/거래처 게시판(board) 목록 : 크루 목록과 동일한 간격 ---- */
 .board__table--stmt th, .board__table--partner th { padding: 13px 18px; }
 .board__table--stmt td, .board__table--partner td { padding: 14px 18px; }
-.board__table--stmt th:nth-child(1), .board__table--partner th:nth-child(1) { width: 56px; text-align: center; }
-.board__table--stmt th:nth-child(2) { width: 104px; }
-.board__table--stmt th:nth-child(3) { width: 190px; }
-.board__table--stmt th:nth-child(5), .board__table--stmt th:nth-child(6) { width: 104px; text-align: right; }
-.board__table--stmt th:nth-child(7) { width: 116px; text-align: right; }
-.board__table--stmt th:nth-child(8) { width: 74px; }
-.board__table--stmt th:nth-child(9) { width: 104px; }
+.board__table--stmt th:nth-child(1), .board__table--partner th:nth-child(1) { width: 52px; text-align: center; }
+.board__table--stmt th:nth-child(2) { width: 100px; }
+.board__table--stmt th:nth-child(3) { width: 100px; }
+.board__table--stmt th:nth-child(6), .board__table--stmt th:nth-child(7) { width: 104px; text-align: right; }
+.board__table--stmt th:nth-child(8) { width: 116px; text-align: right; }
+.board__table--stmt th:nth-child(9) { width: 74px; }
+.board__table--stmt th:nth-child(10) { width: 104px; }
 .board__table--partner th:nth-child(2) { width: 220px; }
-.board__table--partner th:nth-child(3) { width: 160px; }
-.board__table--partner th:nth-child(4) { width: 96px; }
+.board__table--partner th:nth-child(3) { width: 130px; }
+.board__table--partner th:nth-child(4) { width: 150px; }
 .board__table--partner th:nth-child(6) { width: 104px; }
 .board__no { text-align: center; color: var(--ink-3); font-family: var(--mono); font-size: 12px; }
 .board__supplier { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1636,7 +1643,3 @@ html[data-authed="1"] .lock { display: none; }
 .board__act { white-space: nowrap; text-align: right; }
 .board__act .btn { margin-left: 4px; }
 .stmt-hint { font-family: var(--mono); font-size: 10px; letter-spacing: 0; color: var(--ink-3); text-transform: none; margin-left: 8px; font-weight: 400; }
-
-/* ---- 거래명세서 시트: 내용이 모두 들어가도록 줄바꿈 허용 ---- */
-.stmt-sheet td, .stmt-sheet th { word-break: break-word; overflow-wrap: anywhere; }
-.stmt-sheet__items td.l { word-break: break-word; }

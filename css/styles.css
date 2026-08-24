@@ -1612,23 +1612,27 @@ html[data-authed="1"] .lock { display: none; }
   .stmt-sheet .k, .stmt-sheet .sup, .stmt-sheet__sum .grp, .stmt-sheet__items thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
-/* ---- 명세서/거래처 게시판(board) 목록 ---- */
+/* ---- 명세서/거래처 게시판(board) 목록 : 크루 목록과 동일한 간격 ---- */
+.board__table--stmt th, .board__table--partner th { padding: 13px 18px; }
+.board__table--stmt td, .board__table--partner td { padding: 14px 18px; }
 .board__table--stmt th:nth-child(1), .board__table--partner th:nth-child(1) { width: 56px; text-align: center; }
 .board__table--stmt th:nth-child(2) { width: 104px; }
-.board__table--stmt th:nth-child(5), .board__table--stmt th:nth-child(6) { width: 112px; text-align: right; }
-.board__table--stmt th:nth-child(7) { width: 120px; text-align: right; }
-.board__table--stmt th:nth-child(8) { width: 78px; }
-.board__table--stmt th:nth-child(9) { width: 112px; }
+.board__table--stmt th:nth-child(3) { width: 190px; }
+.board__table--stmt th:nth-child(5), .board__table--stmt th:nth-child(6) { width: 104px; text-align: right; }
+.board__table--stmt th:nth-child(7) { width: 116px; text-align: right; }
+.board__table--stmt th:nth-child(8) { width: 74px; }
+.board__table--stmt th:nth-child(9) { width: 104px; }
+.board__table--partner th:nth-child(2) { width: 220px; }
 .board__table--partner th:nth-child(3) { width: 160px; }
 .board__table--partner th:nth-child(4) { width: 96px; }
-.board__table--partner th:nth-child(6) { width: 112px; }
+.board__table--partner th:nth-child(6) { width: 104px; }
 .board__no { text-align: center; color: var(--ink-3); font-family: var(--mono); font-size: 12px; }
-.board__supplier { white-space: normal; word-break: break-word; }
+.board__supplier { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board__prod { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board__amt { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .board__amt--total { color: var(--ink); }
 .board__st { white-space: nowrap; }
-.board__addr { color: var(--ink-2); white-space: normal; word-break: break-word; }
+.board__addr { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board__act { white-space: nowrap; text-align: right; }
 .board__act .btn { margin-left: 4px; }
 .stmt-hint { font-family: var(--mono); font-size: 10px; letter-spacing: 0; color: var(--ink-3); text-transform: none; margin-left: 8px; font-weight: 400; }

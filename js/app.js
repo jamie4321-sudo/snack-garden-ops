@@ -5014,14 +5014,9 @@
       + statCard("", won(sumTotal), "원", "Amount", yr + "년 합계금액")
       + '</div>';
 
-    // 게시판(board) 형식 목록
-    var head = '<div class="board__head">'
-      + '<h3 class="board__title">거래명세서 <span class="chip-mono">' + list.length + '건</span></h3>'
-      + '<button type="button" class="btn btn--sm btn--primary" id="stmtAddBtn2">+ 명세서 등록</button>'
-      + '</div>';
-
+    // 게시판(board) 형식 목록 — 크루 목록과 동일한 간격(page-head 단일 헤더)
     if (!list.length) {
-      html += '<div class="board">' + head
+      html += '<div class="board">'
         + '<div class="board__empty">아직 등록된 거래명세서가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 명세서 등록</b>으로 첫 명세서를 작성해보세요.</span></div>'
         + '</div>';
     } else {
@@ -5044,7 +5039,7 @@
           + '</td>'
           + '</tr>';
       }).join("");
-      html += '<div class="board">' + head
+      html += '<div class="board">'
         + '<div class="board__scroll"><table class="board__table board__table--stmt"><thead><tr>'
         + '<th>번호</th><th>날짜</th><th>거래처(공급자)</th><th>품목</th><th class="num">공급가액</th><th class="num">부가세</th><th class="num">합계금액</th><th>상태</th><th></th>'
         + '</tr></thead><tbody>' + body + '</tbody></table></div>'
@@ -5052,9 +5047,7 @@
     }
     view.innerHTML = html;
 
-    var openEditor = function () { openStatementEditor(null); };
-    stmtOn("#stmtAddBtn", "click", openEditor);
-    stmtOn("#stmtAddBtn2", "click", openEditor);
+    stmtOn("#stmtAddBtn", "click", function () { openStatementEditor(null); });
     stmtOnAll(".board__table--stmt .board__row[data-st-id]", "click", function (ev) {
       if (ev.target.closest("button")) return;
       stmtMode = "view"; stmtEditId = this.getAttribute("data-st-id"); renderStatement();
@@ -5391,13 +5384,9 @@
       + statCard("acid", list.length, "곳", "Total", "등록 거래처")
       + '</div>';
 
-    var head = '<div class="board__head">'
-      + '<h3 class="board__title">거래처 목록 <span class="chip-mono">' + list.length + '곳</span></h3>'
-      + '<button type="button" class="btn btn--sm btn--primary" id="partnerAddBtn2">+ 거래처 등록</button>'
-      + '</div>';
-
+    // 크루 목록과 동일한 간격(page-head 단일 헤더)
     if (!list.length) {
-      html += '<div class="board">' + head
+      html += '<div class="board">'
         + '<div class="board__empty">아직 등록된 거래처가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 거래처 등록</b>으로 사업장을 추가하세요.</span></div>'
         + '</div>';
     } else {
@@ -5414,7 +5403,7 @@
           + '</td>'
           + '</tr>';
       }).join("");
-      html += '<div class="board">' + head
+      html += '<div class="board">'
         + '<div class="board__scroll"><table class="board__table board__table--partner"><thead><tr>'
         + '<th>번호</th><th>상호</th><th>사업자등록번호</th><th>대표자</th><th>사업장소재지</th><th></th>'
         + '</tr></thead><tbody>' + body + '</tbody></table></div>'
@@ -5423,7 +5412,6 @@
     view.innerHTML = html;
 
     stmtOn("#partnerAddBtn", "click", function () { openPartnerModal(null); });
-    stmtOn("#partnerAddBtn2", "click", function () { openPartnerModal(null); });
     stmtOnAll(".board__table--partner .board__row[data-pt-id]", "click", function (ev) {
       if (ev.target.closest("button")) return;
       openPartnerModal(findById(window.PARTNERS || [], this.getAttribute("data-pt-id")));

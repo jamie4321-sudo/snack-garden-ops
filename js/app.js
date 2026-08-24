@@ -1052,6 +1052,7 @@
   var crewDisFilter = "전체";
   var crewGroupFilter = "전체";
   var crewStatusFilter = "전체";
+  var crewSortDir = "asc";        // 입사일 정렬 방향 : "asc"(오래된 입사순) | "desc"(최신 입사순)
   var crewQuery = "";
   var crewDetailId = null;
   var crewDetailTab = "basic";
@@ -1092,8 +1093,20 @@
       + rows.map(crewRow).join("");
   }
 
+  /** 입사일(joinDate, ISO "YYYY-MM-DD") 기준 정렬. 값이 없으면 항상 맨 뒤로. */
+  function sortByJoinDate(rows) {
+    var dir = crewSortDir === "desc" ? -1 : 1;
+    return rows.slice().sort(function (a, b) {
+      var ja = a.joinDate || "", jb = b.joinDate || "";
+      if (!ja && !jb) return 0;
+      if (!ja) return 1;   // 빈 값은 방향과 무관하게 뒤로
+      if (!jb) return -1;
+      return ja < jb ? -1 * dir : ja > jb ? 1 * dir : 0;
+    });
+  }
+
   function tbodyHTML() {
-    var base = filteredCrew(); // 장애여부·그룹·검색 필터 적용 (상태는 아래서 그룹핑)
+    var base = sortByJoinDate(filteredCrew()); // 필터 적용 후 입사일순 정렬 (상태는 아래서 그룹핑)
     var order = crewStatusFilter === "전체" ? ["재직", "휴직", "퇴사"] : [crewStatusFilter];
     var out = order.map(function (s) {
       return crewSection(s, base.filter(function (c) { return c.status === s; }));
@@ -1150,8 +1163,13 @@
       + '<input class="searchbox" id="crewSearch" type="search" placeholder="이름 · 팀 · 담당업무 검색" value="' + esc(crewQuery) + '">'
       + '</div>';
 
+    var sortArrow = crewSortDir === "desc" ? "↓" : "↑";
+    var sortLabel = crewSortDir === "desc" ? "최신 입사순" : "오래된 입사순";
     html += '<div class="table-wrap"><table class="crew-table"><thead><tr>'
-      + '<th>크루</th><th>상태</th><th>입사일</th><th>청구사</th><th>장애유형</th><th>담당 업무</th><th>비고</th>'
+      + '<th>크루</th><th>상태</th>'
+      + '<th class="th-sort is-active" id="crewSortJoin" role="button" tabindex="0" aria-label="입사일 기준 정렬 (' + sortLabel + ')" title="클릭하면 정렬 방향 전환 · 현재 ' + sortLabel + '">'
+      + '입사일 <span class="th-sort__arrow">' + sortArrow + '</span></th>'
+      + '<th>청구사</th><th>장애유형</th><th>담당 업무</th><th>비고</th>'
       + '</tr></thead><tbody id="crewBody">' + tbodyHTML() + '</tbody></table></div>';
 
     view.innerHTML = html;
@@ -5253,6 +5271,18 @@
 
       var groupFilterBtn = ev.target.closest("#crewGroupFilter button[data-g]");
       if (groupFilterBtn) { crewGroupFilter = groupFilterBtn.getAttribute("data-g"); renderCrew(); return; }
+
+      var sortJoinBtn = ev.target.closest("#crewSortJoin");
+      if (sortJoinBtn) { crewSortDir = crewSortDir === "asc" ? "desc" : "asc"; renderCrew(); return; }
+    });
+
+    // 입사일 정렬 헤더 : 키보드(Enter/Space) 접근성
+    view.addEventListener("keydown", function (ev) {
+      if ((ev.key === "Enter" || ev.key === " ") && ev.target.id === "crewSortJoin") {
+        ev.preventDefault();
+        crewSortDir = crewSortDir === "asc" ? "desc" : "asc";
+        renderCrew();
+      }
     });
 
     view.addEventListener("change", function (ev) {

@@ -55,8 +55,19 @@ var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
 // 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
-var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","supplyAmount","vat","total","memo","status","createdAt"];
+// driveUrl : 저장 시 생성해 드라이브에 보관한 PDF 링크(서버에서 채움).
+var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
+
+// 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
+var COMPANY = {
+  name: "주식회사 링키지랩",
+  bizNo: "235-88-00278",
+  ceo: "박대영",
+  addr: "서울특별시 성동구 성수동2가 314-37번지 3층"
+};
+// 거래명세서 PDF 를 보관할 드라이브 폴더명 (없으면 자동 생성)
+var STATEMENT_FOLDER_NAME = "거래명세서";
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
@@ -679,7 +690,8 @@ function statementValuesObj_(data) {
     phone: data.phone || "", email: data.email || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
     supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
-    memo: data.memo || "", status: data.status || "작성", createdAt: data.createdAt || ""
+    memo: data.memo || "", status: data.status || "작성", createdAt: data.createdAt || "",
+    driveUrl: data.driveUrl || ""
   };
 }
 
@@ -687,16 +699,134 @@ function handleStatement_(action, data) {
   var sh = sheet_("statements", STATEMENT_FIELDS);
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
-    upsertRowByHeader_(sh, id, statementValuesObj_(Object.assign({}, data, { id: id })));
-    return json_({ ok: true, id: id });
+    var payload = Object.assign({}, data, { id: id });
+
+    // 드라이브에 PDF 생성/갱신 (실패해도 시트 저장은 진행)
+    var driveUrl = "";
+    try { driveUrl = saveStatementPdf_(payload); } catch (e) { driveUrl = ""; }
+    if (driveUrl) payload.driveUrl = driveUrl;
+
+    upsertRowByHeader_(sh, id, statementValuesObj_(payload));
+    return json_({ ok: true, id: id, driveUrl: driveUrl });
   }
   if (action === "delete") {
     var row = findRowById_(sh, data.id);
     if (row < 0) return json_({ ok: false, error: "not found" });
+    // 관련 PDF 도 휴지통으로
+    try {
+      var headers = headerRow_(sh);
+      var vals = rowValuesByHeader_(sh, row, headers);
+      trashStatementPdf_(vals.docNo);
+    } catch (e) {}
     sh.deleteRow(row);
     return json_({ ok: true });
   }
   return json_({ ok: false, error: "unknown action" });
+}
+
+/** 거래명세서 PDF 보관 폴더 (없으면 생성) */
+function statementFolder_() {
+  var it = DriveApp.getFoldersByName(STATEMENT_FOLDER_NAME);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(STATEMENT_FOLDER_NAME);
+}
+
+/** docNo 로 만든 PDF 파일명 (동일 문서번호는 하나만 유지) */
+function statementPdfName_(data) {
+  var doc = String(data.docNo || data.id || "").replace(/[\\/:*?"<>|]/g, "");
+  var cust = String(data.customerName || "").replace(/[\\/:*?"<>|]/g, "");
+  return "거래명세서_" + doc + (cust ? "_" + cust : "") + ".pdf";
+}
+
+/** 같은 문서번호의 기존 PDF 를 휴지통으로 (중복 방지) */
+function trashStatementPdf_(docNo) {
+  if (!docNo) return;
+  var folder = statementFolder_();
+  var files = folder.getFiles();
+  var frag = "거래명세서_" + String(docNo);
+  while (files.hasNext()) {
+    var f = files.next();
+    if (f.getName().indexOf(frag) === 0) f.setTrashed(true);
+  }
+}
+
+/** 명세서 데이터를 임시 Google Doc 으로 만들어 PDF 로 변환 후 폴더에 저장. PDF URL 반환. */
+function saveStatementPdf_(data) {
+  var items = [];
+  try { items = (typeof data.items === "string") ? JSON.parse(data.items) : (data.items || []); } catch (e) { items = []; }
+
+  var doc = DocumentApp.create("_tmp_stmt_" + (data.docNo || Date.now()));
+  var body = doc.getBody();
+  body.setMarginTop(36).setMarginBottom(36).setMarginLeft(36).setMarginRight(36);
+
+  // 제목
+  var title = body.appendParagraph("거래명세서");
+  title.setHeading(DocumentApp.ParagraphHeading.TITLE);
+
+  // 발행처
+  var co = COMPANY;
+  var coInfo = body.appendParagraph(co.name + "\n" + co.addr
+    + "\n사업자등록번호 " + co.bizNo + " · 대표 " + co.ceo
+    + (data.phone ? "\n" + data.phone : "")
+    + (data.email ? "\n" + data.email : ""));
+  coInfo.setFontSize(9).setForegroundColor("#555555");
+  coInfo.setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+
+  body.appendHorizontalRule();
+
+  // 고객 / 입금계좌
+  var meta = body.appendParagraph(
+    "고객명 : " + (data.customerName || "") + (data.contactName ? " (" + data.contactName + ")" : "")
+    + "\n문서번호 : " + (data.docNo || "")
+    + "\n청구일 : " + (data.billDate || "") + "    납부기한 : " + (data.dueDate || "")
+    + "\n입금계좌 : " + [data.bankName, data.accountNo, data.accountHolder].filter(function (x) { return x; }).join(" / "));
+  meta.setFontSize(10);
+
+  // 품목 표
+  var rows = [["품목", "단가", "수량", "공급가액", "세액", "합계"]];
+  var tS = 0, tV = 0, tT = 0;
+  items.forEach(function (it) {
+    var supply = Math.round((+it.price || 0) * (+it.qty || 0));
+    var vat = Math.round(supply * 0.1);
+    var total = supply + vat;
+    tS += supply; tV += vat; tT += total;
+    rows.push([String(it.name || ""), won_(it.price), String(+it.qty || 0), won_(supply), won_(vat), won_(total)]);
+  });
+  rows.push(["합계", "", "", won_(tS), won_(tV), won_(tT)]);
+  var table = body.appendTable(rows);
+  table.getRow(0).editAsText().setBold(true);
+  table.getRow(rows.length - 1).editAsText().setBold(true);
+  styleTableNums_(table);
+
+  // 총 합계
+  var tot = body.appendParagraph("총 공급가액 : " + won_(tS) + "    총 세액 : " + won_(tV) + "    총 합계 : " + won_(tT));
+  tot.setBold(true).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+
+  // 비고
+  if (data.memo) body.appendParagraph("비고 : " + data.memo).setFontSize(9).setForegroundColor("#444444");
+
+  doc.saveAndClose();
+
+  var pdf = DriveApp.getFileById(doc.getId()).getAs("application/pdf").setName(statementPdfName_(data));
+  trashStatementPdf_(data.docNo);                 // 같은 문서번호 기존본 정리
+  var file = statementFolder_().createFile(pdf);        // 기본 비공개(소유자 열람)
+  DriveApp.getFileById(doc.getId()).setTrashed(true);   // 임시 Doc 삭제
+  return file.getUrl();
+}
+
+/** 표 숫자 셀 우측 정렬 (품목 열 제외) */
+function styleTableNums_(table) {
+  for (var r = 0; r < table.getNumRows(); r++) {
+    var row = table.getRow(r);
+    for (var c = 1; c < row.getNumCells(); c++) {
+      row.getCell(c).getChild(0).asParagraph().setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+    }
+  }
+}
+
+/** 천단위 콤마 */
+function won_(n) {
+  n = Math.round(+n || 0);
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 /** 헤더 이름 기준으로 특정 행의 값을 { 헤더명: 값 } 객체로 읽어온다. */

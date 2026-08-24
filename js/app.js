@@ -173,7 +173,7 @@
       vat: r.vat != null && r.vat !== "" ? +r.vat : t.vat,
       total: r.total != null && r.total !== "" ? +r.total : t.total,
       memo: r.memo || "", status: r.status || "작성",
-      createdAt: r.createdAt || "",
+      createdAt: r.createdAt || "", driveUrl: r.driveUrl || "",
     };
   }
 
@@ -5294,6 +5294,7 @@
     var idx = indexById(window.STATEMENTS, rec.id);
     if (idx > -1) window.STATEMENTS[idx] = rec; else window.STATEMENTS.push(rec);
 
+    // 저장 → GAS 가 드라이브에 PDF 생성 후 링크(driveUrl) 반환 (읽기 가능하면 즉시 반영)
     saveToSheet({
       type: "statement", action: (idx > -1 ? "update" : "add"),
       id: rec.id, docNo: rec.docNo, billDate: rec.billDate, dueDate: rec.dueDate,
@@ -5303,7 +5304,16 @@
       items: JSON.stringify(rec.items),
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
       memo: rec.memo, status: rec.status, createdAt: rec.createdAt,
-    });
+    }).then(function (res) {
+      if (!res || typeof res.json !== "function") return null;
+      return res.json().catch(function () { return null; });
+    }).then(function (j) {
+      if (j && j.driveUrl) {
+        var ix = indexById(window.STATEMENTS, rec.id);
+        if (ix > -1) window.STATEMENTS[ix].driveUrl = j.driveUrl;
+        if (stmtMode === "view" && String(stmtEditId) === String(rec.id)) renderStatement();
+      }
+    }).catch(function () {});
 
     // 연락처·입금계좌 기억
     saveCompanyExtra({ bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder, phone: rec.phone, email: rec.email });
@@ -5427,6 +5437,7 @@
       + '<p class="sub">' + esc(s.docNo || "") + ' · ' + esc(s.billDate || "") + ' · ' + esc(s.customerName || "") + '</p></div>'
       + '<div class="page-head__actions">'
         + '<button class="btn" id="stmtBackBtn">목록으로</button>'
+        + (s.driveUrl ? '<a class="btn" href="' + esc(s.driveUrl) + '" target="_blank" rel="noopener">📁 Drive에서 열기</a>' : '')
         + '<button class="btn" id="stmtEditBtn2">수정</button>'
         + '<button class="btn btn--primary" id="stmtPrintBtn">🖨 인쇄 / PDF</button>'
       + '</div>'

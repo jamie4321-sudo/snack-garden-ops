@@ -5014,41 +5014,53 @@
       + statCard("", won(sumTotal), "원", "Amount", yr + "년 합계금액")
       + '</div>';
 
-    html += '<div class="table-wrap"><table class="crew-table stmt-list"><thead><tr>'
-      + '<th>날짜</th><th>거래처(공급자)</th><th>품목</th><th class="num">공급가액</th><th class="num">부가세</th><th class="num">합계금액</th><th>상태</th><th></th>'
-      + '</tr></thead><tbody>';
+    // 게시판(board) 형식 목록
+    var head = '<div class="board__head">'
+      + '<h3 class="board__title">거래명세서 <span class="chip-mono">' + list.length + '건</span></h3>'
+      + '<button type="button" class="btn btn--sm btn--primary" id="stmtAddBtn2">+ 명세서 등록</button>'
+      + '</div>';
+
     if (!list.length) {
-      html += '<tr><td colspan="8" class="muted" style="text-align:center;padding:36px">등록된 명세서가 없습니다. <b>+ 명세서 등록</b>으로 시작하세요.</td></tr>';
+      html += '<div class="board">' + head
+        + '<div class="board__empty">아직 등록된 거래명세서가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 명세서 등록</b>으로 첫 명세서를 작성해보세요.</span></div>'
+        + '</div>';
     } else {
-      html += list.map(function (s) {
+      var body = list.map(function (s, i) {
         var first = (s.items[0] && s.items[0].name) || "—";
         var more = s.items.length > 1 ? ' <span class="muted">외 ' + (s.items.length - 1) + '건</span>' : '';
         var stCls = s.status === "확정" ? "badge--active" : "badge--leave";
-        return '<tr data-id="' + esc(s.id) + '">'
-          + '<td class="mono-cell">' + esc(s.date || "—") + '</td>'
-          + '<td><b>' + esc(s.supplierName || "—") + '</b></td>'
-          + '<td>' + esc(first) + more + '</td>'
-          + '<td class="num">' + won(s.supplyAmount) + '</td>'
-          + '<td class="num">' + won(s.vat) + '</td>'
-          + '<td class="num"><b>' + won(s.total) + '</b></td>'
-          + '<td><span class="badge ' + stCls + '">' + esc(s.status) + '</span></td>'
-          + '<td class="stmt-rowact">'
+        return '<tr class="board__row" data-st-id="' + esc(s.id) + '">'
+          + '<td class="board__no">' + (list.length - i) + '</td>'
+          + '<td class="board__date mono">' + esc(s.date || "—") + '</td>'
+          + '<td class="board__supplier"><b>' + esc(s.supplierName || "—") + '</b></td>'
+          + '<td class="board__prod">' + esc(first) + more + '</td>'
+          + '<td class="board__amt mono">' + won(s.supplyAmount) + '</td>'
+          + '<td class="board__amt mono">' + won(s.vat) + '</td>'
+          + '<td class="board__amt board__amt--total mono"><b>' + won(s.total) + '</b></td>'
+          + '<td class="board__st"><span class="badge ' + stCls + '">' + esc(s.status) + '</span></td>'
+          + '<td class="board__act">'
             + '<button class="btn btn--xs" data-act="edit" data-id="' + esc(s.id) + '">수정</button>'
             + '<button class="btn btn--xs" data-act="del" data-id="' + esc(s.id) + '">삭제</button>'
           + '</td>'
           + '</tr>';
       }).join("");
+      html += '<div class="board">' + head
+        + '<div class="board__scroll"><table class="board__table board__table--stmt"><thead><tr>'
+        + '<th>번호</th><th>날짜</th><th>거래처(공급자)</th><th>품목</th><th class="num">공급가액</th><th class="num">부가세</th><th class="num">합계금액</th><th>상태</th><th></th>'
+        + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+        + '</div>';
     }
-    html += '</tbody></table></div>';
     view.innerHTML = html;
 
-    stmtOn("#stmtAddBtn", "click", function () { openStatementEditor(null); });
-    stmtOnAll(".stmt-list tbody tr[data-id]", "click", function (ev) {
+    var openEditor = function () { openStatementEditor(null); };
+    stmtOn("#stmtAddBtn", "click", openEditor);
+    stmtOn("#stmtAddBtn2", "click", openEditor);
+    stmtOnAll(".board__table--stmt .board__row[data-st-id]", "click", function (ev) {
       if (ev.target.closest("button")) return;
-      stmtMode = "view"; stmtEditId = this.getAttribute("data-id"); renderStatement();
+      stmtMode = "view"; stmtEditId = this.getAttribute("data-st-id"); renderStatement();
     });
-    stmtOnAll('.stmt-rowact button[data-act="edit"]', "click", function () { openStatementEditor(this.getAttribute("data-id")); });
-    stmtOnAll('.stmt-rowact button[data-act="del"]', "click", function () { deleteStatement(this.getAttribute("data-id")); });
+    stmtOnAll('.board__act button[data-act="edit"]', "click", function () { openStatementEditor(this.getAttribute("data-id")); });
+    stmtOnAll('.board__act button[data-act="del"]', "click", function () { deleteStatement(this.getAttribute("data-id")); });
   }
 
   function openStatementEditor(id) {
@@ -5084,8 +5096,10 @@
     var s = stmtDraft;
     var t = stmtTotals(s.items);
     var partners = window.PARTNERS || [];
+    var curPartner = null;
+    for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.supplierName) { curPartner = partners[pi]; break; } }
     var partnerOpts = '<option value="">거래처 선택 / 직접입력</option>'
-      + partners.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
+      + partners.map(function (p) { return '<option value="' + esc(p.id) + '"' + (curPartner && curPartner.id === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join("");
 
     var html = "";
     html += '<div class="page-head">'
@@ -5110,9 +5124,9 @@
       + '</div>';
 
     // 거래처(공급자)
-    html += '<div class="stmt-section-label">공급자 (거래처)</div>';
+    html += '<div class="stmt-section-label">공급자 (거래처) <span class="stmt-hint">거래처 관리에 등록한 사업장을 선택하면 자동 입력됩니다</span></div>';
     html += '<div class="stmt-form-grid">'
-      + '<label class="stmt-field"><span>거래처 불러오기</span><select class="stmt-in" id="stmtPartnerSel">' + partnerOpts + '</select></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>거래처 선택</span><select class="stmt-in" id="stmtPartnerSel">' + partnerOpts + '</select></label>'
       + '<label class="stmt-field"><span>상호</span><input class="stmt-in" id="stmtSupName" value="' + esc(s.supplierName || "") + '" placeholder="예: 뚜레주르 판교대장점"></label>'
       + '<label class="stmt-field"><span>사업자등록번호</span><input class="stmt-in" id="stmtSupBiz" value="' + esc(s.supplierBizNo || "") + '" placeholder="000-00-00000"></label>'
       + '<label class="stmt-field"><span>대표자</span><input class="stmt-in" id="stmtSupCeo" value="' + esc(s.supplierCeo || "") + '" placeholder="대표자명"></label>'
@@ -5357,8 +5371,155 @@
     stmtOn("#stmtPrintBtn", "click", function () { window.print(); });
   }
 
+  /* ======================================================
+     거래처 관리 — 사업장(PARTNER) CRUD
+     ====================================================== */
+  function renderPartner() {
+    var list = (window.PARTNERS || []).slice().sort(function (a, b) {
+      return (a.name || "") < (b.name || "") ? -1 : (a.name || "") > (b.name || "") ? 1 : 0;
+    });
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Billing / Partner</p>'
+      + '<h2>거래처 관리</h2>'
+      + '<p class="sub">거래처(공급자) 사업장을 등록해두면 명세서 작성 시 선택만으로 자동 입력됩니다. <span class="muted">행을 클릭하면 수정할 수 있어요.</span></p></div>'
+      + '<button class="btn btn--primary" id="partnerAddBtn">+ 거래처 등록</button>'
+      + '</div>';
+
+    html += '<div class="stats">'
+      + statCard("acid", list.length, "곳", "Total", "등록 거래처")
+      + '</div>';
+
+    var head = '<div class="board__head">'
+      + '<h3 class="board__title">거래처 목록 <span class="chip-mono">' + list.length + '곳</span></h3>'
+      + '<button type="button" class="btn btn--sm btn--primary" id="partnerAddBtn2">+ 거래처 등록</button>'
+      + '</div>';
+
+    if (!list.length) {
+      html += '<div class="board">' + head
+        + '<div class="board__empty">아직 등록된 거래처가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 거래처 등록</b>으로 사업장을 추가하세요.</span></div>'
+        + '</div>';
+    } else {
+      var body = list.map(function (p, i) {
+        return '<tr class="board__row" data-pt-id="' + esc(p.id) + '">'
+          + '<td class="board__no">' + (i + 1) + '</td>'
+          + '<td class="board__supplier"><b>' + esc(p.name || "—") + '</b></td>'
+          + '<td class="mono">' + esc(p.bizNo || "—") + '</td>'
+          + '<td>' + esc(p.ceo || "—") + '</td>'
+          + '<td class="board__addr">' + esc(p.addr || "—") + '</td>'
+          + '<td class="board__act">'
+            + '<button class="btn btn--xs" data-act="pedit" data-id="' + esc(p.id) + '">수정</button>'
+            + '<button class="btn btn--xs" data-act="pdel" data-id="' + esc(p.id) + '">삭제</button>'
+          + '</td>'
+          + '</tr>';
+      }).join("");
+      html += '<div class="board">' + head
+        + '<div class="board__scroll"><table class="board__table board__table--partner"><thead><tr>'
+        + '<th>번호</th><th>상호</th><th>사업자등록번호</th><th>대표자</th><th>사업장소재지</th><th></th>'
+        + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+        + '</div>';
+    }
+    view.innerHTML = html;
+
+    stmtOn("#partnerAddBtn", "click", function () { openPartnerModal(null); });
+    stmtOn("#partnerAddBtn2", "click", function () { openPartnerModal(null); });
+    stmtOnAll(".board__table--partner .board__row[data-pt-id]", "click", function (ev) {
+      if (ev.target.closest("button")) return;
+      openPartnerModal(findById(window.PARTNERS || [], this.getAttribute("data-pt-id")));
+    });
+    stmtOnAll('.board__act button[data-act="pedit"]', "click", function () { openPartnerModal(findById(window.PARTNERS || [], this.getAttribute("data-id"))); });
+    stmtOnAll('.board__act button[data-act="pdel"]', "click", function () { deletePartnerById(this.getAttribute("data-id")); });
+  }
+
+  function openPartnerModal(prefill) {
+    var el = document.getElementById("partnerModal");
+    if (!el) { el = buildPartnerModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#partnerModalTitle").textContent = editing ? "거래처 정보 수정" : "신규 거래처 등록";
+    el.querySelector("#partnerDelBtn").hidden = !editing;
+    form.name.value = (prefill && prefill.name) || "";
+    form.bizNo.value = (prefill && prefill.bizNo) || "";
+    form.ceo.value = (prefill && prefill.ceo) || "";
+    form.addr.value = (prefill && prefill.addr) || "";
+    el.hidden = false;
+    setTimeout(function () { form.name.focus(); }, 30);
+  }
+  function closePartnerModal() {
+    var el = document.getElementById("partnerModal");
+    if (el) el.hidden = true;
+  }
+  function buildPartnerModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "partnerModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="거래처 등록">'
+      + '<div class="modal__head"><h3 id="partnerModalTitle">신규 거래처 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="partnerForm">'
+      + '<label class="fld"><span>상호</span><input type="text" name="name" maxlength="40" required placeholder="예: 뚜레주르 판교대장점"></label>'
+      + '<div class="fld-row--2">'
+        + '<label class="fld"><span>사업자등록번호</span><input type="text" name="bizNo" maxlength="20" placeholder="000-00-00000"></label>'
+        + '<label class="fld"><span>대표자</span><input type="text" name="ceo" maxlength="20" placeholder="대표자명"></label>'
+      + '</div>'
+      + '<label class="fld"><span>사업장소재지</span><input type="text" name="addr" maxlength="120" placeholder="주소"></label>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="partnerDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) closePartnerModal();
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var name = f.name.value.trim();
+      if (!name) return;
+      var id = f.dataset.id;
+      var rec = normPartner({
+        id: id || newId("p"), name: name,
+        bizNo: f.bizNo.value.trim(), ceo: f.ceo.value.trim(), addr: f.addr.value.trim(),
+      });
+      if (!window.PARTNERS) window.PARTNERS = [];
+      var idx = id ? indexById(window.PARTNERS, id) : -1;
+      if (idx > -1) window.PARTNERS[idx] = rec; else window.PARTNERS.push(rec);
+      saveToSheet({ type: "partner", action: id ? "update" : "add", id: rec.id, name: rec.name, bizNo: rec.bizNo, ceo: rec.ceo, addr: rec.addr });
+      closePartnerModal();
+      renderPartner();
+    });
+    wrap.querySelector("#partnerDelBtn").addEventListener("click", function () {
+      var id = wrap.querySelector("form").dataset.id;
+      if (!id) return;
+      if (!confirm("이 거래처를 삭제할까요? (기존 명세서에는 영향 없음)")) return;
+      window.PARTNERS = (window.PARTNERS || []).filter(function (p) { return String(p.id) !== String(id); });
+      saveToSheet({ type: "partner", action: "delete", id: id });
+      closePartnerModal();
+      renderPartner();
+    });
+    return wrap;
+  }
+  function deletePartnerById(id) {
+    var p = findById(window.PARTNERS || [], id);
+    if (!p) return;
+    if (!confirm((p.name || "") + " 거래처를 삭제할까요? (기존 명세서에는 영향 없음)")) return;
+    window.PARTNERS = (window.PARTNERS || []).filter(function (x) { return String(x.id) !== String(id); });
+    saveToSheet({ type: "partner", action: "delete", id: id });
+    renderPartner();
+  }
+
   var VIEWS = {
     statement:   { title: "BILLING", render: renderStatement },
+    partner:     { title: "PARTNER", render: renderPartner },
     dashboard:   { title: "DASHBOARD", render: renderDashboard },
     crew:        { title: "CREW", render: renderCrew },
     interview:   { title: "INTERVIEW", render: renderInterview },

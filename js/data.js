@@ -155,7 +155,8 @@ window.PARTNERS = [
 ];
 
 /* --- 거래명세서 : 시트 "statements"
-   (헤더 = id,docNo,billDate,dueDate,customerName,contactName,bankName,accountNo,accountHolder,phone,email,items,supplyAmount,vat,total,memo,status,createdAt)
+   (헤더 = id,docNo,billDate,dueDate,customerName,contactName,bankName,accountNo,accountHolder,phone,email,items,shipping,supplyAmount,vat,total,memo,status,createdAt)
+   shipping : 배송비(부가세 별도). 세액(10%)이 붙어 총 공급가액·세액·합계에 합산됩니다.
    공급자 = 주식회사 링키지랩(고정) / items = 품목 배열 JSON. 각 품목 = { name, price(단가·부가세별도), qty }
    status : 작성 | 확정
    계산규칙 : 단가는 부가세 별도.
@@ -168,6 +169,7 @@ window.STATEMENTS = [
       { name:"스낵 큐레이션 (1월)", price:1500000, qty:1 },
       { name:"운영 관리비",         price:500000,  qty:1 },
     ],
+    shipping:0,
     supplyAmount:2000000, vat:200000, total:2200000,
     memo:"", status:"확정", createdAt:"2025-01-14T00:00:00.000Z" },
 ];

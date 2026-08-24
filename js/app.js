@@ -161,17 +161,18 @@
     var items = parseItems_(r.items).map(function (it) {
       return { name: it.name || "", price: +it.price || 0, qty: +it.qty || 0 };
     });
-    var t = stmtTotals(items);
+    var shipping = +r.shipping || 0;
+    var g = stmtGrand(items, shipping);
     return {
       id: r.id || "", docNo: r.docNo || "",
       billDate: fmtDay(r.billDate || r.date), dueDate: fmtDay(r.dueDate),
       customerName: r.customerName || "", contactName: r.contactName || "",
       bankName: r.bankName || "", accountNo: r.accountNo || "", accountHolder: r.accountHolder || "",
       phone: r.phone || "", email: r.email || "",
-      items: items,
-      supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : t.supply,
-      vat: r.vat != null && r.vat !== "" ? +r.vat : t.vat,
-      total: r.total != null && r.total !== "" ? +r.total : t.total,
+      items: items, shipping: shipping,
+      supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : g.supply,
+      vat: r.vat != null && r.vat !== "" ? +r.vat : g.vat,
+      total: r.total != null && r.total !== "" ? +r.total : g.total,
       memo: r.memo || "", status: r.status || "작성",
       createdAt: r.createdAt || "", driveUrl: r.driveUrl || "",
     };
@@ -190,6 +191,19 @@
       acc.supply += l.supply; acc.vat += l.vat; acc.total += l.total;
       return acc;
     }, { supply: 0, vat: 0, total: 0 });
+  }
+  /** 품목 합계 + 배송비(부가세 별도)를 합산한 최종 합계 */
+  function stmtGrand(items, shipping) {
+    var t = stmtTotals(items);
+    var ship = +shipping || 0;
+    var shipVat = Math.round(ship * 0.1);
+    return {
+      itemsSupply: t.supply, itemsVat: t.vat,
+      shipping: ship, shipVat: shipVat,
+      supply: t.supply + ship,
+      vat: t.vat + shipVat,
+      total: t.supply + ship + t.vat + shipVat,
+    };
   }
   /** 천 단위 콤마 (원화) */
   function won(n) { return (Math.round(+n || 0)).toLocaleString("en-US"); }
@@ -5100,7 +5114,7 @@
         bankName: extra.bankName || "", accountNo: extra.accountNo || "",
         accountHolder: extra.accountHolder || company().name,
         phone: extra.phone || "", email: extra.email || "",
-        items: [{ name: "", price: 0, qty: 0 }],
+        items: [{ name: "", price: 0, qty: 0 }], shipping: 0,
         memo: "", status: "작성",
       };
     }
@@ -5125,7 +5139,7 @@
 
   function renderStatementEditor() {
     var s = stmtDraft;
-    var t = stmtTotals(s.items);
+    var g = stmtGrand(s.items, s.shipping);
     var partners = window.PARTNERS || [];
     var curCust = null;
     for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.customerName) { curCust = partners[pi]; break; } }
@@ -5183,12 +5197,20 @@
       + '<th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th></th>'
       + '</tr></thead><tbody id="stmtItemBody">'
       + s.items.map(stmtItemRowHTML).join("")
-      + '</tbody><tfoot><tr class="stmt-total-row">'
-      + '<td colspan="4">합계</td>'
-      + '<td class="num" id="stmtTotSupply">' + won(t.supply) + '</td>'
-      + '<td class="num" id="stmtTotVat">' + won(t.vat) + '</td>'
-      + '<td class="num" id="stmtTotTotal"><b>' + won(t.total) + '</b></td>'
-      + '<td></td>'
+      + '</tbody><tfoot>'
+      + '<tr class="stmt-ship-row">'
+        + '<td colspan="4">배송비 <span class="stmt-hint">부가세 별도</span></td>'
+        + '<td class="num"><input class="stmt-in stmt-in--num" id="stmtShip" type="number" min="0" value="' + (s.shipping || "") + '" placeholder="0"></td>'
+        + '<td class="num" id="stmtShipVat">' + won(g.shipVat) + '</td>'
+        + '<td class="num" id="stmtShipTotal">' + won(g.shipping + g.shipVat) + '</td>'
+        + '<td></td>'
+      + '</tr>'
+      + '<tr class="stmt-total-row">'
+        + '<td colspan="4">합계</td>'
+        + '<td class="num" id="stmtTotSupply">' + won(g.supply) + '</td>'
+        + '<td class="num" id="stmtTotVat">' + won(g.vat) + '</td>'
+        + '<td class="num" id="stmtTotTotal"><b>' + won(g.total) + '</b></td>'
+        + '<td></td>'
       + '</tr></tfoot></table></div>';
     html += '<button class="btn btn--sm" id="stmtAddItemBtn">+ 품목 추가</button>';
 
@@ -5227,11 +5249,17 @@
     });
 
     // 품목 입력 → 해당 행/합계만 갱신 (포커스 유지)
-    stmtOnAll(".stmt-item-table input.stmt-in", "input", function () {
+    stmtOnAll(".stmt-item-table input.stmt-in[data-i]", "input", function () {
       var i = +this.getAttribute("data-i"), f = this.getAttribute("data-f");
       var val = (f === "price" || f === "qty") ? (+this.value || 0) : this.value;
       stmtDraft.items[i][f] = val;
       if (f === "price" || f === "qty") recomputeStatementRow(i);
+    });
+
+    // 배송비 입력 → 합계 갱신
+    stmtOn("#stmtShip", "input", function () {
+      stmtDraft.shipping = +this.value || 0;
+      recomputeStatementRow(-1);
     });
 
     // 행 삭제
@@ -5260,20 +5288,25 @@
     stmtDraft.phone = g("#stmtPhone");
     stmtDraft.email = g("#stmtEmail");
     stmtDraft.memo = g("#stmtMemo");
+    if (stmtQ("#stmtShip")) stmtDraft.shipping = +stmtQ("#stmtShip").value || 0;
   }
 
   function recomputeStatementRow(i) {
-    var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
-    if (row) {
-      var l = stmtLine(stmtDraft.items[i]);
-      row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
-      row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
-      row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
+    if (i >= 0) {
+      var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
+      if (row) {
+        var l = stmtLine(stmtDraft.items[i]);
+        row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
+        row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
+        row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
+      }
     }
-    var t = stmtTotals(stmtDraft.items);
-    if (stmtQ("#stmtTotSupply")) stmtQ("#stmtTotSupply").textContent = won(t.supply);
-    if (stmtQ("#stmtTotVat")) stmtQ("#stmtTotVat").textContent = won(t.vat);
-    if (stmtQ("#stmtTotTotal")) stmtQ("#stmtTotTotal").innerHTML = "<b>" + won(t.total) + "</b>";
+    var g = stmtGrand(stmtDraft.items, stmtDraft.shipping);
+    if (stmtQ("#stmtShipVat")) stmtQ("#stmtShipVat").textContent = won(g.shipVat);
+    if (stmtQ("#stmtShipTotal")) stmtQ("#stmtShipTotal").textContent = won(g.shipping + g.shipVat);
+    if (stmtQ("#stmtTotSupply")) stmtQ("#stmtTotSupply").textContent = won(g.supply);
+    if (stmtQ("#stmtTotVat")) stmtQ("#stmtTotVat").textContent = won(g.vat);
+    if (stmtQ("#stmtTotTotal")) stmtQ("#stmtTotTotal").innerHTML = "<b>" + won(g.total) + "</b>";
   }
 
   function saveStatement() {
@@ -5284,8 +5317,8 @@
     if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
     s.items = validItems;
 
-    var t = stmtTotals(s.items);
-    s.supplyAmount = t.supply; s.vat = t.vat; s.total = t.total;
+    var g = stmtGrand(s.items, s.shipping);
+    s.supplyAmount = g.supply; s.vat = g.vat; s.total = g.total;
     if (!s.id) s.id = newId("st");
     if (!s.createdAt) s.createdAt = s.billDate ? (s.billDate + "T00:00:00.000Z") : "";
 
@@ -5301,7 +5334,7 @@
       customerName: rec.customerName, contactName: rec.contactName,
       bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
       phone: rec.phone, email: rec.email,
-      items: JSON.stringify(rec.items),
+      items: JSON.stringify(rec.items), shipping: rec.shipping,
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
       memo: rec.memo, status: rec.status, createdAt: rec.createdAt,
     }).then(function (res) {
@@ -5359,6 +5392,7 @@
   /** 거래명세서 레이아웃 (보기/인쇄 공용) — 링키지랩(공급자) 발행 양식 */
   function statementSheetHTML(s) {
     var co = company();
+    var g = stmtGrand(s.items, s.shipping);
     var rows = "";
     var maxRows = Math.max(s.items.length, 4); // 빈 줄 포함
     for (var i = 0; i < maxRows; i++) {
@@ -5420,6 +5454,8 @@
       + '</tr></thead><tbody>' + rows + '</tbody></table>'
       // 합계
       + '<div class="stmt-sheet__totals">'
+        + (g.shipping ? '<div class="stmt-sheet__trow"><span class="tk">품목 공급가액</span><span class="tv">' + won(g.itemsSupply) + '</span></div>'
+            + '<div class="stmt-sheet__trow"><span class="tk">배송비</span><span class="tv">' + won(g.shipping) + '</span></div>' : '')
         + '<div class="stmt-sheet__trow"><span class="tk">총 공급가액</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
         + '<div class="stmt-sheet__trow"><span class="tk">총 세액</span><span class="tv">' + won(s.vat) + '</span></div>'
         + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">총 합계</span><span class="tv">' + won(s.total) + '</span></div>'

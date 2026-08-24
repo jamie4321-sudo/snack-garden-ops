@@ -1569,6 +1569,9 @@ html[data-authed="1"] .lock { display: none; }
 .stmt-del-item:hover { border-color: var(--red); }
 .stmt-total-row td { background: var(--panel-2); font-weight: 700; border-top: 2px solid var(--line); }
 .stmt-total-row td.num { font-family: var(--mono); }
+.stmt-ship-row td { background: var(--panel); border-top: 1px dashed var(--line); }
+.stmt-ship-row td.num { font-family: var(--mono); }
+.stmt-ship-row .stmt-in--num { max-width: 120px; margin-left: auto; }
 
 /* ---- 보기/인쇄용 거래명세서 시트 (링키지랩 발행 양식) ---- */
 .stmt-sheet {

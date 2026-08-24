@@ -56,7 +56,7 @@ var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueD
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
 // 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
 // driveUrl : 저장 시 생성해 드라이브에 보관한 PDF 링크(서버에서 채움).
-var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
+var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","shipping","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
 
 // 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
@@ -689,6 +689,7 @@ function statementValuesObj_(data) {
     bankName: data.bankName || "", accountNo: data.accountNo || "", accountHolder: data.accountHolder || "",
     phone: data.phone || "", email: data.email || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
+    shipping: data.shipping || 0,
     supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
     memo: data.memo || "", status: data.status || "작성", createdAt: data.createdAt || "",
     driveUrl: data.driveUrl || ""
@@ -791,6 +792,13 @@ function saveStatementPdf_(data) {
     tS += supply; tV += vat; tT += total;
     rows.push([String(it.name || ""), won_(it.price), String(+it.qty || 0), won_(supply), won_(vat), won_(total)]);
   });
+  // 배송비 (부가세 별도)
+  var ship = +data.shipping || 0;
+  if (ship > 0) {
+    var shipVat = Math.round(ship * 0.1);
+    tS += ship; tV += shipVat; tT += ship + shipVat;
+    rows.push(["배송비", "", "", won_(ship), won_(shipVat), won_(ship + shipVat)]);
+  }
   rows.push(["합계", "", "", won_(tS), won_(tV), won_(tT)]);
   var table = body.appendTable(rows);
   table.getRow(0).editAsText().setBold(true);

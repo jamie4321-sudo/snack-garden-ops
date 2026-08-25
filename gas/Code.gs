@@ -66,7 +66,11 @@ var COMPANY = {
   ceo: "박대영",
   addr: "서울특별시 성동구 성수동2가 314-37번지 3층"
 };
-// 거래명세서 PDF 를 보관할 드라이브 폴더명 (없으면 자동 생성)
+// 거래명세서 PDF 보관 폴더.
+//  ▶ 특정 드라이브 폴더를 지정하려면 STATEMENT_FOLDER_ID 에 폴더 ID를 넣으세요.
+//    (폴더 URL 이 .../folders/XXXXXXXX 이면 XXXXXXXX 부분이 폴더 ID)
+//  ▶ 비워두면 내 드라이브에 STATEMENT_FOLDER_NAME 이름의 폴더를 자동 생성해서 사용합니다.
+var STATEMENT_FOLDER_ID = "";
 var STATEMENT_FOLDER_NAME = "거래명세서";
 
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
@@ -725,10 +729,26 @@ function handleStatement_(action, data) {
   return json_({ ok: false, error: "unknown action" });
 }
 
-/** 거래명세서 PDF 보관 폴더 (없으면 생성) */
+/** 거래명세서 PDF 보관 폴더.
+ *  STATEMENT_FOLDER_ID 가 지정돼 있으면 그 폴더를, 없으면 이름으로 찾거나 자동 생성. */
 function statementFolder_() {
+  if (STATEMENT_FOLDER_ID) {
+    return DriveApp.getFolderById(STATEMENT_FOLDER_ID);
+  }
   var it = DriveApp.getFoldersByName(STATEMENT_FOLDER_NAME);
   return it.hasNext() ? it.next() : DriveApp.createFolder(STATEMENT_FOLDER_NAME);
+}
+
+/** ★ 최초 1회 실행용 (밑줄 없는 공개 함수 → Apps Script 실행 목록에 보임).
+ *  이 함수를 실행하고 권한을 승인하면 Drive · Docs 접근이 허용되고,
+ *  지정한(또는 자동 생성된) 보관 폴더의 이름·링크를 로그로 확인할 수 있습니다. */
+function authorizeStatement() {
+  var folder = statementFolder_();                 // Drive 권한
+  var doc = DocumentApp.create("_tmp_authorize_");  // Docs 권한
+  DriveApp.getFileById(doc.getId()).setTrashed(true);
+  var msg = "OK · 보관 폴더: " + folder.getName() + " · " + folder.getUrl();
+  Logger.log(msg);
+  return msg;
 }
 
 /** docNo 로 만든 PDF 파일명 (동일 문서번호는 하나만 유지) */

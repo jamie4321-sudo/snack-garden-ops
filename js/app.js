@@ -1095,6 +1095,8 @@
       + '<p class="sub">상위리더에게 보고 완료한 사항이 월별로 쌓입니다.</p></div>'
       + '</div>';
 
+    html += renderWrDocsBoard();
+
     html += '<div class="month-nav">'
       + '<div class="month-nav__nav">'
         + '<button class="iconbtn" data-wr-nav="-1" aria-label="이전">&larr;</button>'
@@ -1130,6 +1132,91 @@
         + '<button type="button" class="evt__act evt__act--del wr-act--del" data-id="' + esc(rp.id || "") + '" title="삭제">&times;</button>'
       + '</span>'
       + '</li>';
+  }
+
+  /* ------ 발행 보고서 (게시형 문서) ------ */
+  function wrDocs() { return Array.isArray(window.WR_DOCS) ? window.WR_DOCS : []; }
+
+  function renderWrDocsBoard() {
+    var docs = wrDocs();
+    if (!docs.length) return "";
+    var cards = docs.slice().sort(function (a, b) {
+      return (b.date || "").localeCompare(a.date || "");
+    }).map(function (d) {
+      return '<button type="button" class="wr-doc-card" data-doc="' + esc(d.id) + '">'
+        + '<span class="wr-doc-card__cat">' + esc(d.category || "보고서") + '</span>'
+        + '<span class="wr-doc-card__title">' + esc(d.title) + '</span>'
+        + (d.summary ? '<span class="wr-doc-card__sum">' + esc(d.summary) + '</span>' : '')
+        + '<span class="wr-doc-card__foot"><span class="wr-doc-card__date">' + esc(d.date || "") + '</span>'
+        + '<span class="wr-doc-card__open">보고서 열기 &rarr;</span></span>'
+        + '</button>';
+    }).join("");
+    return '<section class="wr-docs">'
+      + '<div class="wr-docs__head"><h3>발행 보고서</h3>'
+      + '<span class="chip-mono">' + docs.length + '건</span></div>'
+      + '<div class="wr-docs__grid">' + cards + '</div>'
+      + '</section>';
+  }
+
+  function findWrDoc(id) {
+    return wrDocs().filter(function (d) { return String(d.id) === String(id); })[0] || null;
+  }
+
+  function openWrDocModal(id) {
+    var doc = findWrDoc(id);
+    if (!doc) return;
+    var el = document.getElementById("wrDocModal");
+    if (!el) { el = buildWrDocModal(); document.body.appendChild(el); }
+    el.dataset.docId = doc.id;
+    el.querySelector("#wrDocModalTitle").textContent = doc.title;
+    el.querySelector("#wrDocBody").innerHTML = '<div class="wrdoc">' + doc.html + '</div>';
+    el.querySelector("#wrDocBody").scrollTop = 0;
+    el.hidden = false;
+  }
+  function closeWrDocModal() {
+    var el = document.getElementById("wrDocModal");
+    if (el) el.hidden = true;
+  }
+  function buildWrDocModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "wrDocModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop" data-close></div>'
+      + '<div class="modal__card modal__card--doc" role="dialog" aria-modal="true" aria-label="발행 보고서">'
+      + '<div class="modal__head"><h3 id="wrDocModalTitle">보고서</h3>'
+      + '<div class="modal__head-actions">'
+      + '<button type="button" class="btn btn--primary" data-wr-print>PDF 다운로드</button>'
+      + '<button type="button" class="modal__x" data-close aria-label="닫기">×</button>'
+      + '</div></div>'
+      + '<div class="wrdoc-scroll" id="wrDocBody"></div>'
+      + '</div>';
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-close]")) { closeWrDocModal(); return; }
+      if (ev.target.closest("[data-wr-print]")) { printWrDoc(wrap.dataset.docId); return; }
+    });
+    return wrap;
+  }
+
+  function printWrDoc(id) {
+    var doc = findWrDoc(id);
+    if (!doc) return;
+    var old = document.getElementById("wrPrintArea");
+    if (old) old.parentNode.removeChild(old);
+    var area = document.createElement("div");
+    area.id = "wrPrintArea";
+    area.innerHTML = '<div class="wrdoc wrdoc--print">' + doc.html + '</div>';
+    document.body.appendChild(area);
+    document.body.classList.add("is-wr-printing");
+    var cleanup = function () {
+      document.body.classList.remove("is-wr-printing");
+      if (area && area.parentNode) area.parentNode.removeChild(area);
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    setTimeout(function () { window.print(); }, 60);
+    setTimeout(cleanup, 60000); // 안전장치
   }
 
   /* ======================================================
@@ -5791,6 +5878,9 @@
 
       var reportDoneBtn = ev.target.closest(".report-act--done[data-id]");
       if (reportDoneBtn) { completeReportQuick(reportDoneBtn.getAttribute("data-id")); return; }
+
+      var wrDocCard = ev.target.closest(".wr-doc-card[data-doc]");
+      if (wrDocCard) { openWrDocModal(wrDocCard.getAttribute("data-doc")); return; }
 
       var wrUndoBtn = ev.target.closest(".wr-act--undo[data-id]");
       if (wrUndoBtn) { uncompleteReportQuick(wrUndoBtn.getAttribute("data-id")); return; }

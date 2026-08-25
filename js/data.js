@@ -184,3 +184,81 @@ window.SUMMARY = {
   points: [],
   reports: [],
 };
+
+/* =========================================================
+   발행 보고서 (업무 보고 · 게시형 문서)
+   ---------------------------------------------------------
+   html : .wrdoc 스코프 안에서 렌더링/인쇄되는 보고서 본문.
+   새 보고서는 이 배열에 객체 하나를 추가하면 목록에 노출됩니다.
+   ========================================================= */
+window.WR_DOCS = [
+  {
+    id: "wr-mobility-landscaping-2026-08",
+    title: "모빌리티 조경 관리구역 변경 검토",
+    date: "2026-08-25",
+    category: "조경 관리",
+    author: "Jamie · Snack & Garden",
+    summary: "리모델링에 따른 플랜트박스 삭제가 현장 관리공수에 미치는 영향을 정량 환산하고 관리비 조정 기준을 검토.",
+    html: [
+      '<div class="wrdoc-head">',
+        '<span class="wrdoc-eyebrow">Snack &amp; Garden · 조경 관리 검토</span>',
+        '<h1 class="wrdoc-title">모빌리티 조경 관리구역 변경 검토</h1>',
+        '<p class="wrdoc-lede">리모델링에 따른 플랜트박스 삭제가 실제 <b>현장 관리공수</b>에 미치는 영향을 정량 환산하고, 관리비 조정 기준을 판단하기 위한 검토 보고입니다.</p>',
+        '<div class="wrdoc-meta"><span><b>대상</b> 7·8·9·13층</span><span><b>확정 삭제</b> 대형조성 12개</span><span><b>작성일</b> 2026-08-25</span></div>',
+      '</div>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">01</span>기존 관리 현황</h2>',
+        '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>구분</th><th>기본 플랜트박스</th><th>대형조성</th><th>소형·중형 화분</th></tr></thead>',
+        '<tbody><tr><td>7층</td><td>56</td><td>9</td><td>10</td></tr>',
+        '<tr><td>8층</td><td>71</td><td>9</td><td>3</td></tr>',
+        '<tr><td>9층</td><td>67</td><td>9 *</td><td>5</td></tr>',
+        '<tr><td>13층</td><td>44</td><td>8 *</td><td>1</td></tr>',
+        '<tr class="wrdoc-total"><td>합계</td><td>238</td><td>35</td><td>19</td></tr></tbody></table></div>',
+        '<p class="wrdoc-note">* 9층 대형조성 9개 중 7개 삭제, 13층 대형조성 8개 중 5개 삭제 → 확정 삭제량 <b>총 12개</b></p>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">02</span>관리공수 환산 기준</h2>',
+        '<div class="wrdoc-cards">',
+          '<div class="wrdoc-card"><p class="k">기본 플랜트박스 1개</p><p class="v">1<small> 공수</small></p></div>',
+          '<div class="wrdoc-card"><p class="k">대형조성 1개</p><p class="v">≈8<small> 공수</small></p></div>',
+          '<div class="wrdoc-card"><p class="k">소형·중형 화분 1개</p><p class="v">1<small> 공수(단순환산)</small></p></div>',
+        '</div>',
+        '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>층</th><th>환산식</th><th>관리공수</th></tr></thead>',
+        '<tbody><tr><td>7층</td><td>56 + (9×8) + 10</td><td>138</td></tr>',
+        '<tr><td>8층</td><td>71 + (9×8) + 3</td><td>146</td></tr>',
+        '<tr><td>9층</td><td>67 + (9×8) + 5</td><td>144</td></tr>',
+        '<tr><td>13층</td><td>44 + (8×8) + 1</td><td>109</td></tr>',
+        '<tr class="wrdoc-total"><td>전체</td><td>4개 층 합계</td><td>537</td></tr></tbody></table></div>',
+        '<p class="wrdoc-note">4개 층 평균 537 ÷ 4 ≈ <b>134.3</b> → 1개 층 평균 관리공수 ≈ 134</p>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">03</span>삭제 시나리오별 영향</h2>',
+        '<div class="wrdoc-scen">',
+          '<div class="wrdoc-scard"><p class="tag">시나리오 ①</p><p class="cond">대형조성 12개만 삭제</p><p class="big">17.9<small>%</small></p><p class="sub">공수 −96 · 층 환산 ≈ 0.72층</p></div>',
+          '<div class="wrdoc-scard hot"><p class="tag">시나리오 ②</p><p class="cond">대형 12개 + 기본 32개 삭제</p><p class="big">23.8<small>%</small></p><p class="sub">공수 −128 · 층 환산 ≈ 0.95층</p></div>',
+        '</div>',
+        '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>삭제 조건</th><th>공수 감소</th><th>전체 감소율</th><th>층 환산</th></tr></thead>',
+        '<tbody><tr><td>① 대형조성 12개만 삭제</td><td class="pos">−96</td><td>17.9%</td><td>≈ 0.72층</td></tr>',
+        '<tr><td>② 대형 12개 + 기본 32개 삭제</td><td class="pos">−128</td><td>23.8%</td><td>≈ 0.95층</td></tr>',
+        '<tr><td>정확한 1개 층 기준</td><td>≈ 134</td><td>25%</td><td>1층</td></tr></tbody></table></div>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">04</span>최종 판단</h2>',
+        '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>구분</th><th>결과</th><th>해석</th></tr></thead>',
+        '<tbody><tr><td>① 기본 32개 유지</td><td>약 0.72층 감소</td><td>4→3개 층 조정하기엔 감소폭이 다소 큼</td></tr>',
+        '<tr><td>② 기본 32개 폐기</td><td>약 0.95층 / 23.8%</td><td>실질적 1개 층에 근접 → 3개 층 조정의 충분한 근거</td></tr></tbody></table></div>',
+        '<div class="wrdoc-callout"><span class="lbl">표현 주의</span><p>9층·13층 자체가 관리구역에서 사라지는 것은 아니며, <b>이동·라운딩·잔여 식재 점검·병해충 확인</b> 등 고정 공수는 계속 발생합니다. 따라서 “1개 층 삭제”보다 <b>“식재 관리공수 기준 약 1개 층 상당 감소”</b>가 정확한 표현입니다.</p></div>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">05</span>최종 요약</h2>',
+        '<div class="wrdoc-summary">',
+          '<p class="rlabel">Executive Summary</p>',
+          '<p>모빌리티 리모델링에 따라 현재 <b>9층·13층 대형조성 플랜트박스 총 12개</b>가 삭제될 예정입니다.</p>',
+          '<p>현장 관리공수 기준(대형 1개 ≈ 기본 8개)으로 환산하면, 확정 삭제분은 기존 관리공수의 <span class="hl">약 17.9%, 약 0.72개 층</span> 수준입니다.</p>',
+          '<p>추가 검토 중인 <b>기본 플랜트박스 약 32개</b>까지 삭제될 경우 총 감소율은 <span class="hl">약 23.8%, 약 0.95개 층</span>에 해당합니다.</p>',
+          '<p>따라서 기본 32개까지 최종 폐기되는 경우 <b>관리공수 기준 약 1개 층 상당 감소</b>로 보는 것이 적절하며, <b>폐기 확정 후 관리비 조정 기준을 최종 협의</b>하는 것이 좋겠습니다.</p>',
+        '</div>',
+      '</section>',
+    ].join(""),
+  },
+];

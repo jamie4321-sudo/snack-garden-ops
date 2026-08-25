@@ -1759,3 +1759,84 @@ html[data-authed="1"] .lock { display: none; }
   .wrdoc-tw, .wrdoc-sec, .wrdoc-scard, .wrdoc-callout, .wrdoc-summary { break-inside: avoid; }
   @page { size: A4; margin: 14mm 12mm; }
 }
+
+/* =========================================================
+   업무 보고 재설계 : 존/배지/드라이브/아카이브
+   ========================================================= */
+.wr-zone { margin: 4px 0 30px; }
+.wr-zone__head { display: flex; align-items: center; gap: 9px; margin: 0 0 13px; }
+.wr-zone__no { font-size: 12px; font-weight: 800; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 9px; }
+.wr-zone__head h3 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -.3px; }
+
+.wr-badge { font-size: 10px; font-weight: 800; letter-spacing: .03em; border-radius: 6px; padding: 3px 7px; line-height: 1; flex: none; }
+.wr-badge.b-html, .wr-badge.b-htm { background: color-mix(in srgb, var(--accent) 24%, transparent); color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.wr-badge.b-ppt, .wr-badge.b-pptx { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--line)); }
+.wr-badge.b-pdf { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 38%, var(--line)); }
+.wr-badge.b-xls, .wr-badge.b-xlsx, .wr-badge.b-csv { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 38%, var(--line)); }
+.wr-badge.b-doc, .wr-badge.b-docx { background: color-mix(in srgb, var(--slate) 18%, transparent); color: var(--slate); border: 1px solid color-mix(in srgb, var(--slate) 38%, var(--line)); }
+.wr-badge.b-img, .wr-badge.b-jpg, .wr-badge.b-png, .wr-badge.b-file { background: var(--panel-2); color: var(--ink-3); border: 1px solid var(--line); }
+
+.wr-doc-card__top { display: flex; align-items: center; gap: 7px; }
+.wr-doc-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border: 1.5px dashed var(--line); border-radius: var(--r-lg); color: var(--ink-3); font-size: 13px; font-weight: 700; min-height: 120px; }
+.wr-doc-add span { font-family: var(--mono); font-size: 10px; color: var(--ink-3); opacity: .7; }
+
+.wr-folder { padding: 4px 4px 6px; margin-bottom: 14px; }
+.wr-folder__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px 10px; }
+.wr-folder__title { font-size: 15px; font-weight: 800; letter-spacing: -.3px; }
+.wr-folder__title .cnt { font-size: 11px; font-weight: 700; color: var(--ink-3); background: var(--panel-2); border-radius: 999px; padding: 2px 8px; margin-left: 4px; }
+.wr-drivebtn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 13px; cursor: pointer; text-decoration: none; transition: .15s; }
+.wr-drivebtn:hover { border-color: var(--accent-text); color: var(--accent-text); }
+.wr-drivebtn.is-off { opacity: .5; cursor: default; }
+.wr-frow { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-top: 1px solid var(--line-soft); transition: background .12s; }
+.wr-frow:hover { background: var(--panel-2); }
+.wr-frow__name { font-size: 13.5px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-frow__date { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.wr-frow__open { font-size: 11.5px; font-weight: 700; color: var(--ink-3); text-decoration: none; white-space: nowrap; }
+.wr-frow:hover .wr-frow__open { color: var(--accent-text); }
+.wr-frow__open.is-off { opacity: .45; }
+.wr-frow--empty { color: var(--ink-3); font-size: 12.5px; justify-content: center; }
+.wr-fmore { display: block; width: 100%; text-align: center; padding: 11px; font-size: 12.5px; color: var(--ink-3);
+  background: transparent; border: 0; border-top: 1px solid var(--line-soft); cursor: pointer; font-family: inherit; }
+.wr-fmore:hover { color: var(--ink); }
+
+.wr-arch__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.wr-arch__right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.wr-arch__stat { font-size: 12.5px; color: var(--ink-2); }
+.wr-arch__stat b { font-size: 19px; font-weight: 800; color: var(--ink); font-family: var(--mono); margin-right: 3px; }
+.seg.wr-arch__years, .seg.wr-arch__mode { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.seg.wr-arch__years button, .seg.wr-arch__mode button { border: 0; background: transparent; color: var(--ink-3); font-family: inherit; font-weight: 700; font-size: 12.5px; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.seg.wr-arch__years button.on, .seg.wr-arch__mode button.on { background: var(--ink); color: var(--bg); }
+.wr-months { display: grid; grid-template-columns: repeat(auto-fill, minmax(228px, 1fr)); gap: 12px; }
+.wr-mtile { text-align: left; cursor: pointer; background: var(--card-bg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 15px; font-family: inherit; color: var(--ink); transition: .15s; }
+.wr-mtile:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); box-shadow: var(--shadow); transform: translateY(-2px); }
+.wr-mtile.empty { opacity: .55; cursor: default; }
+.wr-mtile.empty:hover { transform: none; box-shadow: none; border-color: var(--line); }
+.wr-mtile__top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+.wr-mtile__m { font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+.wr-mtile__m small { font-size: 12px; color: var(--ink-3); font-weight: 600; margin-left: 3px; }
+.wr-mtile__cnt { font-size: 11.5px; font-weight: 800; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 2px 9px; }
+.wr-mtile__cnt.zero { background: var(--panel-2); color: var(--ink-3); }
+.wr-mtile__peek { margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--ink-2); line-height: 1.75; }
+.wr-mtile__peek li { padding-left: 12px; position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-mtile__peek li::before { content: ""; position: absolute; left: 0; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent-text); }
+.wr-mtile__peek li.muted::before { background: var(--ink-3); }
+.wr-mtile__more { margin-top: 8px; font-size: 11.5px; color: var(--ink-3); font-weight: 700; }
+
+.wr-timeline { position: relative; padding-left: 18px; }
+.wr-timeline::before { content: ""; position: absolute; left: 4px; top: 4px; bottom: 4px; width: 2px; background: var(--line); }
+.wr-tl__month { position: relative; margin-bottom: 20px; }
+.wr-tl__mark { position: absolute; left: -18px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); }
+.wr-tl__head { font-size: 14px; font-weight: 800; margin-bottom: 8px; }
+.wr-tl__head .chip-mono { margin-left: 6px; }
+.wr-tl__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.wr-tl__list li { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--ink); background: var(--card-bg); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px; }
+.wr-tl__date { font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex: none; }
+
+.wr-back { border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); font-family: inherit; font-weight: 700;
+  font-size: 12.5px; border-radius: 999px; padding: 6px 14px; cursor: pointer; margin-bottom: 12px; }
+.wr-back:hover { border-color: var(--accent-text); color: var(--accent-text); }
+.wr-month-detail__title { font-size: 16px; font-weight: 800; margin: 0 0 12px; }
+
+@media (max-width: 640px) { .wr-arch__bar { align-items: stretch; } }

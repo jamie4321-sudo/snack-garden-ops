@@ -194,6 +194,8 @@ window.SUMMARY = {
 window.WR_DOCS = [
   {
     id: "wr-mobility-landscaping-2026-08",
+    kind: "html",
+    type: "HTML",
     title: "모빌리티 조경 관리구역 변경 검토",
     date: "2026-08-25",
     category: "조경 관리",
@@ -203,7 +205,7 @@ window.WR_DOCS = [
       '<div class="wrdoc-head">',
         '<span class="wrdoc-eyebrow">Snack &amp; Garden · 조경 관리 검토</span>',
         '<h1 class="wrdoc-title">모빌리티 조경 관리구역 변경 검토</h1>',
-        '<p class="wrdoc-lede">리모델링에 따른 플랜트박스 삭제가 실제 <b>현장 관리공수</b>에 미치는 영향을 정량 환산하고, 관리비 조정 기준을 판단하기 위한 검토 보고입니다.</p>',
+        '<p class="wrdoc-lede">리모델링에 따른 플랜트박스 삭제가 실제 <b>현장 관리공수</b>에 미치는 영향을 정량 환산하고, 이를 근거로 관리비 조정 기준을 판단하기 위한 검토 보고입니다.</p>',
         '<div class="wrdoc-meta"><span><b>대상</b> 7·8·9·13층</span><span><b>확정 삭제</b> 대형조성 12개</span><span><b>작성일</b> 2026-08-25</span></div>',
       '</div>',
 
@@ -211,10 +213,10 @@ window.WR_DOCS = [
         '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>구분</th><th>기본 플랜트박스</th><th>대형조성</th><th>소형·중형 화분</th></tr></thead>',
         '<tbody><tr><td>7층</td><td>56</td><td>9</td><td>10</td></tr>',
         '<tr><td>8층</td><td>71</td><td>9</td><td>3</td></tr>',
-        '<tr><td>9층</td><td>67</td><td>9 *</td><td>5</td></tr>',
-        '<tr><td>13층</td><td>44</td><td>8 *</td><td>1</td></tr>',
+        '<tr class="has-del"><td>9층</td><td>67</td><td>9<span class="del-mark">−7 삭제</span></td><td>5</td></tr>',
+        '<tr class="has-del"><td>13층</td><td>44</td><td>8<span class="del-mark">−5 삭제</span></td><td>1</td></tr>',
         '<tr class="wrdoc-total"><td>합계</td><td>238</td><td>35</td><td>19</td></tr></tbody></table></div>',
-        '<p class="wrdoc-note">* 9층 대형조성 9개 중 7개 삭제, 13층 대형조성 8개 중 5개 삭제 → 확정 삭제량 <b>총 12개</b></p>',
+        '<div class="del-callout"><div class="dc-num">−12<small>개 삭제</small></div><div class="dc-body">리모델링으로 <b>대형조성 플랜트박스 총 12개</b>가 삭제됩니다. 9층 9개 중 <b>7개</b>, 13층 8개 중 <b>5개</b> — 현재 확정된 삭제량입니다.</div></div>',
       '</section>',
 
       '<section class="wrdoc-sec"><h2><span class="wrdoc-no">02</span>관리공수 환산 기준</h2>',
@@ -246,7 +248,7 @@ window.WR_DOCS = [
       '<section class="wrdoc-sec"><h2><span class="wrdoc-no">04</span>최종 판단</h2>',
         '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>구분</th><th>결과</th><th>해석</th></tr></thead>',
         '<tbody><tr><td>① 기본 32개 유지</td><td>약 0.72층 감소</td><td>4→3개 층 조정하기엔 감소폭이 다소 큼</td></tr>',
-        '<tr><td>② 기본 32개 폐기</td><td>약 0.95층 / 23.8%</td><td>실질적 1개 층에 근접 → 3개 층 조정의 충분한 근거</td></tr></tbody></table></div>',
+        '<tr><td>② 기본 32개 폐기</td><td>약 0.95층 / 23.8%</td><td>실질적 1개 층에 근접 → 3개 층 조정의 근거</td></tr></tbody></table></div>',
         '<div class="wrdoc-callout"><span class="lbl">표현 주의</span><p>9층·13층 자체가 관리구역에서 사라지는 것은 아니며, <b>이동·라운딩·잔여 식재 점검·병해충 확인</b> 등 고정 공수는 계속 발생합니다. 따라서 “1개 층 삭제”보다 <b>“식재 관리공수 기준 약 1개 층 상당 감소”</b>가 정확한 표현입니다.</p></div>',
       '</section>',
 
@@ -261,4 +263,34 @@ window.WR_DOCS = [
       '</section>',
     ].join(""),
   },
+  {
+    id: "wr-evac-floor-white-2026-08",
+    kind: "link",
+    type: "HTML",
+    title: "피난안내도 · 층별 화이트 안내도",
+    date: "2026-08-25",
+    category: "시설 안내",
+    author: "Jamie · Snack & Garden",
+    summary: "7·8·9·13F 피난안내도를 화이트 톤으로 재구성한 층별 안내 도면.",
+    link: "https://claude.ai/code/artifact/33a26e06-d861-456d-ba04-cab744d2bfa6"
+  },
+];
+
+/* =========================================================
+   드라이브 관리 폴더 (업무 보고)
+   ---------------------------------------------------------
+   라이브(GAS 재배포) 시 action=drivefolders 응답으로 대체됩니다.
+   아래는 데모/폴백 데이터입니다. (Code.gs 의 DRIVE_FOLDERS 에
+   실제 폴더 ID를 넣고 재배포하면 자동으로 채워집니다.)
+   ========================================================= */
+window.DRIVE_FOLDERS = [
+  { name: "안전매뉴얼", url: "", count: 3, files: [
+    { name: "2506 온열질환예방지침(OPS).pdf",       type: "PDF", date: "2026-07-24", url: "" },
+    { name: "2506 폭염 5대 기본수칙 자율점검표.pdf", type: "PDF", date: "2026-07-24", url: "" },
+    { name: "2508 소화기-점검-및-사용방법.pdf",      type: "PDF", date: "2026-07-24", url: "" }
+  ] },
+  { name: "교육 자료", url: "", count: 2, files: [
+    { name: "2508 신규 크루 온보딩 교육.pptx",  type: "PPT", date: "2026-08-05", url: "" },
+    { name: "2507 식물 병해충 관리 가이드.pdf", type: "PDF", date: "2026-07-30", url: "" }
+  ] }
 ];

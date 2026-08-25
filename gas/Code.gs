@@ -73,6 +73,18 @@ var COMPANY = {
 var STATEMENT_FOLDER_ID = "";
 var STATEMENT_FOLDER_NAME = "거래명세서";
 
+// ── 업무 보고 · 드라이브 관리 폴더 ─────────────────────────────
+//  업무 보고 화면에 노출할 구글 드라이브 폴더 목록.
+//  각 폴더의 파일(제목·형식·수정일·링크)을 자동으로 읽어 목록화한다.
+//  ▶ id 에 폴더 ID를 넣으세요. (폴더 URL 이 .../folders/XXXX 이면 XXXX 부분)
+//  ▶ id 가 비어 있으면 해당 폴더는 빈 목록으로 표시된다.
+//  폴더를 추가하려면 { name, id } 한 줄만 더하면 된다.
+var DRIVE_FOLDERS = [
+  { name: "안전매뉴얼", id: "" },
+  { name: "교육 자료",  id: "" }
+];
+var DRIVE_FILES_LIMIT = 100;  // 폴더당 최대 조회 파일 수
+
 // 운영 데이터(크루·일정·면담·근태) 스프레드시트. 독립형(standalone) 스크립트라
 // getActiveSpreadsheet() 는 웹앱 요청 상황에서 불안정해서 ID를 고정한다.
 var SHEET_ID = "1NG8IozqEbilXBEFLjZZANJf1tQlL5wVzP29xg_Z9W6M";
@@ -217,6 +229,7 @@ function doGet(e) {
   if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
+  if (action === "drivefolders") return json_(getDriveFolders_());
   if (action === "debug")      return json_(getDebugInfo_());
   return json_({
     crew: rows_("crew", CREW_FIELDS),
@@ -752,6 +765,52 @@ function authorizeStatement() {
 }
 
 /** docNo 로 만든 PDF 파일명 (동일 문서번호는 하나만 유지) */
+/* ── 업무 보고 · 드라이브 폴더 목록 조회 ────────────────────── */
+function getDriveFolders_() {
+  return (DRIVE_FOLDERS || []).map(function (cfg) {
+    var out = { name: cfg.name, id: cfg.id || "", url: "", count: 0, files: [] };
+    if (!cfg.id) return out;
+    try {
+      var folder = DriveApp.getFolderById(cfg.id);
+      out.url = folder.getUrl();
+      var it = folder.getFiles(), arr = [], n = 0;
+      while (it.hasNext() && n < DRIVE_FILES_LIMIT) {
+        var f = it.next(); n++;
+        arr.push({
+          name: f.getName(),
+          type: driveType_(f),
+          date: Utilities.formatDate(f.getLastUpdated(), "Asia/Seoul", "yyyy-MM-dd"),
+          url: f.getUrl()
+        });
+      }
+      arr.sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+      out.files = arr; out.count = arr.length;
+    } catch (err) { out.error = String(err); }
+    return out;
+  });
+}
+
+/** 파일 형식 라벨 (확장자 우선, 없으면 MIME 로 추정) */
+function driveType_(f) {
+  var n = f.getName() || "";
+  var dot = n.lastIndexOf(".");
+  if (dot > -1 && dot < n.length - 1) {
+    var ext = n.slice(dot + 1).toUpperCase();
+    if (ext === "JPEG") ext = "JPG";
+    if (ext === "PPTX") ext = "PPT";
+    if (ext === "DOCX") ext = "DOC";
+    if (ext === "XLSX") ext = "XLS";
+    return ext.length > 4 ? ext.slice(0, 4) : ext;
+  }
+  var mt = f.getMimeType() || "";
+  if (mt.indexOf("pdf") > -1) return "PDF";
+  if (mt.indexOf("spreadsheet") > -1) return "XLS";
+  if (mt.indexOf("presentation") > -1) return "PPT";
+  if (mt.indexOf("document") > -1) return "DOC";
+  if (mt.indexOf("image") > -1) return "IMG";
+  return "FILE";
+}
+
 function statementPdfName_(data) {
   var doc = String(data.docNo || data.id || "").replace(/[\\/:*?"<>|]/g, "");
   var cust = String(data.customerName || "").replace(/[\\/:*?"<>|]/g, "");

@@ -1084,42 +1084,29 @@
     return byMonth;
   }
 
-  function renderWorkReport() {
-    var byMonth = groupReportsByMonth(completedReportsInScope());
-    var months = Object.keys(byMonth).sort().reverse();
+  var wrArchMode = "grid";                        // 아카이브 표시 : "grid" | "timeline"
+  var wrArchYear = String(TODAY).slice(0, 4);     // 아카이브 선택 연도
+  var wrExpandedMonth = null;                      // 그리드에서 펼친 월 "YYYY-MM"
 
+  function renderWorkReport() {
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Operation / Work Report</p>'
       + '<h2>업무 보고</h2>'
-      + '<p class="sub">상위리더에게 보고 완료한 사항이 월별로 쌓입니다.</p></div>'
+      + '<p class="sub">AI 보고서 · 드라이브 자료 · 리더 보고 아카이브를 한 곳에서 관리합니다.</p></div>'
       + '</div>';
 
-    html += renderWrDocsBoard();
+    html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">①</span><h3>AI 보고서 게시 보드</h3></div>'
+      + renderWrDocsBoard() + '</section>';
 
-    html += '<div class="month-nav">'
-      + '<div class="month-nav__nav">'
-        + '<button class="iconbtn" data-wr-nav="-1" aria-label="이전">&larr;</button>'
-        + '<span class="month-nav__label">' + wrScopeLabel() + '</span>'
-        + '<button class="iconbtn" data-wr-nav="1" aria-label="다음">&rarr;</button>'
-      + '</div>'
-      + '<div class="seg month-nav__seg">'
-        + '<button class="btn btn--sm ' + (wrMode === "month" ? "is-on" : "") + '" data-wr-mode="month">월간</button>'
-        + '<button class="btn btn--sm ' + (wrMode === "year" ? "is-on" : "") + '" data-wr-mode="year">' + wrAnchor.slice(0, 4) + '년</button>'
-      + '</div>'
-      + '</div>';
+    html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">②</span><h3>드라이브 관리 폴더</h3></div>'
+      + '<div id="wrDriveWrap">' + renderDriveFolders() + '</div></section>';
 
-    html += months.length
-      ? months.map(function (m) {
-          var items = byMonth[m].sort(function (a, b) { return (b.reportedAt || "").localeCompare(a.reportedAt || ""); });
-          return '<div class="wr-month">'
-            + '<h3 class="wr-month__title">' + monthLabelFromKey(m) + ' <span class="chip-mono">' + items.length + '건</span></h3>'
-            + '<ul class="wr-list">' + items.map(workReportRow).join("") + '</ul>'
-            + '</div>';
-        }).join("")
-      : '<div class="note-empty">해당 기간에 보고 완료된 사항이 없습니다.</div>';
+    html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">③</span><h3>리더 보고 아카이브</h3></div>'
+      + '<div id="wrArchWrap">' + renderArchive() + '</div></section>';
 
     view.innerHTML = html;
+    ensureDriveFolders();
   }
 
   function workReportRow(rp) {
@@ -1138,24 +1125,173 @@
   function wrDocs() { return Array.isArray(window.WR_DOCS) ? window.WR_DOCS : []; }
 
   function renderWrDocsBoard() {
-    var docs = wrDocs();
-    if (!docs.length) return "";
-    var cards = docs.slice().sort(function (a, b) {
+    var docs = wrDocs().slice().sort(function (a, b) {
       return (b.date || "").localeCompare(a.date || "");
-    }).map(function (d) {
+    });
+    var cards = docs.map(function (d) {
+      var t = (d.type || "DOC").toLowerCase();
+      var open = d.kind === "link" ? "파일 열기 &rarr;" : "보고서 열기 &rarr;";
       return '<button type="button" class="wr-doc-card" data-doc="' + esc(d.id) + '">'
-        + '<span class="wr-doc-card__cat">' + esc(d.category || "보고서") + '</span>'
+        + '<span class="wr-doc-card__top"><span class="wr-badge b-' + esc(t) + '">' + esc(d.type || "DOC") + '</span>'
+        + '<span class="wr-doc-card__cat">' + esc(d.category || "보고서") + '</span></span>'
         + '<span class="wr-doc-card__title">' + esc(d.title) + '</span>'
         + (d.summary ? '<span class="wr-doc-card__sum">' + esc(d.summary) + '</span>' : '')
         + '<span class="wr-doc-card__foot"><span class="wr-doc-card__date">' + esc(d.date || "") + '</span>'
-        + '<span class="wr-doc-card__open">보고서 열기 &rarr;</span></span>'
+        + '<span class="wr-doc-card__open">' + open + '</span></span>'
         + '</button>';
     }).join("");
-    return '<section class="wr-docs">'
-      + '<div class="wr-docs__head"><h3>발행 보고서</h3>'
-      + '<span class="chip-mono">' + docs.length + '건</span></div>'
-      + '<div class="wr-docs__grid">' + cards + '</div>'
-      + '</section>';
+    return '<div class="wr-docs__grid">' + cards
+      + '<div class="wr-doc-add" title="js/data.js 의 WR_DOCS 배열에 추가">＋ 보고서 추가<span>data.js · WR_DOCS</span></div>'
+      + '</div>';
+  }
+
+  /* ② 드라이브 관리 폴더 */
+  function driveFolders() { return Array.isArray(window.DRIVE_FOLDERS) ? window.DRIVE_FOLDERS : []; }
+  var wrDriveOpen = {};       // 폴더 index -> 더보기 펼침 여부
+  var wrDriveLoaded = false;  // 라이브 로드 1회
+
+  function renderDriveFolders() {
+    var folders = driveFolders();
+    if (!folders.length) return '<div class="note-empty">연동된 드라이브 폴더가 없습니다. (Code.gs 의 DRIVE_FOLDERS 설정)</div>';
+    return folders.map(function (fd, fi) {
+      var files = fd.files || [];
+      var openAll = !!wrDriveOpen[fi];
+      var shown = openAll ? files : files.slice(0, 3);
+      var rows = shown.map(function (f) {
+        var t = (f.type || "FILE").toLowerCase();
+        var open = f.url
+          ? '<a class="wr-frow__open" href="' + esc(f.url) + '" target="_blank" rel="noopener">🔗 열기</a>'
+          : '<span class="wr-frow__open is-off">열기</span>';
+        return '<div class="wr-frow"><span class="wr-badge b-' + esc(t) + '">' + esc(f.type || "FILE") + '</span>'
+          + '<span class="wr-frow__name" title="' + esc(f.name) + '">' + esc(f.name) + '</span>'
+          + '<span class="wr-frow__date">' + esc(f.date || "") + '</span>' + open + '</div>';
+      }).join("");
+      var more = files.length > 3
+        ? '<button type="button" class="wr-fmore" data-drive-more="' + fi + '">'
+          + (openAll ? '접기' : '더보기 (' + (files.length - 3) + '건 더)') + '</button>'
+        : "";
+      var driveBtn = fd.url
+        ? '<a class="wr-drivebtn" href="' + esc(fd.url) + '" target="_blank" rel="noopener">🔗 드라이브 폴더</a>'
+        : '<span class="wr-drivebtn is-off" title="폴더 ID 미설정 (Code.gs DRIVE_FOLDERS)">🔗 드라이브 폴더</span>';
+      return '<div class="panel wr-folder">'
+        + '<div class="wr-folder__head"><span class="wr-folder__title">' + esc(fd.name)
+        + ' <span class="cnt">' + (fd.count != null ? fd.count : files.length) + '건</span></span>' + driveBtn + '</div>'
+        + (rows || '<div class="wr-frow wr-frow--empty">파일이 없습니다.</div>') + more
+        + '</div>';
+    }).join("");
+  }
+
+  function ensureDriveFolders() {
+    if (wrDriveLoaded) return;
+    var ep = endpoint(); if (!ep) return;   // 데모 모드는 폴백 데이터 사용
+    wrDriveLoaded = true;
+    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=drivefolders&_ts=" + Date.now();
+    fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      if (Array.isArray(d)) {   // 신규 GAS 배포됨 → 라이브 폴더로 교체
+        window.DRIVE_FOLDERS = d;
+        var wrap = document.getElementById("wrDriveWrap");
+        if (wrap) wrap.innerHTML = renderDriveFolders();
+      }
+    }).catch(function () { /* 실패 시 폴백 유지 */ });
+  }
+
+  /* ③ 리더 보고 아카이브 (그리드 / 타임라인) */
+  function completedReportsAll() {
+    return (window.SUMMARY.reports || []).filter(function (rp) { return rp.done; });
+  }
+  function wrYears() {
+    var ys = {};
+    completedReportsAll().forEach(function (rp) { var y = (rp.reportedAt || "").slice(0, 4); if (y) ys[y] = true; });
+    ys[wrArchYear] = true;
+    return Object.keys(ys).sort().reverse();
+  }
+  function reportsByMonthForYear(year) {
+    var by = {};
+    completedReportsAll().forEach(function (rp) {
+      var d = rp.reportedAt || ""; if (d.slice(0, 4) !== year) return;
+      var m = d.slice(0, 7); (by[m] = by[m] || []).push(rp);
+    });
+    Object.keys(by).forEach(function (m) {
+      by[m].sort(function (a, b) { return (b.reportedAt || "").localeCompare(a.reportedAt || ""); });
+    });
+    return by;
+  }
+
+  function renderArchive() {
+    var years = wrYears();
+    var yseg = years.map(function (y) {
+      return '<button class="' + (y === wrArchYear ? "on" : "") + '" data-wr-year="' + y + '">' + y + '년</button>';
+    }).join("");
+    var total = completedReportsAll().filter(function (rp) { return (rp.reportedAt || "").slice(0, 4) === wrArchYear; }).length;
+    var modeSeg = '<div class="seg wr-arch__mode">'
+      + '<button class="' + (wrArchMode === "grid" ? "on" : "") + '" data-wr-arch="grid">월 그리드</button>'
+      + '<button class="' + (wrArchMode === "timeline" ? "on" : "") + '" data-wr-arch="timeline">타임라인</button>'
+      + '</div>';
+    var bar = '<div class="wr-arch__bar">'
+      + '<div class="seg wr-arch__years">' + yseg + '</div>'
+      + '<div class="wr-arch__right"><span class="wr-arch__stat"><b>' + total + '</b>건 · ' + wrArchYear + ' 누적</span>' + modeSeg + '</div>'
+      + '</div>';
+    var body = wrExpandedMonth
+      ? renderArchiveMonth(wrExpandedMonth)
+      : (wrArchMode === "timeline" ? renderArchiveTimeline(wrArchYear) : renderArchiveGrid(wrArchYear));
+    return bar + body;
+  }
+
+  function renderArchiveGrid(year) {
+    var by = reportsByMonthForYear(year);
+    var keys = Object.keys(by);
+    if (!keys.length) return '<div class="note-empty">' + year + '년 보고 완료 사항이 없습니다.</div>';
+    var maxM = Math.max.apply(null, keys.map(function (k) { return +k.slice(5, 7); }));
+    var minM = Math.min.apply(null, keys.map(function (k) { return +k.slice(5, 7); }));
+    var tiles = "";
+    for (var m = maxM; m >= minM; m--) {
+      var key = year + "-" + (m < 10 ? "0" + m : m);
+      var items = by[key] || [];
+      var peek = items.slice(0, 3).map(function (rp) { return '<li>' + esc(rp.text) + '</li>'; }).join("")
+        || '<li class="muted">보고 완료 사항 없음</li>';
+      var moreN = items.length - 3;
+      tiles += '<button type="button" class="wr-mtile' + (items.length ? "" : " empty") + '" data-wr-month="' + key + '">'
+        + '<div class="wr-mtile__top"><span class="wr-mtile__m">' + m + '<small>월</small></span>'
+        + '<span class="wr-mtile__cnt' + (items.length ? "" : " zero") + '">' + items.length + '건</span></div>'
+        + '<ul class="wr-mtile__peek">' + peek + '</ul>'
+        + (moreN > 0 ? '<div class="wr-mtile__more">+' + moreN + '건 더 · 펼치기 →</div>' : (items.length ? '<div class="wr-mtile__more">펼치기 →</div>' : ''))
+        + '</button>';
+    }
+    return '<div class="wr-months">' + tiles + '</div>';
+  }
+
+  function renderArchiveTimeline(year) {
+    var by = reportsByMonthForYear(year);
+    var keys = Object.keys(by).sort().reverse();
+    if (!keys.length) return '<div class="note-empty">' + year + '년 보고 완료 사항이 없습니다.</div>';
+    var html = '<div class="wr-timeline">';
+    keys.forEach(function (m) {
+      var items = by[m];
+      html += '<div class="wr-tl__month"><div class="wr-tl__mark"></div>'
+        + '<div class="wr-tl__head">' + (+m.slice(5, 7)) + '월 <span class="chip-mono">' + items.length + '건</span></div>'
+        + '<ul class="wr-tl__list">'
+        + items.map(function (rp) {
+            var link = rp.link ? ' <a class="link-chip" href="' + esc(rp.link) + '" target="_blank" rel="noopener">🔗</a>' : "";
+            return '<li><span class="wr-tl__date">' + esc((rp.reportedAt || "").slice(5)) + '</span><span class="issue-text">' + esc(rp.text) + '</span>' + link + '</li>';
+          }).join("")
+        + '</ul></div>';
+    });
+    return html + '</div>';
+  }
+
+  function renderArchiveMonth(key) {
+    var by = reportsByMonthForYear(key.slice(0, 4));
+    var items = by[key] || [];
+    return '<div class="wr-month-detail">'
+      + '<button type="button" class="wr-back" data-wr-back="1">← 아카이브</button>'
+      + '<h4 class="wr-month-detail__title">' + monthLabelFromKey(key) + ' <span class="chip-mono">' + items.length + '건</span></h4>'
+      + '<ul class="wr-list">' + items.map(workReportRow).join("") + '</ul>'
+      + '</div>';
+  }
+
+  function rerenderArchive() {
+    var wrap = document.getElementById("wrArchWrap");
+    if (wrap) wrap.innerHTML = renderArchive();
   }
 
   function findWrDoc(id) {
@@ -5880,7 +6016,29 @@
       if (reportDoneBtn) { completeReportQuick(reportDoneBtn.getAttribute("data-id")); return; }
 
       var wrDocCard = ev.target.closest(".wr-doc-card[data-doc]");
-      if (wrDocCard) { openWrDocModal(wrDocCard.getAttribute("data-doc")); return; }
+      if (wrDocCard) {
+        var wd = findWrDoc(wrDocCard.getAttribute("data-doc"));
+        if (wd && wd.kind === "link" && wd.link) window.open(wd.link, "_blank", "noopener");
+        else openWrDocModal(wrDocCard.getAttribute("data-doc"));
+        return;
+      }
+
+      var wrDriveMore = ev.target.closest("[data-drive-more]");
+      if (wrDriveMore) {
+        var di = wrDriveMore.getAttribute("data-drive-more");
+        wrDriveOpen[di] = !wrDriveOpen[di];
+        var dwrap = document.getElementById("wrDriveWrap");
+        if (dwrap) dwrap.innerHTML = renderDriveFolders();
+        return;
+      }
+      var wrYearBtn = ev.target.closest("[data-wr-year]");
+      if (wrYearBtn) { wrArchYear = wrYearBtn.getAttribute("data-wr-year"); wrExpandedMonth = null; rerenderArchive(); return; }
+      var wrArchBtn = ev.target.closest("[data-wr-arch]");
+      if (wrArchBtn) { wrArchMode = wrArchBtn.getAttribute("data-wr-arch"); wrExpandedMonth = null; rerenderArchive(); return; }
+      var wrMonthBtn = ev.target.closest(".wr-mtile[data-wr-month]");
+      if (wrMonthBtn) { wrExpandedMonth = wrMonthBtn.getAttribute("data-wr-month"); rerenderArchive(); return; }
+      var wrBackBtn = ev.target.closest("[data-wr-back]");
+      if (wrBackBtn) { wrExpandedMonth = null; rerenderArchive(); return; }
 
       var wrUndoBtn = ev.target.closest(".wr-act--undo[data-id]");
       if (wrUndoBtn) { uncompleteReportQuick(wrUndoBtn.getAttribute("data-id")); return; }

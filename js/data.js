@@ -250,7 +250,7 @@ window.WR_DOCS = [
         '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>구분</th><th>결과</th><th>해석</th></tr></thead>',
         '<tbody><tr><td>① 기본 32개 유지</td><td>약 0.66층 감소</td><td>4→3개 층 조정하기엔 감소폭이 다소 큼</td></tr>',
         '<tr><td>② 기본 32개 폐기</td><td>약 0.89층 / 22.3%</td><td>실질적 1개 층에 근접 → 3개 층 조정의 근거</td></tr></tbody></table></div>',
-        '<div class="wrdoc-callout"><span class="lbl">표현 주의</span><p>9층·13층 자체가 관리구역에서 사라지는 것은 아니며, <b>이동·라운딩·잔여 식재 점검·병해충 확인</b> 등 고정 공수는 계속 발생합니다. 따라서 “1개 층 삭제”보다 <b>“식재 관리공수 기준 약 1개 층 상당 감소”</b>가 정확한 표현입니다.</p></div>',
+        '<div class="wrdoc-callout"><p><b>‘층이 사라지는 것’이 아니라 ‘식재 관리공수가 줄어드는 것’입니다.</b> 9층·13층은 여전히 관리구역으로 남으며, <b>이동·라운딩·잔여 식재 점검·병해충 확인</b> 등 고정 공수는 계속 발생합니다. 따라서 관리비 조정 기준은 ‘1개 층 삭제’가 아닌 <b>‘식재 관리공수 기준 약 1개 층 상당 감소’</b>로 보는 것이 정확합니다.</p></div>',
       '</section>',
 
       '<section class="wrdoc-sec"><h2><span class="wrdoc-no">05</span>층별 식물 · 삭제 구간 도면 <small style="font-size:12px;color:#838c86;font-weight:600;">(2026-08-25 기준)</small></h2>',

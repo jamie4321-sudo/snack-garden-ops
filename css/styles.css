@@ -1840,3 +1840,9 @@ html[data-authed="1"] .lock { display: none; }
 .wr-month-detail__title { font-size: 16px; font-weight: 800; margin: 0 0 12px; }
 
 @media (max-width: 640px) { .wr-arch__bar { align-items: stretch; } }
+
+/* 발행 보고서 · 층별 식물·삭제 도면 */
+.wrdoc-floors { display: grid; gap: 12px; }
+.wrdoc-floors figure { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.wrdoc-floors figcaption { font-weight: 800; font-size: 13px; color: #1a1d1b; padding: 8px 12px; background: #faf9f6; border-bottom: 1px solid #efeee8; }
+.wrdoc-floors img { display: block; width: 100%; height: auto; }

@@ -265,7 +265,7 @@ window.WR_DOCS = [
         '<p class="cs-p">다만 식재 일부가 삭제되더라도 <b>9층과 13층은 기존 관리 구역으로 유지</b>되므로, 층간 이동·정기 라운딩·잔여 식재 점검 및 관수·병해충 예찰·방제 등 기본 관리 공수는 지속적으로 발생합니다.</p>',
         '<p class="cs-bt">현재 관리비 및 예상 조정 기준</p>',
         '<div class="wrdoc-cards cs-cards"><div class="wrdoc-card"><p class="k">현행 월 관리비</p><p class="v">3,773,000<small> 원</small></p></div><div class="wrdoc-card"><p class="k">예상 축소 작업량</p><p class="v">≈0.5<small> 개 층/일 1h</small></p></div><div class="wrdoc-card"><p class="k">1시간 상당액</p><p class="v">471,625<small> 원</small></p></div></div>',
-        '<p class="wrdoc-note" style="margin:8px 0 0;">* 1시간 상당 관리비 = 3,773,000원 ÷ 8시간 = 471,625원</p>',
+        '<p class="wrdoc-note" style="margin:8px 0 0;">* 대형 플랜트박스는 <b>크기가 제각각</b>이라 단순 개수 비례가 어려워, 실제 작업량 기준 <b>약 0.5개 층(일 1시간)으로 보수적으로 산정</b>했습니다. · 1시간 상당 관리비 = 3,773,000원 ÷ 8시간 = 471,625원</p>',
         '<p class="cs-bt">운영 시 함께 고려가 필요한 사항</p>',
         '<div class="cs-key"><ul><li>리모델링 이후 소규모 화분이 추가되는 경우에도 <b>별도의 관리비 조정 없이 유연하게 대응</b>하고자 합니다.</li><li>일정 범위 내의 식재 증감은 별도 비용 조정 없이 운영하고, <b>실제 관리 공수에 영향을 주는 규모의 변동</b>이 발생하는 경우 관리비를 조정하는 방식이 양측 모두 효율적이라고 판단합니다.</li></ul></div>',
         '<p class="cs-bt">관리비 조정 제안</p>',

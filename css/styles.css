@@ -1848,7 +1848,7 @@ html[data-authed="1"] .lock { display: none; }
 .wrdoc-floors img { display: block; width: 100%; height: auto; }
 
 /* 발행 보고서 · 비용 조정 방안 섹션 */
-.wrdoc .cs-p{font-size:14px;color:var(--ink-2);margin:0 0 10px;line-height:1.7}
+.wrdoc .cs-p{font-size:14px;color:var(--ink-2);margin:0 0 12px;line-height:1.8}
 .wrdoc .cs-p b{color:var(--ink)}
 .wrdoc .cs-bt{font-size:14px;font-weight:800;color:var(--ink);margin:22px 0 12px;display:flex;align-items:center;gap:8px}
 .wrdoc .cs-bt::before{content:"";width:8px;height:8px;border-radius:50%;background:#1b5e3f;flex:none}

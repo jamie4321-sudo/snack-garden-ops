@@ -5354,17 +5354,19 @@
   var stmtDraft = null;     // 편집 중 임시 명세서 객체
   var billTab = "statement"; // 청구 관리 활성 탭 : "statement"(거래명세서) | "quote"(견적서)
 
-  /** 청구 관리 진입점 — 활성 탭(거래명세서/견적서)에 따라 목록/편집/보기 렌더 */
+  /** 청구 관리 진입점 — 활성 탭(거래명세서/견적서/거래처)에 따라 목록/편집/보기 렌더 */
   function renderBilling() {
     if (billTab === "quote") renderQuote();
+    else if (billTab === "partner") renderPartner();
     else renderStatement();
   }
 
-  /** 청구 관리 상단 탭 (거래명세서 / 견적서) */
+  /** 청구 관리 상단 탭 (거래명세서 / 견적서 / 거래처) */
   function billTabsHTML(active) {
     return '<div class="seg bill-tabs">'
       + '<button type="button" class="btn btn--sm ' + (active === "statement" ? "is-on" : "") + '" data-bill-tab="statement">거래명세서</button>'
       + '<button type="button" class="btn btn--sm ' + (active === "quote" ? "is-on" : "") + '" data-bill-tab="quote">견적서</button>'
+      + '<button type="button" class="btn btn--sm ' + (active === "partner" ? "is-on" : "") + '" data-bill-tab="partner">거래처</button>'
       + '</div>';
   }
   function bindBillTabs() {
@@ -5403,7 +5405,7 @@
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Billing / Statement</p>'
-      + '<h2>청구 관리 · 거래명세서</h2>'
+      + '<h2>청구 관리</h2>'
       + '<p class="sub">거래처별 명세서를 등록·관리하고 인쇄/PDF로 출력합니다. <span class="muted">행을 클릭하면 명세서를 볼 수 있어요.</span></p></div>'
       + '<div class="page-head__actions">'
         + billTabsHTML("statement")
@@ -5892,7 +5894,7 @@
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Billing / Quote</p>'
-      + '<h2>청구 관리 · 견적서</h2>'
+      + '<h2>청구 관리</h2>'
       + '<p class="sub">고객사별 견적서를 등록·관리하고 인쇄/PDF로 출력합니다. <span class="muted">행을 클릭하면 견적서를 볼 수 있어요.</span></p></div>'
       + '<div class="page-head__actions">'
         + billTabsHTML("quote")
@@ -6324,9 +6326,12 @@
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Billing / Customer</p>'
-      + '<h2>거래처 관리</h2>'
-      + '<p class="sub">고객사를 등록해두면 명세서 작성 시 선택만으로 자동 입력됩니다. <span class="muted">행을 클릭하면 수정할 수 있어요.</span></p></div>'
-      + '<button class="btn btn--primary" id="partnerAddBtn">+ 거래처 등록</button>'
+      + '<h2>청구 관리</h2>'
+      + '<p class="sub">고객사를 등록해두면 명세서·견적서 작성 시 선택만으로 자동 입력됩니다. <span class="muted">행을 클릭하면 수정할 수 있어요.</span></p></div>'
+      + '<div class="page-head__actions">'
+        + billTabsHTML("partner")
+        + '<button class="btn btn--primary" id="partnerAddBtn">+ 거래처 등록</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="stats">'
@@ -6360,6 +6365,7 @@
     }
     view.innerHTML = html;
 
+    bindBillTabs();
     stmtOn("#partnerAddBtn", "click", function () { openPartnerModal(null); });
     stmtOnAll(".board__table--partner .board__row[data-pt-id]", "click", function (ev) {
       if (ev.target.closest("button")) return;
@@ -6477,15 +6483,15 @@
   };
 
   function go(name) {
-    // #quote 딥링크는 청구 관리(견적서 탭)로 진입
-    var forceQuote = (name === "quote");
-    if (name === "quote") name = "statement";
+    // #quote · #partner 딥링크는 청구 관리의 해당 탭으로 진입
+    var billDeepTab = (name === "quote" || name === "partner") ? name : null;
+    if (billDeepTab) name = "statement";
     if (!VIEWS[name]) name = "schedule";
     // 사이드바로 청구관리 진입 시 항상 목록부터 (이전 보기/편집 상태 초기화)
     if (name === "statement") {
       stmtMode = null; stmtEditId = null; stmtDraft = null;
       qMode = null; qEditId = null; qDraft = null;
-      billTab = forceQuote ? "quote" : "statement";
+      billTab = billDeepTab || "statement";
     }
     navItems.forEach(function (a) { a.classList.toggle("is-active", a.getAttribute("data-view") === name); });
     viewTitle.textContent = VIEWS[name].title;

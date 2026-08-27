@@ -417,7 +417,8 @@ function getKpi_() {
     } else {
       var k = parseInt(subIdx, 10) - 1;
       if (!(k >= 0)) continue;
-      out[no].sub[k] = { current: r[3], note: String(r[4] == null ? "" : r[4]).trim() };
+      // 세부목표 행에서 C열(grade)은 목표 등급과 무관 → 진행 상태(진행중/완료) 보관용으로 사용
+      out[no].sub[k] = { current: r[3], note: String(r[4] == null ? "" : r[4]).trim(), status: String(r[2] == null ? "" : r[2]).trim() };
     }
   }
   return out;
@@ -490,8 +491,9 @@ function kpiSheet_() {
   return sh;
 }
 
-/** KPI 진행 저장(upsert). data: { no, subIndex(""|숫자), grade?, current?, note? }
- *  (no, subIndex) 일치 행이 있으면 갱신, 없으면 추가. F열(설명) 등 뒤 컬럼은 건드리지 않음. */
+/** KPI 진행 저장(upsert). data: { no, subIndex(""|숫자), grade?, current?, note?, status? }
+ *  (no, subIndex) 일치 행이 있으면 갱신, 없으면 추가. F열(설명) 등 뒤 컬럼은 건드리지 않음.
+ *  status(진행중/완료)는 세부목표 행의 grade(C)열에 저장한다. */
 function handleKpi_(action, data) {
   var sh = kpiSheet_();
   var no = String(data.no == null ? "" : data.no).trim();
@@ -503,7 +505,9 @@ function handleKpi_(action, data) {
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]).trim() === no && String(vals[i][1]).trim() === subIndex) { rowNum = i + 2; cur = vals[i]; break; }
   }
-  var grade = data.grade !== undefined ? data.grade : cur[2];
+  // 세부목표(subIndex 있음)의 status 는 grade(C)열에 저장 — grade 파라미터와 동일 컬럼 공유
+  var grade = data.grade !== undefined ? data.grade
+            : (data.status !== undefined ? data.status : cur[2]);
   var current = data.current !== undefined ? data.current : cur[3];
   var note = data.note !== undefined ? data.note : cur[4];
   var row = [no, subIndex, grade, current, note];

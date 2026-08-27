@@ -5273,11 +5273,16 @@
     var data = window.KPI_DATA || [];
     var prog = window.KPI_PROGRESS || {};
     var scoreMap = { "탁월": 1, "충족": 0.7, "노력필요": 0.3 };
-    var wsum = 0, achieved = 0, weighted = 0;
+    var wsum = 0, achieved = 0, weighted = 0, subTotal = 0, subDone = 0;
     data.forEach(function (g) {
       wsum += g.weight;
       var p = prog[g.no];
       if (p && p.grade && scoreMap[p.grade] != null) { achieved++; weighted += g.weight * scoreMap[p.grade]; }
+      (g.subgoals || []).forEach(function (s, i) {
+        subTotal++;
+        var sp = p && p.sub && p.sub[i];
+        if (sp && sp.status === "완료") subDone++;
+      });
     });
     var pct = Math.round(weighted * 100);
 
@@ -5298,7 +5303,7 @@
         return '<div class="kpi-score__bar" title="' + esc(g.title) + ' · 비중 ' + Math.round(g.weight * 100) + '%">'
           + '<span class="kpi-score__fill kpi-score__fill--' + kpiGradeClass(p.grade || "") + '" style="height:' + Math.round(s * 100) + '%"></span></div>';
       }).join("") + '</div>'
-      + '<div class="kpi-score__meta">' + achieved + ' / ' + data.length + ' 목표 등급 입력 · 비중 합 ' + Math.round(wsum * 100) + '%</div>'
+      + '<div class="kpi-score__meta">' + achieved + ' / ' + data.length + ' 목표 등급 입력 · <b>세부목표 완료 ' + subDone + ' / ' + subTotal + '</b> · 비중 합 ' + Math.round(wsum * 100) + '%</div>'
       + '</div>';
 
     html += '<div class="kpi-list">' + data.map(function (g) {
@@ -5306,11 +5311,14 @@
       var grade = p.grade || "미정";
       var parts = {};
       g.subgoals.forEach(function (s) { (parts[s.part] = parts[s.part] || []).push(s); });
+      var cardDone = 0, cardTotal = g.subgoals.length;
+      g.subgoals.forEach(function (s, i) { var sp = p.sub && p.sub[i]; if (sp && sp.status === "완료") cardDone++; });
       return '<section class="kpi-card">'
         + '<div class="kpi-card__head">'
           + '<span class="kpi-no">' + g.no + '</span>'
           + '<b class="kpi-title">' + esc(g.title) + '</b>'
           + '<span class="kpi-weight">비중 ' + Math.round(g.weight * 100) + '%</span>'
+          + '<span class="kpi-donechip' + (cardDone === cardTotal && cardTotal ? " is-all" : "") + '" title="달성 완료 세부목표 수">완료 ' + cardDone + '/' + cardTotal + '</span>'
           + '<span class="kpi-gradepick">' + ["탁월", "충족", "노력필요"].map(function (lv) {
               return '<button type="button" class="kpi-gp' + (grade === lv ? " is-on kpi-gp--" + kpiGradeClass(lv) : "") + '" data-kpi-grade="' + g.no + "|" + lv + '">' + lv + '</button>';
             }).join("") + '</span>'
@@ -5321,9 +5329,15 @@
               var idx = g.subgoals.indexOf(s);
               var sp = (p.sub && p.sub[idx]) || null;
               var curVal = sp && sp.current != null ? String(sp.current) : "";
-              return '<li><span class="kpi-sub">' + esc(s.text) + '</span>'
+              var st = sp && sp.status ? sp.status : "";
+              return '<li class="kpi-subrow' + (st === "완료" ? " is-done" : "") + '">'
+                + '<span class="kpi-sub">' + esc(s.text) + '</span>'
                 + (s.target ? ' <span class="kpi-target">' + esc(s.target) + '</span>' : '')
                 + ' <input class="kpi-curin" type="text" data-kpi-cur="' + g.no + "|" + (idx + 1) + '" value="' + esc(curVal) + '" placeholder="현재값">'
+                + ' <span class="kpi-substatus">'
+                  + '<button type="button" class="kpi-st kpi-st--prog' + (st === "진행중" ? " is-on" : "") + '" data-kpi-status="' + g.no + "|" + (idx + 1) + '|진행중">진행중</button>'
+                  + '<button type="button" class="kpi-st kpi-st--done' + (st === "완료" ? " is-on" : "") + '" data-kpi-status="' + g.no + "|" + (idx + 1) + '|완료">완료</button>'
+                + '</span>'
                 + '</li>';
             }).join("") + '</ul></div>';
         }).join("") + '</div>'
@@ -6523,6 +6537,19 @@
         var p = window.KPI_PROGRESS[no] = window.KPI_PROGRESS[no] || { grade: "", note: "", sub: {} };
         p.grade = (p.grade === lv) ? "" : lv; // 같은 등급 다시 누르면 해제
         saveToSheet({ type: "kpi", no: no, grade: p.grade });
+        renderKpi();
+        return;
+      }
+      var kpiSt = ev.target.closest(".kpi-st[data-kpi-status]");
+      if (kpiSt) {
+        var st = kpiSt.getAttribute("data-kpi-status").split("|");
+        var stNo = st[0], stSub = st[1], stVal = st[2];
+        window.KPI_PROGRESS = window.KPI_PROGRESS || {};
+        var sp = window.KPI_PROGRESS[stNo] = window.KPI_PROGRESS[stNo] || { grade: "", note: "", sub: {} };
+        var kk = (+stSub) - 1;
+        sp.sub[kk] = sp.sub[kk] || { current: "", note: "" };
+        sp.sub[kk].status = (sp.sub[kk].status === stVal) ? "" : stVal; // 같은 상태 다시 누르면 해제
+        saveToSheet({ type: "kpi", no: stNo, subIndex: stSub, status: sp.sub[kk].status });
         renderKpi();
         return;
       }

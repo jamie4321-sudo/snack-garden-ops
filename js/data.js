@@ -182,7 +182,7 @@ window.STATEMENTS = [
 window.QUOTES = [
   { id:"q1", docNo:"Q26060001", quoteDate:"2026-06-30", validUntil:"2026-07-30",
     customerName:"아지뜰 아삭존", contactName:"",
-    repName:"서준오 팀장", repPhone:"010-3003-3866", repEmail:"juno1111@naver.com",
+    repName:"", repPhone:"", repEmail:"jamie.4321@linkagelab.co.kr",
     items:[
       { name:"고추, 바질, 가지", spec:"", unit:"box", price:30000, qty:12 },
     ],

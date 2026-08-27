@@ -166,7 +166,7 @@
     return {
       id: r.id || "", docNo: r.docNo || "",
       billDate: fmtDay(r.billDate || r.date), dueDate: fmtDay(r.dueDate),
-      customerName: r.customerName || "", contactName: r.contactName || "",
+      customerName: r.customerName || "", contactName: r.contactName || "", customerBizNo: r.customerBizNo || "",
       bankName: r.bankName || "", accountNo: r.accountNo || "", accountHolder: r.accountHolder || "",
       phone: r.phone || "", email: r.email || "",
       items: items, shipping: shipping,
@@ -193,7 +193,7 @@
     return {
       id: r.id || "", docNo: r.docNo || "",
       quoteDate: fmtDay(r.quoteDate || r.date), validUntil: fmtDay(r.validUntil),
-      customerName: r.customerName || "", contactName: r.contactName || "",
+      customerName: r.customerName || "", contactName: r.contactName || "", customerBizNo: r.customerBizNo || "",
       repName: r.repName || "", repPhone: r.repPhone || "", repEmail: r.repEmail || "",
       items: items, shipping: shipping,
       supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : g.supply,
@@ -5482,7 +5482,7 @@
       var extra = loadCompanyExtra();
       stmtDraft = {
         id: "", docNo: genDocNo(), billDate: TODAY, dueDate: "",
-        customerName: "", contactName: "",
+        customerName: "", contactName: "", customerBizNo: "",
         bankName: extra.bankName || "", accountNo: extra.accountNo || "",
         accountHolder: extra.accountHolder || company().name,
         phone: extra.phone || "", email: extra.email || "",
@@ -5549,6 +5549,7 @@
       + '<label class="stmt-field stmt-field--wide"><span>거래처 선택</span><select class="stmt-in" id="stmtCustSel">' + custOpts + '</select></label>'
       + '<label class="stmt-field"><span>고객명 (상호)</span><input class="stmt-in" id="stmtCustName" value="' + esc(s.customerName || "") + '" placeholder="예: 카카오페이"></label>'
       + '<label class="stmt-field"><span>담당자명</span><input class="stmt-in" id="stmtContact" value="' + esc(s.contactName || "") + '" placeholder="담당자"></label>'
+      + '<label class="stmt-field"><span>사업자등록번호</span><input class="stmt-in" id="stmtCustBizNo" value="' + esc(s.customerBizNo || "") + '" placeholder="000-00-00000"></label>'
       + '</div>';
     html += '<label class="stmt-partner-save"><input type="checkbox" id="stmtSaveCust" checked> 이 고객 정보를 거래처 관리에 저장/갱신</label>';
 
@@ -5606,17 +5607,18 @@
     });
 
     // 메타 입력
-    ["#stmtDocNo", "#stmtBillDate", "#stmtDueDate", "#stmtStatus", "#stmtCustName", "#stmtContact",
+    ["#stmtDocNo", "#stmtBillDate", "#stmtDueDate", "#stmtStatus", "#stmtCustName", "#stmtContact", "#stmtCustBizNo",
      "#stmtBank", "#stmtAccNo", "#stmtAccHolder", "#stmtPhone", "#stmtEmail", "#stmtMemo"].forEach(function (sel) {
       stmtOn(sel, "input", syncDraftMeta);
     });
 
-    // 고객(거래처) 선택 → 자동 채움
+    // 고객(거래처) 선택 → 자동 채움 (사업자등록번호 포함)
     stmtOn("#stmtCustSel", "change", function () {
       var p = findById(window.PARTNERS || [], this.value);
       if (!p) return;
       stmtQ("#stmtCustName").value = p.name;
       stmtQ("#stmtContact").value = p.contact || "";
+      if (stmtQ("#stmtCustBizNo")) stmtQ("#stmtCustBizNo").value = p.bizNo || "";
       syncDraftMeta();
     });
 
@@ -5654,6 +5656,7 @@
     stmtDraft.status = g("#stmtStatus");
     stmtDraft.customerName = g("#stmtCustName");
     stmtDraft.contactName = g("#stmtContact");
+    stmtDraft.customerBizNo = g("#stmtCustBizNo");
     stmtDraft.bankName = g("#stmtBank");
     stmtDraft.accountNo = g("#stmtAccNo");
     stmtDraft.accountHolder = g("#stmtAccHolder");
@@ -5703,7 +5706,7 @@
     saveToSheet({
       type: "statement", action: (idx > -1 ? "update" : "add"),
       id: rec.id, docNo: rec.docNo, billDate: rec.billDate, dueDate: rec.dueDate,
-      customerName: rec.customerName, contactName: rec.contactName,
+      customerName: rec.customerName, contactName: rec.contactName, customerBizNo: rec.customerBizNo,
       bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
       phone: rec.phone, email: rec.email,
       items: JSON.stringify(rec.items), shipping: rec.shipping,
@@ -5723,9 +5726,9 @@
     // 연락처·입금계좌 기억
     saveCompanyExtra({ bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder, phone: rec.phone, email: rec.email });
 
-    // 고객(거래처) 저장/갱신
+    // 고객(거래처) 저장/갱신 — 사업자등록번호도 함께 반영 (빈 값이면 기존 값 유지)
     if (stmtQ("#stmtSaveCust") && stmtQ("#stmtSaveCust").checked) {
-      upsertPartner({ name: rec.customerName, contact: rec.contactName });
+      upsertPartner({ name: rec.customerName, contact: rec.contactName, bizNo: rec.customerBizNo || undefined });
     }
 
     stmtDraft = null;
@@ -5809,6 +5812,7 @@
         + '<div class="stmt-sheet__meta-col">'
           + '<div class="stmt-sheet__meta-h">고객명 (담당자명)</div>'
           + '<div class="stmt-sheet__mrow"><span class="mk">고객명</span><span class="mv">' + esc(s.customerName || "") + (s.contactName ? ' (' + esc(s.contactName) + ')' : '') + '</span></div>'
+          + (s.customerBizNo ? '<div class="stmt-sheet__mrow"><span class="mk">사업자번호</span><span class="mv">' + esc(s.customerBizNo) + '</span></div>' : '')
           + '<div class="stmt-sheet__mrow"><span class="mk">문서번호</span><span class="mv">' + esc(s.docNo || "") + '</span></div>'
           + '<div class="stmt-sheet__mrow"><span class="mk">청구일</span><span class="mv">' + esc(s.billDate || "") + '</span></div>'
           + '<div class="stmt-sheet__mrow"><span class="mk">납부기한</span><span class="mv">' + esc(s.dueDate || "") + '</span></div>'
@@ -5970,7 +5974,7 @@
       var extra = loadQuoteExtra();
       qDraft = {
         id: "", docNo: genQuoteNo(), quoteDate: TODAY, validUntil: "",
-        customerName: "", contactName: "",
+        customerName: "", contactName: "", customerBizNo: "",
         repName: extra.repName || "", repPhone: extra.repPhone || "", repEmail: extra.repEmail || "",
         items: [{ name: "", spec: "", unit: "", price: 0, qty: 0 }], shipping: 0,
         notes: "", status: "작성",
@@ -6037,6 +6041,7 @@
       + '<label class="stmt-field stmt-field--wide"><span>거래처 선택</span><select class="stmt-in" id="qCustSel">' + custOpts + '</select></label>'
       + '<label class="stmt-field"><span>고객명 (상호)</span><input class="stmt-in" id="qCustName" value="' + esc(s.customerName || "") + '" placeholder="예: 카카오페이"></label>'
       + '<label class="stmt-field"><span>담당자명</span><input class="stmt-in" id="qContact" value="' + esc(s.contactName || "") + '" placeholder="담당자"></label>'
+      + '<label class="stmt-field"><span>사업자등록번호</span><input class="stmt-in" id="qCustBizNo" value="' + esc(s.customerBizNo || "") + '" placeholder="000-00-00000"></label>'
       + '</div>';
     html += '<label class="stmt-partner-save"><input type="checkbox" id="qSaveCust" checked> 이 고객 정보를 거래처 관리에 저장/갱신</label>';
 
@@ -6091,7 +6096,7 @@
       renderQuoteEditor();
     });
 
-    ["#qDocNo", "#qQuoteDate", "#qValidUntil", "#qStatus", "#qCustName", "#qContact",
+    ["#qDocNo", "#qQuoteDate", "#qValidUntil", "#qStatus", "#qCustName", "#qContact", "#qCustBizNo",
      "#qRepName", "#qRepPhone", "#qRepEmail", "#qNotes"].forEach(function (sel) {
       stmtOn(sel, "input", syncQuoteMeta);
     });
@@ -6101,6 +6106,7 @@
       if (!p) return;
       stmtQ("#qCustName").value = p.name;
       stmtQ("#qContact").value = p.contact || "";
+      if (stmtQ("#qCustBizNo")) stmtQ("#qCustBizNo").value = p.bizNo || "";
       syncQuoteMeta();
     });
 
@@ -6134,6 +6140,7 @@
     qDraft.status = g("#qStatus");
     qDraft.customerName = g("#qCustName");
     qDraft.contactName = g("#qContact");
+    qDraft.customerBizNo = g("#qCustBizNo");
     qDraft.repName = g("#qRepName");
     qDraft.repPhone = g("#qRepPhone");
     qDraft.repEmail = g("#qRepEmail");
@@ -6180,7 +6187,7 @@
     saveToSheet({
       type: "quote", action: (idx > -1 ? "update" : "add"),
       id: rec.id, docNo: rec.docNo, quoteDate: rec.quoteDate, validUntil: rec.validUntil,
-      customerName: rec.customerName, contactName: rec.contactName,
+      customerName: rec.customerName, contactName: rec.contactName, customerBizNo: rec.customerBizNo,
       repName: rec.repName, repPhone: rec.repPhone, repEmail: rec.repEmail,
       items: JSON.stringify(rec.items), shipping: rec.shipping,
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
@@ -6199,7 +6206,7 @@
     saveQuoteExtra({ repName: rec.repName, repPhone: rec.repPhone, repEmail: rec.repEmail });
 
     if (stmtQ("#qSaveCust") && stmtQ("#qSaveCust").checked) {
-      upsertPartner({ name: rec.customerName, contact: rec.contactName });
+      upsertPartner({ name: rec.customerName, contact: rec.contactName, bizNo: rec.customerBizNo || undefined });
     }
 
     qDraft = null;
@@ -6264,6 +6271,7 @@
         + '<div class="stmt-sheet__meta-col">'
           + '<div class="stmt-sheet__meta-h">수신처</div>'
           + '<div class="stmt-sheet__mrow"><span class="mk">고객명</span><span class="mv">' + esc(s.customerName || "") + (s.customerName ? " 귀하" : "") + (s.contactName ? ' (' + esc(s.contactName) + ')' : '') + '</span></div>'
+          + (s.customerBizNo ? '<div class="stmt-sheet__mrow"><span class="mk">사업자번호</span><span class="mv">' + esc(s.customerBizNo) + '</span></div>' : '')
           + '<div class="stmt-sheet__mrow"><span class="mk">견적번호</span><span class="mv">' + esc(s.docNo || "") + '</span></div>'
           + '<div class="stmt-sheet__mrow"><span class="mk">견적일자</span><span class="mv">' + esc(s.quoteDate || "") + '</span></div>'
           + '<div class="stmt-sheet__mrow"><span class="mk">유효기간</span><span class="mv">' + esc(s.validUntil || "") + '</span></div>'

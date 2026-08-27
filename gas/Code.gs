@@ -57,9 +57,9 @@ var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueD
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
 // 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
 // driveUrl : 저장 시 생성해 드라이브에 보관한 PDF 링크(서버에서 채움).
-var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","shipping","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
+var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","customerBizNo","bankName","accountNo","accountHolder","phone","email","items","shipping","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
 // 견적서 : 거래명세서와 동일 양식. items 각 품목 = {name,spec,unit,price,qty}. repName/repPhone/repEmail = 발행처 담당자.
-var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","repName","repPhone","repEmail","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
+var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","customerBizNo","repName","repPhone","repEmail","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
 
 // 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
@@ -709,7 +709,7 @@ function handlePartner_(action, data) {
 function statementValuesObj_(data) {
   return {
     id: data.id, docNo: data.docNo || "", billDate: data.billDate || "", dueDate: data.dueDate || "",
-    customerName: data.customerName || "", contactName: data.contactName || "",
+    customerName: data.customerName || "", contactName: data.contactName || "", customerBizNo: data.customerBizNo || "",
     bankName: data.bankName || "", accountNo: data.accountNo || "", accountHolder: data.accountHolder || "",
     phone: data.phone || "", email: data.email || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
@@ -753,7 +753,7 @@ function handleStatement_(action, data) {
 function quoteValuesObj_(data) {
   return {
     id: data.id, docNo: data.docNo || "", quoteDate: data.quoteDate || "", validUntil: data.validUntil || "",
-    customerName: data.customerName || "", contactName: data.contactName || "",
+    customerName: data.customerName || "", contactName: data.contactName || "", customerBizNo: data.customerBizNo || "",
     repName: data.repName || "", repPhone: data.repPhone || "", repEmail: data.repEmail || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
     shipping: data.shipping || 0,

@@ -5269,21 +5269,90 @@
   }
   function kpiGradeClass(g) { return g === "탁월" ? "top" : g === "충족" ? "meet" : g === "노력필요" ? "need" : "na"; }
 
+  /** KPI 진행 대시보드 — 세부목표 완료 도넛 + 지표 + 목표별 스택 진행 막대 */
+  function kpiDashboardHTML(m) {
+    var R = 52, C = 2 * Math.PI * R, cx = 60, cy = 60;
+    var gap = C * 0.008; // 세그먼트 사이 2px 정도 간격
+    var dLen = Math.max(0, C * (m.subDonePct / 100) - (m.subDonePct > 0 && m.subProgPct > 0 ? gap : 0));
+    var pLen = Math.max(0, C * (m.subProgPct / 100));
+    var ring = '<svg class="kpi-ring" viewBox="0 0 120 120" role="img" aria-label="세부목표 완료율 ' + m.subDonePct + '%">'
+      + '<circle class="kpi-ring__track" cx="' + cx + '" cy="' + cy + '" r="' + R + '"></circle>'
+      + '<circle class="kpi-ring__prog" cx="' + cx + '" cy="' + cy + '" r="' + R + '" stroke-dasharray="' + pLen.toFixed(1) + ' ' + (C - pLen).toFixed(1) + '" stroke-dashoffset="' + (-(dLen + gap)).toFixed(1) + '"></circle>'
+      + '<circle class="kpi-ring__done" cx="' + cx + '" cy="' + cy + '" r="' + R + '" stroke-dasharray="' + dLen.toFixed(1) + ' ' + (C - dLen).toFixed(1) + '" stroke-dashoffset="0"></circle>'
+      + '<text class="kpi-ring__num" x="60" y="58">' + m.subDonePct + '<tspan class="kpi-ring__pctsign">%</tspan></text>'
+      + '<text class="kpi-ring__cap" x="60" y="76">완료</text>'
+      + '</svg>';
+
+    function statTile(val, unit, label, cls) {
+      return '<div class="kpi-tile ' + (cls || "") + '">'
+        + '<div class="kpi-tile__val">' + val + (unit ? '<small>' + unit + '</small>' : '') + '</div>'
+        + '<div class="kpi-tile__lbl">' + label + '</div>'
+        + '</div>';
+    }
+    var tiles = '<div class="kpi-tiles">'
+      + statTile(m.pct, "%", "가중 달성도 <span class=\"muted\">(등급 반영)</span>", "kpi-tile--accent")
+      + statTile(m.subDone + '<span class="kpi-tile__sub">/' + m.subTotal + '</span>', "", "세부목표 완료", "kpi-tile--done")
+      + statTile(m.subProg + '<span class="kpi-tile__sub">/' + m.subTotal + '</span>', "", "진행 중", "kpi-tile--prog")
+      + statTile(m.achieved + '<span class="kpi-tile__sub">/' + m.goalCount + '</span>', "", "목표 등급 입력", "")
+      + '</div>';
+
+    var legend = '<div class="kpi-legend">'
+      + '<span class="kpi-legend__it"><i class="kpi-dot kpi-dot--done"></i>완료</span>'
+      + '<span class="kpi-legend__it"><i class="kpi-dot kpi-dot--prog"></i>진행 중</span>'
+      + '<span class="kpi-legend__it"><i class="kpi-dot kpi-dot--none"></i>미정</span>'
+      + '<span class="kpi-legend__note">막대 = 목표별 세부목표 진행 비율 · 비중 합 ' + Math.round(m.wsum * 100) + '%</span>'
+      + '</div>';
+
+    var maxW = m.goalStats.reduce(function (a, g) { return Math.max(a, g.weight); }, 0) || 1;
+    var goals = '<div class="kpi-goals">' + m.goalStats.map(function (g) {
+      var gradeLbl = g.grade || "미정";
+      var tip = g.no + ". " + g.title + " — 완료 " + g.done + "/" + g.total
+        + (g.prog ? " · 진행중 " + g.prog : "") + " · 미정 " + g.none + " · 비중 " + Math.round(g.weight * 100) + "% · 등급 " + gradeLbl;
+      return '<div class="kpi-goal" title="' + esc(tip) + '">'
+        + '<span class="kpi-goal__no">' + g.no + '</span>'
+        + '<span class="kpi-goal__title">' + esc(g.title) + '</span>'
+        + '<span class="kpi-goal__wt"><i class="kpi-goal__wtbar" style="width:' + Math.round(g.weight / maxW * 100) + '%"></i><b>' + Math.round(g.weight * 100) + '%</b></span>'
+        + '<div class="kpi-goal__track">'
+          + '<span class="kpi-goal__seg kpi-goal__seg--done" style="width:' + g.donePct + '%"></span>'
+          + '<span class="kpi-goal__seg kpi-goal__seg--prog" style="width:' + g.progPct + '%"></span>'
+        + '</div>'
+        + '<span class="kpi-goal__count"><b>' + g.done + '</b><span class="kpi-tile__sub">/' + g.total + '</span></span>'
+        + '<span class="kpi-badge kpi-badge--' + kpiGradeClass(g.grade || "") + '">' + gradeLbl + '</span>'
+        + '</div>';
+    }).join("") + '</div>';
+
+    return '<div class="kpi-dash">'
+      + '<div class="kpi-dash__top"><div class="kpi-dash__ringwrap">' + ring + '</div>' + tiles + '</div>'
+      + legend + goals
+      + '</div>';
+  }
+
   function renderKpi() {
     var data = window.KPI_DATA || [];
     var prog = window.KPI_PROGRESS || {};
     var scoreMap = { "탁월": 1, "충족": 0.7, "노력필요": 0.3 };
-    var wsum = 0, achieved = 0, weighted = 0, subTotal = 0, subDone = 0;
+    var wsum = 0, achieved = 0, weighted = 0, subTotal = 0, subDone = 0, subProg = 0;
+    var goalStats = [];
     data.forEach(function (g) {
       wsum += g.weight;
       var p = prog[g.no];
       if (p && p.grade && scoreMap[p.grade] != null) { achieved++; weighted += g.weight * scoreMap[p.grade]; }
+      var gt = (g.subgoals || []).length, gd = 0, gp = 0;
       (g.subgoals || []).forEach(function (s, i) {
         subTotal++;
         var sp = p && p.sub && p.sub[i];
-        if (sp && sp.status === "완료") subDone++;
+        if (sp && sp.status === "완료") { subDone++; gd++; }
+        else if (sp && sp.status === "진행중") { subProg++; gp++; }
+      });
+      goalStats.push({
+        no: g.no, title: g.title, weight: g.weight, grade: (p && p.grade) || "",
+        total: gt, done: gd, prog: gp, none: gt - gd - gp,
+        donePct: gt ? Math.round(gd / gt * 100) : 0,
+        progPct: gt ? Math.round(gp / gt * 100) : 0,
       });
     });
+    var subDonePct = subTotal ? Math.round(subDone / subTotal * 100) : 0;
+    var subProgPct = subTotal ? Math.round(subProg / subTotal * 100) : 0;
     var pct = Math.round(weighted * 100);
 
     var html = '<div class="page-head"><div><p class="eyebrow">Operation / KPI</p>'
@@ -5295,16 +5364,11 @@
       view.innerHTML = html; return;
     }
 
-    html += '<div class="kpi-score">'
-      + '<div class="kpi-score__main"><span class="kpi-score__pct">' + pct + '<small>%</small></span>'
-      + '<span class="kpi-score__lbl">가중 달성도<br><span class="muted">등급 반영</span></span></div>'
-      + '<div class="kpi-score__bars">' + data.map(function (g) {
-        var p = prog[g.no] || {}; var s = (p.grade && scoreMap[p.grade] != null) ? scoreMap[p.grade] : 0;
-        return '<div class="kpi-score__bar" title="' + esc(g.title) + ' · 비중 ' + Math.round(g.weight * 100) + '%">'
-          + '<span class="kpi-score__fill kpi-score__fill--' + kpiGradeClass(p.grade || "") + '" style="height:' + Math.round(s * 100) + '%"></span></div>';
-      }).join("") + '</div>'
-      + '<div class="kpi-score__meta">' + achieved + ' / ' + data.length + ' 목표 등급 입력 · <b>세부목표 완료 ' + subDone + ' / ' + subTotal + '</b> · 비중 합 ' + Math.round(wsum * 100) + '%</div>'
-      + '</div>';
+    html += kpiDashboardHTML({
+      pct: pct, achieved: achieved, goalCount: data.length, wsum: wsum,
+      subTotal: subTotal, subDone: subDone, subProg: subProg,
+      subDonePct: subDonePct, subProgPct: subProgPct, goalStats: goalStats,
+    });
 
     html += '<div class="kpi-list">' + data.map(function (g) {
       var p = prog[g.no] || {};

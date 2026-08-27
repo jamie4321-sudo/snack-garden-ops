@@ -1418,19 +1418,66 @@ html[data-authed="1"] .lock { display: none; }
 /* =========================================================
    2026 KPI 뷰
    ========================================================= */
-.kpi-score{ display:flex;align-items:center;gap:20px;flex-wrap:wrap;
-  background:var(--card-bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 22px;margin-bottom:18px; }
-.kpi-score__main{ display:flex;align-items:baseline;gap:10px; }
-.kpi-score__pct{ font-size:38px;font-weight:800;color:var(--accent-text);letter-spacing:-.02em;font-variant-numeric:tabular-nums; }
-.kpi-score__pct small{ font-size:18px;margin-left:2px; }
-.kpi-score__lbl{ font-size:12px;color:var(--ink-2);line-height:1.3; }
-.kpi-score__bars{ display:flex;align-items:flex-end;gap:5px;height:44px;margin-left:auto; }
-.kpi-score__bar{ width:16px;height:100%;background:var(--panel-2);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden; }
-.kpi-score__fill{ width:100%;border-radius:4px;background:var(--ink-3,var(--line)); }
-.kpi-score__fill--top{ background:var(--accent); }
-.kpi-score__fill--meet{ background:var(--green); }
-.kpi-score__fill--need{ background:var(--amber); }
-.kpi-score__meta{ font-size:12px;color:var(--ink-2);flex-basis:100%; }
+/* --- KPI 진행 대시보드 --- */
+.kpi-dash{ background:var(--card-bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 22px;margin-bottom:18px; }
+.kpi-dash__top{ display:flex;align-items:center;gap:24px;flex-wrap:wrap; }
+.kpi-dash__ringwrap{ flex:0 0 auto; }
+
+/* 완료율 도넛 */
+.kpi-ring{ width:118px;height:118px;display:block; }
+.kpi-ring circle{ fill:none;stroke-width:12;transform:rotate(-90deg);transform-origin:60px 60px;stroke-linecap:butt; }
+.kpi-ring__track{ stroke:var(--panel-2); }
+.kpi-ring__done{ stroke:var(--green);transition:stroke-dasharray .5s ease; }
+.kpi-ring__prog{ stroke:var(--amber);transition:stroke-dasharray .5s ease,stroke-dashoffset .5s ease; }
+.kpi-ring__num{ font-size:30px;font-weight:800;fill:var(--ink);text-anchor:middle;dominant-baseline:middle;font-variant-numeric:tabular-nums; }
+.kpi-ring__pctsign{ font-size:15px;font-weight:700;fill:var(--ink-2); }
+.kpi-ring__cap{ font-size:11px;font-weight:700;fill:var(--ink-3,var(--ink-2));text-anchor:middle; }
+
+/* 지표 타일 */
+.kpi-tiles{ display:grid;grid-template-columns:repeat(4,minmax(96px,1fr));gap:10px;flex:1 1 340px; }
+@media(max-width:640px){ .kpi-tiles{ grid-template-columns:repeat(2,1fr); } }
+.kpi-tile{ border:1px solid var(--line-soft);border-radius:var(--r-md,10px);padding:11px 13px;background:var(--panel);
+  border-left:3px solid var(--line); }
+.kpi-tile--accent{ border-left-color:var(--accent); }
+.kpi-tile--done{ border-left-color:var(--green); }
+.kpi-tile--prog{ border-left-color:var(--amber); }
+.kpi-tile__val{ font-size:26px;font-weight:800;color:var(--ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.05; }
+.kpi-tile__val small{ font-size:14px;margin-left:1px;color:var(--ink-2); }
+.kpi-tile__sub{ font-size:15px;font-weight:700;color:var(--ink-3,var(--ink-2)); }
+.kpi-tile__lbl{ margin-top:3px;font-size:11.5px;color:var(--ink-2);line-height:1.3; }
+
+/* 범례 */
+.kpi-legend{ display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin:16px 0 10px;font-size:12px;color:var(--ink-2); }
+.kpi-legend__it{ display:inline-flex;align-items:center;gap:6px;font-weight:700; }
+.kpi-dot{ width:11px;height:11px;border-radius:3px;display:inline-block; }
+.kpi-dot--done{ background:var(--green); }
+.kpi-dot--prog{ background:var(--amber); }
+.kpi-dot--none{ background:var(--panel-2);border:1px solid var(--line); }
+.kpi-legend__note{ margin-left:auto;font-weight:400;color:var(--ink-3,var(--ink-2)); }
+
+/* 목표별 진행 막대 */
+.kpi-goals{ display:flex;flex-direction:column;gap:7px; }
+.kpi-goal{ display:grid;grid-template-columns:22px minmax(90px,1.4fr) 70px 1fr 44px 62px;align-items:center;gap:10px; }
+@media(max-width:720px){ .kpi-goal{ grid-template-columns:20px 1fr 56px;grid-auto-rows:auto;row-gap:4px; }
+  .kpi-goal__track{ grid-column:1 / -1;order:5; } .kpi-goal__count{ order:3; } .kpi-badge{ order:4; } }
+.kpi-goal__no{ width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+  font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center; }
+.kpi-goal__title{ font-size:12.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.kpi-goal__wt{ display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-2);font-variant-numeric:tabular-nums; }
+.kpi-goal__wt b{ font-weight:700; }
+.kpi-goal__wtbar{ height:5px;border-radius:3px;background:color-mix(in srgb,var(--accent) 45%,var(--panel-2));flex:0 0 auto;min-width:3px; }
+.kpi-goal__track{ height:12px;border-radius:6px;background:var(--panel-2);overflow:hidden;display:flex; }
+.kpi-goal__seg{ height:100%;transition:width .4s ease; }
+.kpi-goal__seg--done{ background:var(--green); }
+.kpi-goal__seg--prog{ background:var(--amber);box-shadow:-2px 0 0 var(--card-bg); }
+.kpi-goal__count{ font-size:12px;color:var(--ink-2);text-align:right;font-variant-numeric:tabular-nums; }
+.kpi-goal__count b{ color:var(--green);font-weight:800; }
+.kpi-badge{ font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:999px;text-align:center;white-space:nowrap;
+  background:var(--panel-2);color:var(--ink-3,var(--ink-2));border:1px solid var(--line-soft); }
+.kpi-badge--top{ background:var(--accent);color:var(--accent-ink);border-color:var(--accent); }
+.kpi-badge--meet{ background:var(--green);color:#fff;border-color:var(--green); }
+.kpi-badge--need{ background:var(--amber);color:#fff;border-color:var(--amber); }
+.kpi-badge--na{ background:var(--panel-2);color:var(--ink-3,var(--ink-2)); }
 
 .kpi-list{ display:flex;flex-direction:column;gap:14px; }
 .kpi-card{ background:var(--card-bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px; }

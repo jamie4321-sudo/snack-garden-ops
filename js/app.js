@@ -358,11 +358,26 @@
       .catch(function (e) { console.warn("[시트 저장 실패]", e); });
   }
 
+  /** 일정 링크(최대 5개) 정규화 — links(배열/JSON문자열) 우선, 없으면 단일 link 로 대체 */
+  function evtLinks(e) {
+    if (!e) return [];
+    var arr = [];
+    if (Array.isArray(e.links)) arr = e.links.slice();
+    else if (typeof e.links === "string" && e.links) {
+      try { var p = JSON.parse(e.links); if (Array.isArray(p)) arr = p; else arr = e.links.split("\n"); }
+      catch (x) { arr = e.links.split("\n"); }
+    }
+    if (!arr.length && e.link) arr = [e.link];
+    return arr.map(function (s) { return String(s || "").trim(); }).filter(Boolean).slice(0, 5);
+  }
+
   /** 일정 저장 payload — 필드 하나만 바뀌어도 항상 전체 필드를 함께 보내 시트에서 값이 비는 걸 방지 */
   function schedulePayload_(evt, action) {
+    var links = evtLinks(evt);
     return {
       type: "schedule", action: action, id: evt.id, date: evt.date, time: evt.time, title: evt.title,
-      category: evt.category, done: evt.done, assignee: evt.assignee, link: evt.link,
+      category: evt.category, done: evt.done, assignee: evt.assignee,
+      link: links[0] || "", links: JSON.stringify(links),
       alarm: evt.alarm, alarmTime: evt.alarmTime || "",
     };
   }
@@ -546,6 +561,34 @@
   /* ---------- 일정 등록/수정 모달 ---------- */
   var CATEGORIES = ["운영", "채용", "교육", "내부", "외부", "보고", "근태", "행정", "휴일", "기타"];
 
+  var EVENT_LINK_MAX = 5;
+  function eventLinkRowHTML(val) {
+    return '<div class="evt-link-row">'
+      + '<input type="url" class="evt-link-in" placeholder="https://docs.google.com/..." value="' + esc(val || "") + '">'
+      + '<button type="button" class="evt-link-del" title="링크 삭제" aria-label="링크 삭제">&times;</button>'
+      + '</div>';
+  }
+  /** 모달의 링크 목록을 links 배열로 다시 그린다 (최소 1행, 최대 5행) */
+  function renderEventLinks(box, links) {
+    if (!box) return;
+    var arr = (links && links.length) ? links.slice(0, EVENT_LINK_MAX) : [""];
+    box.innerHTML = arr.map(eventLinkRowHTML).join("");
+    updateEventAddLinkBtn(box);
+  }
+  function updateEventAddLinkBtn(box) {
+    var btn = document.getElementById("eventAddLinkBtn");
+    if (!btn || !box) return;
+    var count = box.querySelectorAll(".evt-link-row").length;
+    btn.disabled = count >= EVENT_LINK_MAX;
+    btn.textContent = count >= EVENT_LINK_MAX ? "링크는 최대 5개" : "🔗 링크 추가";
+  }
+  /** 모달 입력값에서 비어있지 않은 링크만 순서대로 수집 */
+  function collectEventLinks(box) {
+    if (!box) return [];
+    return Array.prototype.map.call(box.querySelectorAll(".evt-link-in"), function (i) { return i.value.trim(); })
+      .filter(Boolean).slice(0, EVENT_LINK_MAX);
+  }
+
   function openEventModal(prefill) {
     var el = document.getElementById("eventModal");
     if (!el) { el = buildEventModal(); document.body.appendChild(el); }
@@ -560,7 +603,7 @@
     form.title.value = (prefill && prefill.title) || "";
     form.category.value = (prefill && prefill.category) || "운영";
     form.assignee.value = (prefill && prefill.assignee) || "";
-    form.link.value = (prefill && prefill.link) || "";
+    renderEventLinks(el.querySelector("#eventLinks"), evtLinks(prefill));
     form.done.checked = !!(prefill && prefill.done);
     var alarmOn = !!(prefill && prefill.alarm);
     form.alarm.checked = alarmOn;
@@ -601,7 +644,10 @@
       + '<label class="fld fld--check" id="eventRepeatWrap"><input type="checkbox" name="repeatWeekly"><span>매주 반복</span></label>'
       + '<label class="fld" id="eventRepeatEndWrap" hidden><span>반복 종료일</span><input type="date" name="repeatUntil"></label>'
       + '<label class="fld"><span>담당 <em>(선택)</em></span><input type="text" name="assignee" maxlength="20" placeholder="담당자 / 팀"></label>'
-      + '<label class="fld"><span>링크 <em>(선택 · 입력 시 🔗 버튼 생성)</em></span><input type="url" name="link" placeholder="https://docs.google.com/..."></label>'
+      + '<div class="fld"><span>링크 <em>(선택 · 최대 5개 · 목록엔 첫 번째만 표시)</em></span>'
+        + '<div id="eventLinks" class="evt-links"></div>'
+        + '<button type="button" class="btn btn--sm evt-links__add" id="eventAddLinkBtn">🔗 링크 추가</button>'
+      + '</div>'
       + '<div class="fld-row">'
         + '<label class="fld fld--check"><input type="checkbox" name="done"><span>완료 처리</span></label>'
         + '<label class="fld fld--check"><input type="checkbox" name="alarm"><span>🔔 알림 설정</span></label>'
@@ -630,6 +676,22 @@
     wrap.querySelector('input[name="date"]').addEventListener("change", function (ev) {
       wrap.querySelector('input[name="repeatUntil"]').min = ev.target.value;
     });
+    // 링크 추가/삭제 (최대 5개)
+    var linksBox = wrap.querySelector("#eventLinks");
+    wrap.querySelector("#eventAddLinkBtn").addEventListener("click", function () {
+      if (linksBox.querySelectorAll(".evt-link-row").length >= EVENT_LINK_MAX) return;
+      linksBox.insertAdjacentHTML("beforeend", eventLinkRowHTML(""));
+      updateEventAddLinkBtn(linksBox);
+      var ins = linksBox.querySelector(".evt-link-row:last-child .evt-link-in");
+      if (ins) ins.focus();
+    });
+    linksBox.addEventListener("click", function (ev) {
+      if (!ev.target.closest(".evt-link-del")) return;
+      var rows = linksBox.querySelectorAll(".evt-link-row");
+      if (rows.length <= 1) { linksBox.querySelector(".evt-link-in").value = ""; }
+      else ev.target.closest(".evt-link-row").remove();
+      updateEventAddLinkBtn(linksBox);
+    });
     // 작성 중 실수로 닫히지 않도록 배경 클릭·ESC 닫기는 비활성화 (X·취소 버튼으로만 닫힘)
     wrap.querySelector("form").addEventListener("submit", function (ev) {
       ev.preventDefault();
@@ -653,6 +715,7 @@
         return;
       }
       var id = f.dataset.id;
+      var _links = collectEventLinks(wrap.querySelector("#eventLinks"));
       var evt = {
         id: id || newId("s"),
         date: f.date.value,
@@ -661,7 +724,8 @@
         category: f.category.value,
         done: f.done.checked,
         assignee: f.assignee.value.trim(),
-        link: f.link.value.trim(),
+        link: _links[0] || "",
+        links: _links,
         alarm: f.alarm.checked,
         alarmTime: f.alarm.checked ? (f.alarmTime.value || f.time.value || "") : "",
       };
@@ -733,8 +797,9 @@
     var color = CATCOLOR[e.category] || "#cbd5e1";
     var alarmMark = e.alarm ? '<span class="evt__alarm-mark" title="알림 ' + esc(e.alarmTime || e.time || "") + '">🔔</span>' : '';
     var lead = (e.time || alarmMark) ? '<span class="evt__time">' + (e.time ? esc(e.time) : '') + alarmMark + '</span>' : '';
-    var link = e.link
-      ? '<a class="evt__link" href="' + esc(e.link) + '" target="_blank" rel="noopener" title="링크 열기" onclick="event.stopPropagation()">🔗</a>'
+    var _links = evtLinks(e);
+    var link = _links.length
+      ? '<a class="evt__link" href="' + esc(_links[0]) + '" target="_blank" rel="noopener" title="링크 열기' + (_links.length > 1 ? ' (외 ' + (_links.length - 1) + '개는 수정에서 확인)' : '') + '" onclick="event.stopPropagation()">🔗' + (_links.length > 1 ? '<span class="evt__link-badge">' + _links.length + '</span>' : '') + '</a>'
       : '';
     var actions = '<span class="evt__actions">'
       + '<button type="button" class="evt__act evt__act--next" data-id="' + esc(e.id || "") + '" title="다음 날로 업무 이관">&rarr;</button>'
@@ -5287,6 +5352,31 @@
   var stmtMode = null;      // null=목록 | "edit"=편집기 | "view"=보기
   var stmtEditId = null;    // 편집/보기 대상 id ("" = 신규)
   var stmtDraft = null;     // 편집 중 임시 명세서 객체
+  var billTab = "statement"; // 청구 관리 활성 탭 : "statement"(거래명세서) | "quote"(견적서)
+
+  /** 청구 관리 진입점 — 활성 탭(거래명세서/견적서)에 따라 목록/편집/보기 렌더 */
+  function renderBilling() {
+    if (billTab === "quote") renderQuote();
+    else renderStatement();
+  }
+
+  /** 청구 관리 상단 탭 (거래명세서 / 견적서) */
+  function billTabsHTML(active) {
+    return '<div class="seg bill-tabs">'
+      + '<button type="button" class="btn btn--sm ' + (active === "statement" ? "is-on" : "") + '" data-bill-tab="statement">거래명세서</button>'
+      + '<button type="button" class="btn btn--sm ' + (active === "quote" ? "is-on" : "") + '" data-bill-tab="quote">견적서</button>'
+      + '</div>';
+  }
+  function bindBillTabs() {
+    stmtOnAll(".bill-tabs [data-bill-tab]", "click", function () {
+      var t = this.getAttribute("data-bill-tab");
+      if (t === billTab) return;
+      billTab = t;
+      stmtMode = null; stmtEditId = null; stmtDraft = null;
+      qMode = null; qEditId = null; qDraft = null;
+      renderBilling();
+    });
+  }
 
   function stmtQ(sel) { return view.querySelector(sel); }
   function stmtOn(sel, evt, fn) { var el = view.querySelector(sel); if (el) el.addEventListener(evt, fn); }
@@ -5315,7 +5405,10 @@
       + '<div><p class="eyebrow">Billing / Statement</p>'
       + '<h2>청구 관리 · 거래명세서</h2>'
       + '<p class="sub">거래처별 명세서를 등록·관리하고 인쇄/PDF로 출력합니다. <span class="muted">행을 클릭하면 명세서를 볼 수 있어요.</span></p></div>'
-      + '<button class="btn btn--primary" id="stmtAddBtn">+ 명세서 등록</button>'
+      + '<div class="page-head__actions">'
+        + billTabsHTML("statement")
+        + '<button class="btn btn--primary" id="stmtAddBtn">+ 명세서 등록</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="stats">'
@@ -5358,6 +5451,7 @@
     }
     view.innerHTML = html;
 
+    bindBillTabs();
     stmtOn("#stmtAddBtn", "click", function () { openStatementEditor(null); });
     stmtOnAll(".board__table--stmt .board__row[data-st-id]", "click", function (ev) {
       if (ev.target.closest("button")) return;
@@ -5798,9 +5892,12 @@
     var html = "";
     html += '<div class="page-head">'
       + '<div><p class="eyebrow">Billing / Quote</p>'
-      + '<h2>견적 관리 · 견적서</h2>'
+      + '<h2>청구 관리 · 견적서</h2>'
       + '<p class="sub">고객사별 견적서를 등록·관리하고 인쇄/PDF로 출력합니다. <span class="muted">행을 클릭하면 견적서를 볼 수 있어요.</span></p></div>'
-      + '<button class="btn btn--primary" id="qAddBtn">+ 견적서 등록</button>'
+      + '<div class="page-head__actions">'
+        + billTabsHTML("quote")
+        + '<button class="btn btn--primary" id="qAddBtn">+ 견적서 등록</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="stats">'
@@ -5842,6 +5939,7 @@
     }
     view.innerHTML = html;
 
+    bindBillTabs();
     stmtOn("#qAddBtn", "click", function () { openQuoteEditor(null); });
     stmtOnAll(".board__table--stmt .board__row[data-q-id]", "click", function (ev) {
       if (ev.target.closest("button")) return;
@@ -6361,8 +6459,8 @@
   }
 
   var VIEWS = {
-    statement:   { title: "BILLING", render: renderStatement },
-    quote:       { title: "QUOTE", render: renderQuote },
+    statement:   { title: "BILLING", render: renderBilling },
+    quote:       { title: "BILLING", render: renderBilling },
     partner:     { title: "PARTNER", render: renderPartner },
     dashboard:   { title: "DASHBOARD", render: renderDashboard },
     crew:        { title: "CREW", render: renderCrew },
@@ -6379,10 +6477,16 @@
   };
 
   function go(name) {
+    // #quote 딥링크는 청구 관리(견적서 탭)로 진입
+    var forceQuote = (name === "quote");
+    if (name === "quote") name = "statement";
     if (!VIEWS[name]) name = "schedule";
     // 사이드바로 청구관리 진입 시 항상 목록부터 (이전 보기/편집 상태 초기화)
-    if (name === "statement") { stmtMode = null; stmtEditId = null; stmtDraft = null; }
-    if (name === "quote") { qMode = null; qEditId = null; qDraft = null; }
+    if (name === "statement") {
+      stmtMode = null; stmtEditId = null; stmtDraft = null;
+      qMode = null; qEditId = null; qDraft = null;
+      billTab = forceQuote ? "quote" : "statement";
+    }
     navItems.forEach(function (a) { a.classList.toggle("is-active", a.getAttribute("data-view") === name); });
     viewTitle.textContent = VIEWS[name].title;
     if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);

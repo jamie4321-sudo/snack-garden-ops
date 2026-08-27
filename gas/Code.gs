@@ -42,7 +42,8 @@ var CREW_FIELDS = [
   "id","name","role","team","group","status","joinDate","leftDate","phone","site","duties","note",
   "contractType","contractEndDate","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
 ];
-var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link","alarm","alarmTime"];
+// link = 대표(첫 번째) 링크 · links = 최대 5개 링크의 JSON 배열 문자열
+var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link","links","alarm","alarmTime"];
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
 var REPORT_FIELDS = ["id","text","link","urgent","done","reportedAt"];
@@ -546,6 +547,7 @@ function scheduleValuesObj_(data) {
   return {
     id: data.id, date: data.date || "", time: data.time || "", title: data.title || "",
     category: data.category || "", done: data.done ? "완료" : "", assignee: data.assignee || "", link: data.link || "",
+    links: (typeof data.links === "string") ? data.links : JSON.stringify(data.links || []),
     alarm: data.alarm ? "켜짐" : "", alarmTime: data.alarmTime || ""
   };
 }

@@ -174,6 +174,24 @@ window.STATEMENTS = [
     memo:"", status:"확정", createdAt:"2025-01-14T00:00:00.000Z" },
 ];
 
+/* --- 견적서 : 시트 "quotes"
+   (헤더 = id,docNo,quoteDate,validUntil,customerName,contactName,repName,repPhone,repEmail,items,shipping,supplyAmount,vat,total,notes,status,createdAt)
+   거래명세서와 동일 양식·계산식(단가 = 부가세 별도). 공급자 = 주식회사 링키지랩(고정).
+   items = 품목 배열 JSON. 각 품목 = { name, spec(규격), unit(단위), price(단가·부가세별도), qty }
+   repName/repPhone/repEmail = 발행처(링키지랩) 담당자. status : 작성 | 확정 --- */
+window.QUOTES = [
+  { id:"q1", docNo:"Q26060001", quoteDate:"2026-06-30", validUntil:"2026-07-30",
+    customerName:"아지뜰 아삭존", contactName:"",
+    repName:"서준오 팀장", repPhone:"010-3003-3866", repEmail:"juno1111@naver.com",
+    items:[
+      { name:"고추, 바질, 가지", spec:"", unit:"box", price:30000, qty:12 },
+    ],
+    shipping:0,
+    supplyAmount:360000, vat:36000, total:396000,
+    notes:"식물 식재 및 폐기 포함비용 / 도매시장에 없을시 발주자와 협의 하여 대체수종",
+    status:"작성", createdAt:"2026-06-30T00:00:00.000Z" },
+];
+
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */
 window.SUMMARY = {
   monthLabel: "2026년 7월",

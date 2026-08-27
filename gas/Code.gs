@@ -57,6 +57,8 @@ var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","befor
 // 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
 // driveUrl : 저장 시 생성해 드라이브에 보관한 PDF 링크(서버에서 채움).
 var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","bankName","accountNo","accountHolder","phone","email","items","shipping","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
+// 견적서 : 거래명세서와 동일 양식. items 각 품목 = {name,spec,unit,price,qty}. repName/repPhone/repEmail = 발행처 담당자.
+var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","repName","repPhone","repEmail","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
 
 // 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
@@ -227,6 +229,7 @@ function doGet(e) {
   if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
   if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
   if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
+  if (action === "quotes")     return json_(mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
   if (action === "drivefolders") return json_(getDriveFolders_());
@@ -243,7 +246,8 @@ function doGet(e) {
     education: mapEducation_(rows_("education", EDUCATION_FIELDS)),
     hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]),
     partners: rows_("partners", PARTNER_FIELDS),
-    statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"])
+    statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]),
+    quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"])
   });
 }
 
@@ -469,6 +473,7 @@ function doPost(e) {
   if (data.type === "hrchange") return handleHrChange_(action, data);
   if (data.type === "partner")  return handlePartner_(action, data);
   if (data.type === "statement") return handleStatement_(action, data);
+  if (data.type === "quote")    return handleQuote_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
   if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
@@ -736,6 +741,37 @@ function handleStatement_(action, data) {
       var vals = rowValuesByHeader_(sh, row, headers);
       trashStatementPdf_(vals.docNo);
     } catch (e) {}
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
+/* ---------- 견적서(quote) 저장/삭제 : 거래명세서와 동일 구조 ---------- */
+function quoteValuesObj_(data) {
+  return {
+    id: data.id, docNo: data.docNo || "", quoteDate: data.quoteDate || "", validUntil: data.validUntil || "",
+    customerName: data.customerName || "", contactName: data.contactName || "",
+    repName: data.repName || "", repPhone: data.repPhone || "", repEmail: data.repEmail || "",
+    items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
+    shipping: data.shipping || 0,
+    supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
+    notes: data.notes || "", status: data.status || "작성", createdAt: data.createdAt || "",
+    driveUrl: data.driveUrl || ""
+  };
+}
+
+function handleQuote_(action, data) {
+  var sh = sheet_("quotes", QUOTE_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    var payload = Object.assign({}, data, { id: id });
+    upsertRowByHeader_(sh, id, quoteValuesObj_(payload));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
     sh.deleteRow(row);
     return json_({ ok: true });
   }

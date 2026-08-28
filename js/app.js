@@ -1215,7 +1215,8 @@
       + '</div>';
 
     html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">①</span><h3>AI 보고서 게시 보드</h3></div>'
-      + renderWrDocsBoard() + '</section>';
+      + renderWrDocsBoard()
+      + renderWrPhotoBoard() + '</section>';
 
     html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">②</span><h3>드라이브 관리 폴더</h3></div>'
       + '<div id="wrDriveWrap">' + renderDriveFolders() + '</div></section>';
@@ -1225,6 +1226,8 @@
 
     view.innerHTML = html;
     ensureDriveFolders();
+    ensureWrPhotos();
+    wireWrPhotos();
   }
 
   function workReportRow(rp) {
@@ -1261,6 +1264,124 @@
     return '<div class="wr-docs__grid">' + cards
       + '<div class="wr-doc-add" title="js/data.js 의 WR_DOCS 배열에 추가">＋ 보고서 추가<span>data.js · WR_DOCS</span></div>'
       + '</div>';
+  }
+
+  /* ------ AI 보고서 게시보드 · 현장 사진 갤러리 (구글드라이브 공유) ------ */
+  var wrPhotosLoaded = false;
+  function wrPhotos() { return Array.isArray(window.WR_PHOTOS) ? window.WR_PHOTOS : []; }
+
+  function renderWrPhotoBoard() {
+    return '<div class="wr-photos">'
+      + '<div class="wr-photos__head"><h4>📷 현장 사진</h4>'
+      + '<span id="wrPhotoStatus" class="wr-photos__status"></span>'
+      + '<label class="wr-photo-upload">＋ 사진 등록'
+      + '<input type="file" id="wrPhotoInput" accept="image/*" multiple hidden></label>'
+      + '</div>'
+      + '<div id="wrPhotoGrid">' + renderWrPhotoGrid() + '</div>'
+      + '</div>';
+  }
+
+  function renderWrPhotoGrid() {
+    if (!endpoint()) return '<div class="wr-photos__empty">라이브 모드(구글 시트 연동)에서 사진을 등록·조회할 수 있어요.</div>';
+    if (!wrPhotosLoaded) return '<div class="wr-photos__empty">사진 불러오는 중…</div>';
+    var list = wrPhotos();
+    if (!list.length) return '<div class="wr-photos__empty">아직 등록된 사진이 없습니다. 오른쪽 위 <b>＋ 사진 등록</b>으로 현장 사진을 올려보세요.</div>';
+    return '<div class="wr-photo-grid">' + list.map(function (p) {
+      var cap = p.caption ? '<span class="wr-photo__cap" title="' + esc(p.caption) + '">' + esc(p.caption) + '</span>' : '<span class="wr-photo__cap wr-photo__cap--none">' + esc(p.name || "현장 사진") + '</span>';
+      return '<figure class="wr-photo" data-photo-id="' + esc(p.id) + '">'
+        + '<img src="' + esc(p.thumb) + '" alt="' + esc(p.caption || p.name || "현장 사진") + '" loading="lazy" referrerpolicy="no-referrer" data-photo-open="' + esc(p.url) + '">'
+        + '<figcaption>' + cap + '<span class="wr-photo__date">' + esc(p.date || "") + '</span></figcaption>'
+        + '<button type="button" class="wr-photo__del" data-photo-del="' + esc(p.id) + '" title="사진 삭제">×</button>'
+        + '</figure>';
+    }).join("") + '</div>';
+  }
+
+  function refreshWrPhotoGrid() {
+    var g = document.getElementById("wrPhotoGrid");
+    if (g) g.innerHTML = renderWrPhotoGrid();
+  }
+  function showWrPhotoStatus(msg) {
+    var s = document.getElementById("wrPhotoStatus");
+    if (s) s.textContent = msg || "";
+  }
+
+  function ensureWrPhotos() {
+    var ep = endpoint(); if (!ep) return;
+    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=reportphotos&_ts=" + Date.now();
+    fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
+      if (Array.isArray(d)) window.WR_PHOTOS = d;
+    }).catch(function () { /* 실패 시 빈 목록 유지 */ })
+      .then(function () { wrPhotosLoaded = true; refreshWrPhotoGrid(); });
+  }
+
+  function wireWrPhotos() {
+    var input = document.getElementById("wrPhotoInput");
+    if (input && !input.dataset.wired) {
+      input.dataset.wired = "1";
+      input.addEventListener("change", function () {
+        var files = Array.prototype.slice.call(input.files || []);
+        input.value = "";
+        uploadWrPhotos(files);
+      });
+    }
+    var grid = document.getElementById("wrPhotoGrid");
+    if (grid && !grid.dataset.wired) {
+      grid.dataset.wired = "1";
+      grid.addEventListener("click", function (ev) {
+        var del = ev.target.closest("[data-photo-del]");
+        if (del) { deleteWrPhoto(del.getAttribute("data-photo-del")); return; }
+        var open = ev.target.closest("[data-photo-open]");
+        if (open) { window.open(open.getAttribute("data-photo-open"), "_blank", "noopener"); return; }
+      });
+    }
+  }
+
+  function uploadWrPhotos(files) {
+    var ep = endpoint();
+    if (!ep) { alert("라이브 모드에서만 사진을 등록할 수 있어요."); return; }
+    var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
+    if (!imgs.length) { alert("이미지 파일만 등록할 수 있어요."); return; }
+    var MAX = 12 * 1024 * 1024;   // 12MB
+    var total = imgs.length, done = 0, failed = 0;
+    showWrPhotoStatus("사진 업로드 중… (0/" + total + ")");
+
+    function step() {
+      done++;
+      showWrPhotoStatus("사진 업로드 중… (" + done + "/" + total + ")");
+      if (done >= total) {
+        wrPhotosLoaded = true;
+        refreshWrPhotoGrid();
+        showWrPhotoStatus(failed ? (failed + "장 실패 · 나머지 등록됨") : (total + "장 등록 완료"));
+        setTimeout(function () { showWrPhotoStatus(""); }, 4000);
+      }
+    }
+
+    imgs.forEach(function (f) {
+      if (f.size > MAX) { failed++; step(); return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var b64 = String(reader.result).split(",")[1] || "";
+        fetch(ep, { method: "POST", body: JSON.stringify({
+          type: "reportPhoto", action: "add",
+          dataBase64: b64, mimeType: f.type, name: f.name
+        }) }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res && res.ok && res.photo) window.WR_PHOTOS = [res.photo].concat(wrPhotos());
+          else failed++;
+        }).catch(function () { failed++; }).then(step);
+      };
+      reader.onerror = function () { failed++; step(); };
+      reader.readAsDataURL(f);
+    });
+  }
+
+  function deleteWrPhoto(id) {
+    if (!id) return;
+    if (!confirm("이 사진을 삭제할까요?\n(구글드라이브 휴지통으로 이동되어 복구할 수 있어요.)")) return;
+    var ep = endpoint(); if (!ep) return;
+    window.WR_PHOTOS = wrPhotos().filter(function (p) { return String(p.id) !== String(id); });
+    refreshWrPhotoGrid();
+    fetch(ep, { method: "POST", body: JSON.stringify({ type: "reportPhoto", action: "delete", id: id }) })
+      .catch(function () { /* 화면은 이미 갱신됨 */ });
   }
 
   /* ② 드라이브 관리 폴더 */

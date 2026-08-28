@@ -76,6 +76,13 @@ var COMPANY = {
 var STATEMENT_FOLDER_ID = "";
 var STATEMENT_FOLDER_NAME = "거래명세서";
 
+// 업무 보고 · AI 보고서 게시보드 사진 갤러리 보관 폴더.
+//  ▶ REPORT_PHOTO_FOLDER_ID 에 폴더 ID를 넣으면 그 폴더를, 비우면 이름으로 자동 생성.
+//  ▶ 업로드한 사진은 화면(<img>) 표시를 위해 '링크가 있는 모든 사용자 · 보기'로 공유됩니다.
+var REPORT_PHOTO_FOLDER_ID = "";
+var REPORT_PHOTO_FOLDER_NAME = "업무보고 사진";
+var REPORT_PHOTO_LIMIT = 300;   // 조회 최대 사진 수
+
 // ── 업무 보고 · 드라이브 관리 폴더 ─────────────────────────────
 //  업무 보고 화면에 노출할 구글 드라이브 폴더 목록.
 //  각 폴더의 파일(제목·형식·수정일·링크)을 자동으로 읽어 목록화한다.
@@ -234,6 +241,7 @@ function doGet(e) {
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
   if (action === "drivefolders") return json_(getDriveFolders_());
+  if (action === "reportphotos") return json_(getReportPhotos_());
   if (action === "debug")      return json_(getDebugInfo_());
   return json_({
     crew: rows_("crew", CREW_FIELDS),
@@ -479,6 +487,7 @@ function doPost(e) {
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
   if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
+  if (data.type === "reportPhoto") return handleReportPhoto_(action, data);
   return json_({ ok: false, error: "unknown type" });
 }
 
@@ -804,6 +813,71 @@ function authorizeStatement() {
   var msg = "OK · 보관 폴더: " + folder.getName() + " · " + folder.getUrl();
   Logger.log(msg);
   return msg;
+}
+
+/* ── 업무 보고 · AI 보고서 게시보드 사진 갤러리 ──────────────
+   · 프런트가 이미지(base64) + mimeType + name 을 보내면 보관 폴더에
+     저장하고, 화면 표시용 썸네일 URL 을 돌려준다.
+   · ?action=reportphotos 로 폴더의 사진 목록을 조회한다.
+   · createFile 는 Drive 권한이 필요(거래명세서 기능과 동일 스코프).
+     최초 1회는 authorizeStatement() 를 실행해 Drive 접근을 승인하세요. */
+function reportPhotoFolder_() {
+  if (REPORT_PHOTO_FOLDER_ID) return DriveApp.getFolderById(REPORT_PHOTO_FOLDER_ID);
+  var it = DriveApp.getFoldersByName(REPORT_PHOTO_FOLDER_NAME);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(REPORT_PHOTO_FOLDER_NAME);
+}
+
+function reportPhotoObj_(f) {
+  var id = f.getId();
+  return {
+    id: id,
+    name: f.getName(),
+    caption: f.getDescription() || "",
+    date: Utilities.formatDate(f.getLastUpdated(), "Asia/Seoul", "yyyy-MM-dd"),
+    url: f.getUrl(),                                                       // 원본 열기
+    thumb: "https://drive.google.com/thumbnail?id=" + id + "&sz=w1600"      // 화면 표시용
+  };
+}
+
+function getReportPhotos_() {
+  var folder = reportPhotoFolder_();
+  var it = folder.getFiles(), arr = [], n = 0;
+  while (it.hasNext() && n < REPORT_PHOTO_LIMIT) {
+    var f = it.next();
+    if ((f.getMimeType() || "").indexOf("image") !== 0) continue;   // 이미지 파일만
+    n++;
+    arr.push(reportPhotoObj_(f));
+  }
+  arr.sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+  return arr;
+}
+
+function handleReportPhoto_(action, data) {
+  if (action === "delete") {
+    var id = String(data.id || "");
+    if (!id) return json_({ ok: false, error: "id required" });
+    try { DriveApp.getFileById(id).setTrashed(true); }   // 휴지통 이동(복구 가능)
+    catch (e) { return json_({ ok: false, error: "삭제 실패: " + e }); }
+    return json_({ ok: true });
+  }
+  // action === "add" (기본)
+  var b64 = String(data.dataBase64 || "");
+  if (!b64) return json_({ ok: false, error: "이미지 데이터가 비어 있어요." });
+  var mime = String(data.mimeType || "image/jpeg");
+  if (mime.indexOf("image") !== 0) return json_({ ok: false, error: "이미지 파일만 업로드할 수 있어요." });
+  var name = String(data.name || ("photo_" + Date.now() + ".jpg"));
+  var caption = String(data.caption || "");
+  var file;
+  try {
+    var blob = Utilities.newBlob(Utilities.base64Decode(b64), mime, name);
+    file = reportPhotoFolder_().createFile(blob);
+    if (caption) file.setDescription(caption);
+    // <img> 썸네일 핫링크 표시를 위해 링크 공유 허용
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {}
+  } catch (e) {
+    return json_({ ok: false, error: "업로드 실패: " + e });
+  }
+  return json_({ ok: true, photo: reportPhotoObj_(file) });
 }
 
 /** docNo 로 만든 PDF 파일명 (동일 문서번호는 하나만 유지) */

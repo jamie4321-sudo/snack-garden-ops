@@ -1759,19 +1759,55 @@ html[data-authed="1"] .lock { display: none; }
 
 /* 문서 뷰어 모달 */
 .modal__card--doc {
-  max-width: min(900px, 95vw); width: 100%; max-height: 92vh;
+  max-width: min(1360px, 96vw); width: 100%; max-height: 92vh;
   display: flex; flex-direction: column; padding: 18px 20px 20px;
 }
 .modal__card--doc .modal__head { margin-bottom: 12px; }
 .wrdoc-scroll { overflow-y: auto; border-radius: 12px; background: #f3f4f2; padding: 22px; }
 
+/* AI 보고서 게시보드 · 현장 사진 갤러리 */
+.wr-photos { margin-top: 20px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.wr-photos__head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.wr-photos__head h4 { margin: 0; font-size: 14px; font-weight: 800; letter-spacing: -.3px; }
+.wr-photos__status { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.wr-photo-upload {
+  margin-left: auto; cursor: pointer; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--ink); font-size: 12.5px; font-weight: 700; padding: 8px 15px; border-radius: 999px; transition: .15s;
+}
+.wr-photo-upload:hover { border-color: var(--accent); color: var(--accent-text); }
+.wr-photos__empty {
+  color: var(--ink-3); font-size: 13px; padding: 26px 20px; text-align: center;
+  border: 1px dashed var(--line); border-radius: var(--r-lg); background: var(--panel-2);
+}
+.wr-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.wr-photo {
+  position: relative; margin: 0; border: 1px solid var(--line); border-radius: var(--r-sm);
+  overflow: hidden; background: var(--panel-2);
+}
+.wr-photo img {
+  display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+  cursor: zoom-in; background: var(--panel); transition: transform .2s ease;
+}
+.wr-photo:hover img { transform: scale(1.04); }
+.wr-photo figcaption { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+.wr-photo__cap { font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wr-photo__cap--none { color: var(--ink-3); }
+.wr-photo__date { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-left: auto; flex: none; }
+.wr-photo__del {
+  position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%;
+  border: 0; background: color-mix(in srgb, #000 55%, transparent); color: #fff;
+  font-size: 15px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .15s, background .15s;
+}
+.wr-photo:hover .wr-photo__del { opacity: 1; }
+.wr-photo__del:hover { background: #c0392b; }
+
 /* ---- 보고서 본문 (항상 라이트 · 인쇄 안전) ---- */
 .wrdoc {
   --g:#1b5e3f; --gd:#123f2a; --gs:#e7f0ea; --amber:#b5822e;
   --ink:#1a1d1b; --soft:#4a524d; --mute:#838c86; --line:#e3e1d9; --card:#fff;
-  max-width: 760px; margin: 0 auto; background: #fff; color: var(--ink);
-  border-radius: 12px; padding: 40px 44px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
-  font-family: "Pretendard", var(--mono); line-height: 1.7; letter-spacing: -.01em;
+  max-width: 100%; margin: 0 auto; background: #fff; color: var(--ink);
+  border-radius: 12px; padding: 40px 52px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  font-family: "Wanted Sans", "Pretendard", system-ui, sans-serif; line-height: 1.7; letter-spacing: -.01em;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .wrdoc *, .wrdoc *::before, .wrdoc *::after { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

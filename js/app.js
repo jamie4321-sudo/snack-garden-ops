@@ -1215,8 +1215,7 @@
       + '</div>';
 
     html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">①</span><h3>AI 보고서 게시 보드</h3></div>'
-      + renderWrDocsBoard()
-      + renderWrPhotoBoard() + '</section>';
+      + renderWrDocsBoard() + '</section>';
 
     html += '<section class="wr-zone"><div class="wr-zone__head"><span class="wr-zone__no">②</span><h3>드라이브 관리 폴더</h3></div>'
       + '<div id="wrDriveWrap">' + renderDriveFolders() + '</div></section>';
@@ -1226,8 +1225,6 @@
 
     view.innerHTML = html;
     ensureDriveFolders();
-    ensureWrPhotos();
-    wireWrPhotos();
   }
 
   function workReportRow(rp) {
@@ -1266,93 +1263,71 @@
       + '</div>';
   }
 
-  /* ------ AI 보고서 게시보드 · 현장 사진 갤러리 (구글드라이브 공유) ------ */
-  var wrPhotosLoaded = false;
-  function wrPhotos() { return Array.isArray(window.WR_PHOTOS) ? window.WR_PHOTOS : []; }
+  /* ------ 보고서별 현장 사진 (보고서 문서 하단 · 구글드라이브 폴더 보고서 id별) ------ */
+  var wrDocPhotos = {};        // docId -> [photo]
+  var wrDocPhotoLoaded = {};   // docId -> bool
 
-  function renderWrPhotoBoard() {
-    return '<div class="wr-photos">'
-      + '<div class="wr-photos__head"><h4>📷 현장 사진</h4>'
-      + '<span id="wrPhotoStatus" class="wr-photos__status"></span>'
-      + '<label class="wr-photo-upload">＋ 사진 등록'
-      + '<input type="file" id="wrPhotoInput" accept="image/*" multiple hidden></label>'
-      + '</div>'
-      + '<div id="wrPhotoGrid">' + renderWrPhotoGrid() + '</div>'
-      + '</div>';
+  function renderDocPhotoSection(docId) {
+    return '<section class="wrdoc-photos">'
+      + '<div class="wrdoc-photos__head"><h2><span class="wrdoc-no">📷</span>현장 사진</h2>'
+      + '<span class="wrdoc-photos__status"></span>'
+      + '<label class="wrdoc-photo-add">＋ 사진 추가'
+      + '<input type="file" class="wrdoc-photo-input" accept="image/*" multiple hidden></label></div>'
+      + '<div class="wrdoc-photos__body">' + docPhotoBody(docId) + '</div>'
+      + '</section>';
   }
 
-  function renderWrPhotoGrid() {
-    if (!endpoint()) return '<div class="wr-photos__empty">라이브 모드(구글 시트 연동)에서 사진을 등록·조회할 수 있어요.</div>';
-    if (!wrPhotosLoaded) return '<div class="wr-photos__empty">사진 불러오는 중…</div>';
-    var list = wrPhotos();
-    if (!list.length) return '<div class="wr-photos__empty">아직 등록된 사진이 없습니다. 오른쪽 위 <b>＋ 사진 등록</b>으로 현장 사진을 올려보세요.</div>';
-    return '<div class="wr-photo-grid">' + list.map(function (p) {
-      var cap = p.caption ? '<span class="wr-photo__cap" title="' + esc(p.caption) + '">' + esc(p.caption) + '</span>' : '<span class="wr-photo__cap wr-photo__cap--none">' + esc(p.name || "현장 사진") + '</span>';
-      return '<figure class="wr-photo" data-photo-id="' + esc(p.id) + '">'
+  function docPhotoBody(docId) {
+    if (!endpoint()) return '<div class="wrdoc-photos__empty">라이브 모드(구글 시트 연동)에서 사진을 등록·조회할 수 있어요.</div>';
+    if (!wrDocPhotoLoaded[docId]) return '<div class="wrdoc-photos__empty">사진 불러오는 중…</div>';
+    var list = wrDocPhotos[docId] || [];
+    if (!list.length) return '<div class="wrdoc-photos__empty">이 보고서에 등록된 사진이 없습니다. <b>＋ 사진 추가</b> 버튼으로 현장 사진을 올려보세요.</div>';
+    return '<div class="wrdoc-photo-grid">' + list.map(function (p) {
+      var cap = p.caption ? '<figcaption>' + esc(p.caption) + '</figcaption>' : '';
+      return '<figure class="wrdoc-photo" data-photo-id="' + esc(p.id) + '">'
         + '<img src="' + esc(p.thumb) + '" alt="' + esc(p.caption || p.name || "현장 사진") + '" loading="lazy" referrerpolicy="no-referrer" data-photo-open="' + esc(p.url) + '">'
-        + '<figcaption>' + cap + '<span class="wr-photo__date">' + esc(p.date || "") + '</span></figcaption>'
-        + '<button type="button" class="wr-photo__del" data-photo-del="' + esc(p.id) + '" title="사진 삭제">×</button>'
-        + '</figure>';
+        + '<button type="button" class="wrdoc-photo__del" data-photo-del="' + esc(p.id) + '" title="사진 삭제">×</button>'
+        + cap + '</figure>';
     }).join("") + '</div>';
   }
 
-  function refreshWrPhotoGrid() {
-    var g = document.getElementById("wrPhotoGrid");
-    if (g) g.innerHTML = renderWrPhotoGrid();
+  function refreshDocPhotos(docId) {
+    var body = document.querySelector('#wrDocBody .wrdoc-photos__body');
+    if (body) body.innerHTML = docPhotoBody(docId);
   }
-  function showWrPhotoStatus(msg) {
-    var s = document.getElementById("wrPhotoStatus");
+  function setDocPhotoStatus(msg) {
+    var s = document.querySelector('#wrDocBody .wrdoc-photos__status');
     if (s) s.textContent = msg || "";
   }
 
-  function ensureWrPhotos() {
-    var ep = endpoint(); if (!ep) return;
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=reportphotos&_ts=" + Date.now();
+  function loadDocPhotos(docId) {
+    var ep = endpoint();
+    if (!ep) { wrDocPhotoLoaded[docId] = true; refreshDocPhotos(docId); return; }
+    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?")
+      + "action=reportphotos&docId=" + encodeURIComponent(docId) + "&_ts=" + Date.now();
     fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
-      if (Array.isArray(d)) window.WR_PHOTOS = d;
-    }).catch(function () { /* 실패 시 빈 목록 유지 */ })
-      .then(function () { wrPhotosLoaded = true; refreshWrPhotoGrid(); });
+      if (Array.isArray(d)) wrDocPhotos[docId] = d;
+    }).catch(function () { /* 실패 시 빈 목록 */ })
+      .then(function () { wrDocPhotoLoaded[docId] = true; refreshDocPhotos(docId); });
   }
 
-  function wireWrPhotos() {
-    var input = document.getElementById("wrPhotoInput");
-    if (input && !input.dataset.wired) {
-      input.dataset.wired = "1";
-      input.addEventListener("change", function () {
-        var files = Array.prototype.slice.call(input.files || []);
-        input.value = "";
-        uploadWrPhotos(files);
-      });
-    }
-    var grid = document.getElementById("wrPhotoGrid");
-    if (grid && !grid.dataset.wired) {
-      grid.dataset.wired = "1";
-      grid.addEventListener("click", function (ev) {
-        var del = ev.target.closest("[data-photo-del]");
-        if (del) { deleteWrPhoto(del.getAttribute("data-photo-del")); return; }
-        var open = ev.target.closest("[data-photo-open]");
-        if (open) { window.open(open.getAttribute("data-photo-open"), "_blank", "noopener"); return; }
-      });
-    }
-  }
-
-  function uploadWrPhotos(files) {
+  function uploadDocPhotos(docId, files) {
     var ep = endpoint();
     if (!ep) { alert("라이브 모드에서만 사진을 등록할 수 있어요."); return; }
     var imgs = files.filter(function (f) { return /^image\//.test(f.type); });
     if (!imgs.length) { alert("이미지 파일만 등록할 수 있어요."); return; }
     var MAX = 12 * 1024 * 1024;   // 12MB
     var total = imgs.length, done = 0, failed = 0;
-    showWrPhotoStatus("사진 업로드 중… (0/" + total + ")");
+    setDocPhotoStatus("사진 업로드 중… (0/" + total + ")");
 
     function step() {
       done++;
-      showWrPhotoStatus("사진 업로드 중… (" + done + "/" + total + ")");
+      setDocPhotoStatus("사진 업로드 중… (" + done + "/" + total + ")");
       if (done >= total) {
-        wrPhotosLoaded = true;
-        refreshWrPhotoGrid();
-        showWrPhotoStatus(failed ? (failed + "장 실패 · 나머지 등록됨") : (total + "장 등록 완료"));
-        setTimeout(function () { showWrPhotoStatus(""); }, 4000);
+        wrDocPhotoLoaded[docId] = true;
+        refreshDocPhotos(docId);
+        setDocPhotoStatus(failed ? (failed + "장 실패 · 나머지 등록됨") : (total + "장 등록 완료"));
+        setTimeout(function () { setDocPhotoStatus(""); }, 4000);
       }
     }
 
@@ -1362,10 +1337,10 @@
       reader.onload = function () {
         var b64 = String(reader.result).split(",")[1] || "";
         fetch(ep, { method: "POST", body: JSON.stringify({
-          type: "reportPhoto", action: "add",
+          type: "reportPhoto", action: "add", docId: docId,
           dataBase64: b64, mimeType: f.type, name: f.name
         }) }).then(function (r) { return r.json(); }).then(function (res) {
-          if (res && res.ok && res.photo) window.WR_PHOTOS = [res.photo].concat(wrPhotos());
+          if (res && res.ok && res.photo) wrDocPhotos[docId] = [res.photo].concat(wrDocPhotos[docId] || []);
           else failed++;
         }).catch(function () { failed++; }).then(step);
       };
@@ -1374,12 +1349,12 @@
     });
   }
 
-  function deleteWrPhoto(id) {
+  function deleteDocPhoto(docId, id) {
     if (!id) return;
     if (!confirm("이 사진을 삭제할까요?\n(구글드라이브 휴지통으로 이동되어 복구할 수 있어요.)")) return;
     var ep = endpoint(); if (!ep) return;
-    window.WR_PHOTOS = wrPhotos().filter(function (p) { return String(p.id) !== String(id); });
-    refreshWrPhotoGrid();
+    wrDocPhotos[docId] = (wrDocPhotos[docId] || []).filter(function (p) { return String(p.id) !== String(id); });
+    refreshDocPhotos(docId);
     fetch(ep, { method: "POST", body: JSON.stringify({ type: "reportPhoto", action: "delete", id: id }) })
       .catch(function () { /* 화면은 이미 갱신됨 */ });
   }
@@ -1544,9 +1519,11 @@
     if (!el) { el = buildWrDocModal(); document.body.appendChild(el); }
     el.dataset.docId = doc.id;
     el.querySelector("#wrDocModalTitle").textContent = doc.title;
-    el.querySelector("#wrDocBody").innerHTML = '<div class="wrdoc">' + doc.html + '</div>';
+    el.querySelector("#wrDocBody").innerHTML =
+      '<div class="wrdoc">' + doc.html + renderDocPhotoSection(doc.id) + '</div>';
     el.querySelector("#wrDocBody").scrollTop = 0;
     el.hidden = false;
+    loadDocPhotos(doc.id);
   }
   function closeWrDocModal() {
     var el = document.getElementById("wrDocModal");
@@ -1570,6 +1547,17 @@
     wrap.addEventListener("click", function (ev) {
       if (ev.target.closest("[data-close]")) { closeWrDocModal(); return; }
       if (ev.target.closest("[data-wr-print]")) { printWrDoc(wrap.dataset.docId); return; }
+      var del = ev.target.closest("[data-photo-del]");
+      if (del) { deleteDocPhoto(wrap.dataset.docId, del.getAttribute("data-photo-del")); return; }
+      var open = ev.target.closest("[data-photo-open]");
+      if (open) { window.open(open.getAttribute("data-photo-open"), "_blank", "noopener"); return; }
+    });
+    wrap.addEventListener("change", function (ev) {
+      var input = ev.target.closest(".wrdoc-photo-input");
+      if (!input) return;
+      var files = Array.prototype.slice.call(input.files || []);
+      input.value = "";
+      uploadDocPhotos(wrap.dataset.docId, files);
     });
     return wrap;
   }
@@ -6671,6 +6659,17 @@
     renderPartner();
   }
 
+  /* =========================================================
+     업무 프로세스 HUB — 상세 로직은 js/process-hub.js 모듈에 위임
+     ========================================================= */
+  function renderProcess() {
+    if (window.ProcessHub && typeof window.ProcessHub.render === "function") {
+      window.ProcessHub.render(view);
+    } else {
+      view.innerHTML = '<div class="board__empty">업무 프로세스 HUB 모듈을 불러오지 못했습니다.</div>';
+    }
+  }
+
   var VIEWS = {
     statement:   { title: "BILLING", render: renderBilling },
     quote:       { title: "BILLING", render: renderBilling },
@@ -6687,6 +6686,7 @@
     notify:      { title: "NOTIFY", render: renderNotify },
     workreport:  { title: "WORK REPORT", render: renderWorkReport },
     kpi:         { title: "2026 KPI", render: renderKpi },
+    process:     { title: "PROCESS HUB", render: renderProcess },
   };
 
   function go(name) {

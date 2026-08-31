@@ -345,6 +345,7 @@
         if (d && d.partners) window.PARTNERS = d.partners.map(normPartner);
         if (d && d.statements) window.STATEMENTS = d.statements.map(normStatement);
         if (d && d.quotes) window.QUOTES = d.quotes.map(normQuote);
+        if (d && d.processes) window.PROCESS_HUB_DATA = d.processes; // 업무 프로세스 HUB(process-hub.js)
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });

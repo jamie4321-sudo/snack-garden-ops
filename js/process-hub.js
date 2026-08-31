@@ -68,6 +68,58 @@
   function prioOf(id) { for (var i = 0; i < PRIORITIES.length; i++) if (PRIORITIES[i].id === id) return PRIORITIES[i]; return PRIORITIES[3]; }
   function byId(id) { for (var i = 0; i < db.length; i++) if (db[i].id === id) return db[i]; return null; }
 
+  /* ---------- 구글시트 연동 ---------- */
+  function endpoint() { return (window.CONFIG && window.CONFIG.endpoint || "").trim(); }
+  function isLive() { return !!endpoint(); }
+
+  /* 시트에서 내려온 한 행(문자열 필드 포함)을 앱 내부 구조로 정규화 */
+  function normFromSheet(r) {
+    function arr(v) { if (Array.isArray(v)) return v; try { var p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch (e) { return []; } }
+    function obj(v) { if (v && typeof v === "object") return v; try { var p = JSON.parse(v); return (p && typeof p === "object") ? p : {}; } catch (e) { return {}; } }
+    function tags(v) { if (Array.isArray(v)) return v; if (typeof v === "string" && v[0] === "[") { try { var p = JSON.parse(v); if (Array.isArray(p)) return p; } catch (e) {} } return String(v || "").split(/[,\s]+/).map(function (t) { return t.replace(/^#/, "").trim(); }).filter(Boolean); }
+    var rr = obj(r.reportRules), st = obj(r.stakeholders);
+    return {
+      id: r.id || uid(), title: r.title || "", category: r.category || "", subCategory: r.subCategory || "",
+      purpose: r.purpose || "", trigger: r.trigger || "", priority: r.priority || "today",
+      tags: tags(r.tags),
+      processSteps: arr(r.processSteps), decisionPoints: arr(r.decisionPoints),
+      reportRules: { immediate: rr.immediate || "", regular: rr.regular || "", targets: rr.targets || "", approval: !!rr.approval, external: !!rr.external },
+      stakeholders: { main: st.main || "", internal: st.internal || "", report: st.report || "", vendor: st.vendor || "", vendorContact: st.vendorContact || "", note: st.note || "" },
+      relatedResources: arr(r.relatedResources), pastCases: arr(r.pastCases),
+      favorite: (r.favorite === true || r.favorite === "Y" || r.favorite === "y" || String(r.favorite).toLowerCase() === "true"),
+      createdAt: r.createdAt || "", updatedAt: r.updatedAt || "",
+    };
+  }
+
+  /* 앱 구조 → 시트 저장용 평면 객체(중첩은 JSON 문자열) */
+  function serializeProcess(p) {
+    return {
+      id: p.id, title: p.title || "", category: p.category || "", subCategory: p.subCategory || "",
+      purpose: p.purpose || "", trigger: p.trigger || "", priority: p.priority || "today",
+      tags: JSON.stringify(p.tags || []),
+      processSteps: JSON.stringify(p.processSteps || []),
+      decisionPoints: JSON.stringify(p.decisionPoints || []),
+      reportRules: JSON.stringify(p.reportRules || {}),
+      stakeholders: JSON.stringify(p.stakeholders || {}),
+      relatedResources: JSON.stringify(p.relatedResources || []),
+      pastCases: JSON.stringify(p.pastCases || []),
+      favorite: p.favorite ? "Y" : "",
+      createdAt: p.createdAt || "", updatedAt: p.updatedAt || "",
+    };
+  }
+
+  /* 개별 변경을 시트에 반영(fire-and-forget). action: add | update | delete */
+  function pushToSheet(action, p) {
+    if (!isLive()) return;
+    var body = (action === "delete")
+      ? { type: "process", action: "delete", id: p.id }
+      : Object.assign({ type: "process", action: action }, serializeProcess(p));
+    try {
+      fetch(endpoint(), { method: "POST", body: JSON.stringify(body) })
+        .catch(function (e) { console.warn("[HUB 시트 저장 실패]", e); });
+    } catch (e) { console.warn("[HUB 시트 저장 예외]", e); }
+  }
+
   /* ---------- 저장/로드 ---------- */
   function load() {
     try {
@@ -76,10 +128,25 @@
     } catch (e) {}
     return seed();
   }
+  // 로컬 캐시 저장(오프라인/데모 대비 · 라이브에서도 미러로 유지)
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); } catch (e) {}
   }
-  function ensureDb() { if (!db) db = load(); }
+  // 변경을 로컬 캐시 + (라이브면) 시트에 함께 반영
+  function persist(action, p) {
+    save();
+    pushToSheet(action, p);
+  }
+  function ensureDb() {
+    if (db) return;
+    // 라이브 모드: app.js가 시트에서 받아 채워둔 window.PROCESS_HUB_DATA 사용
+    if (isLive() && Array.isArray(window.PROCESS_HUB_DATA)) {
+      db = window.PROCESS_HUB_DATA.map(normFromSheet);
+    } else {
+      // 데모/오프라인(엔드포인트 없음 또는 아직 미배포): 로컬 캐시/시드 사용
+      db = load();
+    }
+  }
 
   /* ---------- 시드(예시) 데이터 ---------- */
   function seed() {
@@ -703,13 +770,16 @@
       pastCases: (d.pastCases || []).filter(function (c) { return c.date || c.situation || c.action || c.result || c.note; }),
     };
     var now = todayIso();
+    var saved;
     if (state.editId) {
       var p = byId(state.editId);
       if (p) {
         for (var k in clean) if (clean.hasOwnProperty(k)) p[k] = clean[k];
         p.updatedAt = now;
         state.detailId = p.id;
+        saved = p;
       }
+      persist("update", saved || clean);
     } else {
       clean.id = uid();
       clean.favorite = false;
@@ -717,8 +787,8 @@
       clean.updatedAt = now;
       db.push(clean);
       state.detailId = clean.id;
+      persist("add", clean);
     }
-    save();
     state.route = "detail";
     state.editId = null; state.draft = null;
     paint();
@@ -797,13 +867,13 @@
         var t = byId(pid);
         if (t && confirm('“' + t.title + '” 프로세스를 삭제할까요?')) {
           db = db.filter(function (x) { return x.id !== pid; });
-          save(); state.route = "dashboard"; paint();
+          persist("delete", { id: pid }); state.route = "dashboard"; paint();
         }
         return true;
       }
       case "fav": {
         var f = byId(pid);
-        if (f) { f.favorite = !f.favorite; f.updatedAt = todayIso(); save(); paint(); }
+        if (f) { f.favorite = !f.favorite; f.updatedAt = todayIso(); persist("update", f); paint(); }
         return true;
       }
       case "home": state.route = "dashboard"; state.query = ""; paint(); return true;

@@ -61,6 +61,9 @@ var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contac
 // 견적서 : 거래명세서와 동일 양식. items 각 품목 = {name,spec,unit,price,qty}. repName/repPhone/repEmail = 발행처 담당자.
 var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","customerBizNo","repName","repPhone","repEmail","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
+// 업무 프로세스 HUB(개인용) : 중첩 구조(단계·판단기준·보고·담당·자료·사례)는 JSON 문자열로 저장한다.
+//   tags = 태그 JSON 배열 · favorite = "Y"|"" · processSteps/decisionPoints/relatedResources/pastCases = JSON 배열 · reportRules/stakeholders = JSON 객체
+var PROCESS_FIELDS = ["id","title","category","subCategory","purpose","trigger","priority","tags","processSteps","decisionPoints","reportRules","stakeholders","relatedResources","pastCases","favorite","createdAt","updatedAt"];
 
 // 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
 var COMPANY = {
@@ -238,10 +241,11 @@ function doGet(e) {
   if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
   if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
   if (action === "quotes")     return json_(mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]));
+  if (action === "processes")  return json_(mapProcesses_(rows_("processes", PROCESS_FIELDS)));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
   if (action === "drivefolders") return json_(getDriveFolders_());
-  if (action === "reportphotos") return json_(getReportPhotos_());
+  if (action === "reportphotos") return json_(getReportPhotos_((e.parameter && e.parameter.docId) || ""));
   if (action === "debug")      return json_(getDebugInfo_());
   return json_({
     crew: rows_("crew", CREW_FIELDS),
@@ -256,7 +260,22 @@ function doGet(e) {
     hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]),
     partners: rows_("partners", PARTNER_FIELDS),
     statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]),
-    quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"])
+    quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]),
+    processes: mapProcesses_(rows_("processes", PROCESS_FIELDS))
+  });
+}
+
+/** 업무 프로세스 HUB : JSON 문자열 컬럼을 객체/배열로 복원하고 favorite 을 불리언으로 정규화한다. */
+function mapProcesses_(list) {
+  var jsonFields = ["tags","processSteps","decisionPoints","reportRules","stakeholders","relatedResources","pastCases"];
+  return list.map(function (r) {
+    jsonFields.forEach(function (f) {
+      if (typeof r[f] === "string" && r[f]) { try { r[f] = JSON.parse(r[f]); } catch (e) {} }
+    });
+    r.favorite = (r.favorite === true || r.favorite === "Y" || r.favorite === "y" || String(r.favorite).toLowerCase() === "true");
+    r.createdAt = r.createdAt ? fmtDate_(r.createdAt) : "";
+    r.updatedAt = r.updatedAt ? fmtDate_(r.updatedAt) : "";
+    return r;
   });
 }
 
@@ -484,6 +503,7 @@ function doPost(e) {
   if (data.type === "partner")  return handlePartner_(action, data);
   if (data.type === "statement") return handleStatement_(action, data);
   if (data.type === "quote")    return handleQuote_(action, data);
+  if (data.type === "process")  return handleProcess_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
   if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
@@ -793,6 +813,42 @@ function handleQuote_(action, data) {
   return json_({ ok: false, error: "unknown action" });
 }
 
+/* ---------- 업무 프로세스 HUB(process) 저장/삭제 ---------- */
+// 중첩 구조는 JSON 문자열로 저장한다. 프런트(process-hub.js)가 이미 문자열로 보내면 그대로,
+// 혹시 객체로 오면 여기서 문자열화한다.
+function processValuesObj_(data) {
+  function j(v, empty) { return (typeof v === "string") ? v : JSON.stringify(v == null ? empty : v); }
+  return {
+    id: data.id, title: data.title || "", category: data.category || "", subCategory: data.subCategory || "",
+    purpose: data.purpose || "", trigger: data.trigger || "", priority: data.priority || "today",
+    tags: j(data.tags, []),
+    processSteps: j(data.processSteps, []),
+    decisionPoints: j(data.decisionPoints, []),
+    reportRules: j(data.reportRules, {}),
+    stakeholders: j(data.stakeholders, {}),
+    relatedResources: j(data.relatedResources, []),
+    pastCases: j(data.pastCases, []),
+    favorite: (data.favorite === true || data.favorite === "Y") ? "Y" : "",
+    createdAt: data.createdAt || "", updatedAt: data.updatedAt || ""
+  };
+}
+
+function handleProcess_(action, data) {
+  var sh = sheet_("processes", PROCESS_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, processValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
 /** 거래명세서 PDF 보관 폴더.
  *  STATEMENT_FOLDER_ID 가 지정돼 있으면 그 폴더를, 없으면 이름으로 찾거나 자동 생성. */
 function statementFolder_() {
@@ -827,6 +883,17 @@ function reportPhotoFolder_() {
   return it.hasNext() ? it.next() : DriveApp.createFolder(REPORT_PHOTO_FOLDER_NAME);
 }
 
+/** 보고서(docId)별 하위 폴더. docId 가 없으면 루트 폴더를 그대로 사용.
+ *  create=true 면 없을 때 생성, false 면 없을 때 null 반환. */
+function reportPhotoSubFolder_(docId, create) {
+  var root = reportPhotoFolder_();
+  docId = String(docId || "").trim();
+  if (!docId) return root;
+  var it = root.getFoldersByName(docId);
+  if (it.hasNext()) return it.next();
+  return create ? root.createFolder(docId) : null;
+}
+
 function reportPhotoObj_(f) {
   var id = f.getId();
   return {
@@ -839,8 +906,9 @@ function reportPhotoObj_(f) {
   };
 }
 
-function getReportPhotos_() {
-  var folder = reportPhotoFolder_();
+function getReportPhotos_(docId) {
+  var folder = docId ? reportPhotoSubFolder_(docId, false) : reportPhotoFolder_();
+  if (!folder) return [];   // 해당 보고서 폴더가 아직 없음 → 빈 목록
   var it = folder.getFiles(), arr = [], n = 0;
   while (it.hasNext() && n < REPORT_PHOTO_LIMIT) {
     var f = it.next();
@@ -870,7 +938,7 @@ function handleReportPhoto_(action, data) {
   var file;
   try {
     var blob = Utilities.newBlob(Utilities.base64Decode(b64), mime, name);
-    file = reportPhotoFolder_().createFile(blob);
+    file = reportPhotoSubFolder_(data.docId, true).createFile(blob);   // 보고서별 폴더에 저장
     if (caption) file.setDescription(caption);
     // <img> 썸네일 핫링크 표시를 위해 링크 공유 허용
     try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {}

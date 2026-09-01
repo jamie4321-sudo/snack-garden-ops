@@ -1692,6 +1692,24 @@ html[data-authed="1"] .lock { display: none; }
 .stmt-sheet__memo-b { font-size: 12px; color: #444; word-break: break-word; }
 .stmt-sheet__memo-b .muted { color: #aaa; }
 
+/* ---- 청구서(INVOICE) 전용 요소 ---- */
+.stmt-sheet__subtitle { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #999; margin-top: -8px; }
+.stmt-sheet__pm { font-size: 11.5px; color: #555; line-height: 1.7; }
+.stmt-sheet__pm .pmk { display: inline-block; min-width: 14px; color: #aaa; font-weight: 700; }
+.stmt-sheet__to-name { font-size: 16px; font-weight: 800; color: #111; margin-bottom: 2px; }
+.stmt-sheet__amtbox { display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  padding: 10px 14px; margin-bottom: 12px; background: #f7f7f8; border: 1px solid #ececef; border-radius: 8px; }
+.stmt-sheet__amtbox-k { font-size: 12.5px; font-weight: 700; color: #333; white-space: nowrap; }
+.stmt-sheet__amtbox-v { font-size: 20px; font-weight: 800; color: #111; font-variant-numeric: tabular-nums; }
+.stmt-sheet__isub { font-size: 11px; color: #888; margin-top: 2px; }
+.stmt-sheet__unit-note { text-align: right; font-size: 11px; color: #999; margin: -8px 0 14px; }
+.stmt-sheet__purpose { margin-top: 30px; font-size: 13px; color: #222; text-align: center; letter-spacing: .2px; }
+.stmt-sheet__sign { margin-top: 26px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+.stmt-sheet__sign-co { line-height: 1.7; }
+.stmt-sheet__sign-ceo { position: relative; font-size: 14px; font-weight: 700; color: #111; white-space: nowrap; padding-right: 74px; }
+.stmt-sheet__inmark { color: #888; font-weight: 500; margin-left: 4px; }
+.stmt-sheet__seal { position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 64px; height: 64px; opacity: .92; }
+
 /* ---- 인쇄 : 화면의 명세서 시트 그대로 출력 ---- */
 @media print {
   .side, .topbar, .lock, .stmt-actions, .side__foot { display: none !important; }

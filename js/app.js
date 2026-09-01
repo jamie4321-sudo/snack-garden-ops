@@ -204,6 +204,36 @@
     };
   }
 
+  /* ---------- 청구서(INVOICE) 정규화 ----------
+     견적서와 동일 양식/계산(단가 = 부가세 별도). 견적서 대비 입금기한(dueDate)과
+     입금계좌 정보(bankName/accountNo/accountHolder)를 추가로 보관합니다. */
+  function normInvoice(r) {
+    var items = parseItems_(r.items).map(function (it) {
+      return {
+        name: it.name || "", spec: it.spec || "", unit: it.unit || "",
+        price: +it.price || 0, qty: +it.qty || 0,
+      };
+    });
+    var shipping = +r.shipping || 0;
+    var g = stmtGrand(items, shipping);
+    return {
+      id: r.id || "", docNo: r.docNo || "",
+      invoiceDate: fmtDay(r.invoiceDate || r.date), dueDate: fmtDay(r.dueDate),
+      customerName: r.customerName || "", contactName: r.contactName || "", customerBizNo: r.customerBizNo || "",
+      customerPhone: r.customerPhone || "", customerEmail: r.customerEmail || "",
+      repName: r.repName || "", repPhone: r.repPhone || "", repEmail: r.repEmail || "",
+      bankName: r.bankName || "", accountNo: r.accountNo || "", accountHolder: r.accountHolder || "",
+      accountingName: r.accountingName || "", accountingEmail: r.accountingEmail || "",
+      purpose: r.purpose != null ? r.purpose : "상기와 같이 위탁운영대금 지급을 정히 청구합니다.",
+      items: items, shipping: shipping,
+      supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : g.supply,
+      vat: r.vat != null && r.vat !== "" ? +r.vat : g.vat,
+      total: r.total != null && r.total !== "" ? +r.total : g.total,
+      notes: r.notes || "", status: r.status || "작성",
+      createdAt: r.createdAt || "", driveUrl: r.driveUrl || "",
+    };
+  }
+
   /** 숫자를 한글 금액으로 (예: 360000 → "삼십육만") */
   function numToKorean(n) {
     n = Math.round(+n || 0);
@@ -260,15 +290,28 @@
   /** 천 단위 콤마 (원화) */
   function won(n) { return (Math.round(+n || 0)).toLocaleString("en-US"); }
 
-  /* 발행처(공급자) = 주식회사 링키지랩 — 고정 정보 */
+  /* 발행처(공급자) = 주식회사 링키지랩 — 기본값 + 사용자가 수정한 값(localStorage) 우선 */
+  function loadCompanyOverride() {
+    try { return JSON.parse(localStorage.getItem("sg-company") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveCompanyOverride(o) {
+    try { localStorage.setItem("sg-company", JSON.stringify(o || {})); } catch (x) {}
+  }
   function company() {
     var base = (window.COMPANY || {});
+    var ov = loadCompanyOverride();
+    function pick(k, def) {
+      if (ov[k] != null && String(ov[k]).trim() !== "") return ov[k];
+      if (base[k] != null && String(base[k]).trim() !== "") return base[k];
+      return def;
+    }
     return {
-      name: base.name || "주식회사 링키지랩",
-      bizNo: base.bizNo || "235-88-00278",
-      ceo: base.ceo || "박대영",
-      addr: base.addr || "서울특별시 성동구 성수동2가 314-37번지 3층",
-      logo: base.logo || "./assets/logo.png",
+      name: pick("name", "주식회사 링키지랩"),
+      bizNo: pick("bizNo", "235-88-00278"),
+      ceo: pick("ceo", "박대영"),
+      addr: pick("addr", "서울특별시 성동구 성수동2가 314-37번지 3층"),
+      logo: pick("logo", "./assets/logo.png"),
+      seal: pick("seal", "./assets/seal.svg"),
     };
   }
   /* 최근 입력한 연락처·입금계좌를 기억해 다음 명세서에 자동 채움 */
@@ -345,6 +388,7 @@
         if (d && d.partners) window.PARTNERS = d.partners.map(normPartner);
         if (d && d.statements) window.STATEMENTS = d.statements.map(normStatement);
         if (d && d.quotes) window.QUOTES = d.quotes.map(normQuote);
+        if (d && d.invoices) window.INVOICES = d.invoices.map(normInvoice);
         if (d && d.processes) window.PROCESS_HUB_DATA = d.processes; // 업무 프로세스 HUB(process-hub.js)
         return true;
       })
@@ -5540,22 +5584,25 @@
   var stmtMode = null;      // null=목록 | "edit"=편집기 | "view"=보기
   var stmtEditId = null;    // 편집/보기 대상 id ("" = 신규)
   var stmtDraft = null;     // 편집 중 임시 명세서 객체
-  var billTab = "statement"; // 청구 관리 활성 탭 : "statement"(거래명세서) | "quote"(견적서)
+  var billTab = "statement"; // 청구 관리 활성 탭 : "statement"(거래명세서) | "quote"(견적서) | "invoice"(청구서) | "partner"(거래처)
 
-  /** 청구 관리 진입점 — 활성 탭(거래명세서/견적서/거래처)에 따라 목록/편집/보기 렌더 */
+  /** 청구 관리 진입점 — 활성 탭(거래명세서/견적서/청구서/거래처)에 따라 목록/편집/보기 렌더 */
   function renderBilling() {
     if (billTab === "quote") renderQuote();
+    else if (billTab === "invoice") renderInvoice();
     else if (billTab === "partner") renderPartner();
     else renderStatement();
   }
 
-  /** 청구 관리 상단 탭 (거래명세서 / 견적서 / 거래처) */
+  /** 청구 관리 상단 탭 (거래명세서 / 견적서 / 청구서 / 거래처) + 발행처 정보 수정 */
   function billTabsHTML(active) {
     return '<div class="seg bill-tabs">'
       + '<button type="button" class="btn btn--sm ' + (active === "statement" ? "is-on" : "") + '" data-bill-tab="statement">거래명세서</button>'
       + '<button type="button" class="btn btn--sm ' + (active === "quote" ? "is-on" : "") + '" data-bill-tab="quote">견적서</button>'
+      + '<button type="button" class="btn btn--sm ' + (active === "invoice" ? "is-on" : "") + '" data-bill-tab="invoice">청구서</button>'
       + '<button type="button" class="btn btn--sm ' + (active === "partner" ? "is-on" : "") + '" data-bill-tab="partner">거래처</button>'
-      + '</div>';
+      + '</div>'
+      + '<button type="button" class="btn btn--sm" id="billCompanyBtn" title="세금계산서·명세서·견적서·청구서에 표기되는 발행처(공급자) 정보를 수정합니다">🏢 발행처 정보</button>';
   }
   function bindBillTabs() {
     stmtOnAll(".bill-tabs [data-bill-tab]", "click", function () {
@@ -5564,8 +5611,87 @@
       billTab = t;
       stmtMode = null; stmtEditId = null; stmtDraft = null;
       qMode = null; qEditId = null; qDraft = null;
+      invMode = null; invEditId = null; invDraft = null;
       renderBilling();
     });
+    stmtOn("#billCompanyBtn", "click", openCompanyModal);
+  }
+
+  /* ---------- 발행처(회사) 정보 수정 모달 ---------- */
+  function openCompanyModal() {
+    var el = document.getElementById("companyModal");
+    if (!el) { el = buildCompanyModal(); document.body.appendChild(el); }
+    var c = company();
+    var f = el.querySelector("form");
+    f.name.value = c.name;
+    f.bizNo.value = c.bizNo;
+    f.ceo.value = c.ceo;
+    f.addr.value = c.addr;
+    f.logo.value = c.logo;
+    f.seal.value = c.seal;
+    el.hidden = false;
+    setTimeout(function () { f.name.focus(); }, 30);
+  }
+  function closeCompanyModal() {
+    var el = document.getElementById("companyModal");
+    if (el) el.hidden = true;
+  }
+  function buildCompanyModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal";
+    wrap.id = "companyModal";
+    wrap.hidden = true;
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card" role="dialog" aria-modal="true" aria-label="발행처 정보 수정">'
+      + '<div class="modal__head"><h3>발행처(공급자) 정보 수정</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="companyForm">'
+      + '<p class="sub" style="margin:-4px 0 14px">거래명세서·견적서·청구서 상단에 표기되는 <b>공급자 정보</b>입니다. 이 기기에 저장됩니다.</p>'
+      + '<label class="fld"><span>상호 (회사명)</span><input type="text" name="name" maxlength="40" placeholder="주식회사 링키지랩"></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>사업자등록번호</span><input type="text" name="bizNo" maxlength="20" placeholder="000-00-00000"></label>'
+        + '<label class="fld"><span>대표자</span><input type="text" name="ceo" maxlength="20" placeholder="대표자명"></label>'
+      + '</div>'
+      + '<label class="fld"><span>주소</span><input type="text" name="addr" maxlength="80" placeholder="서울특별시 ..."></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>로고 경로 <em>(선택)</em></span><input type="text" name="logo" maxlength="200" placeholder="./assets/logo.png"></label>'
+        + '<label class="fld"><span>인감 경로 <em>(청구서 날인)</em></span><input type="text" name="seal" maxlength="200" placeholder="./assets/seal.svg"></label>'
+      + '</div>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="companyResetBtn" title="기본값으로 되돌립니다">기본값 복원</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form>'
+      + '</div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close") || ev.target.classList.contains("modal__backdrop")) closeCompanyModal();
+    });
+    wrap.querySelector("#companyResetBtn").addEventListener("click", function () {
+      if (!confirm("발행처 정보를 기본값으로 되돌릴까요?")) return;
+      saveCompanyOverride({});
+      closeCompanyModal();
+      renderBilling();
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var name = f.name.value.trim();
+      if (!name) { alert("상호(회사명)를 입력하세요."); f.name.focus(); return; }
+      saveCompanyOverride({
+        name: name,
+        bizNo: f.bizNo.value.trim(),
+        ceo: f.ceo.value.trim(),
+        addr: f.addr.value.trim(),
+        logo: f.logo.value.trim(),
+        seal: f.seal.value.trim(),
+      });
+      closeCompanyModal();
+      renderBilling();
+    });
+    return wrap;
   }
 
   function stmtQ(sel) { return view.querySelector(sel); }
@@ -6039,6 +6165,7 @@
         + '<button class="btn" id="stmtBackBtn">목록으로</button>'
         + (s.driveUrl ? '<a class="btn" href="' + esc(s.driveUrl) + '" target="_blank" rel="noopener">📁 Drive에서 열기</a>' : '')
         + '<button class="btn" id="stmtEditBtn2">수정</button>'
+        + '<button class="btn" id="stmtExcelBtn">📊 Excel</button>'
         + '<button class="btn btn--primary" id="stmtPrintBtn">🖨 인쇄 / PDF</button>'
       + '</div>'
       + '</div>';
@@ -6047,7 +6174,21 @@
 
     stmtOn("#stmtBackBtn", "click", function () { stmtMode = null; renderStatement(); });
     stmtOn("#stmtEditBtn2", "click", function () { openStatementEditor(s.id); });
+    stmtOn("#stmtExcelBtn", "click", function () { exportStatementExcel(s); });
     stmtOn("#stmtPrintBtn", "click", function () { window.print(); });
+  }
+
+  function exportStatementExcel(s) {
+    var meta = [
+      ["문서 번호", s.docNo], ["청구일", s.billDate], ["납부기한", s.dueDate || "—"],
+      ["고객명", [s.customerName, s.contactName].filter(Boolean).join(" / ")],
+      ["상태", s.status],
+    ];
+    var foot = [];
+    if (s.bankName || s.accountNo) foot.push(["입금 계좌", [s.bankName, s.accountNo].filter(Boolean).join("  ") + (s.accountHolder ? "  (예금주 " + s.accountHolder + ")" : "")]);
+    if (s.memo) foot.push(["메모", s.memo]);
+    var body = billExcelBody({ title: "거래명세서", meta: meta, items: s.items, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
+    xlsDownload("거래명세서_" + safeName(s.docNo || s.billDate) + "_" + safeName(s.customerName) + ".xls", body);
   }
 
   /* ======================================================
@@ -6500,15 +6641,649 @@
         + '<button class="btn" id="qBackBtn">목록으로</button>'
         + (s.driveUrl ? '<a class="btn" href="' + esc(s.driveUrl) + '" target="_blank" rel="noopener">📁 Drive에서 열기</a>' : '')
         + '<button class="btn" id="qEditBtn2">수정</button>'
+        + '<button class="btn" id="qExcelBtn">📊 Excel</button>'
         + '<button class="btn btn--primary" id="qPrintBtn">🖨 인쇄 / PDF</button>'
       + '</div>'
       + '</div>';
     html += quoteSheetHTML(s);
     view.innerHTML = html;
 
+    stmtOn("#qExcelBtn", "click", function () { exportQuoteExcel(s); });
     stmtOn("#qBackBtn", "click", function () { qMode = null; renderQuote(); });
     stmtOn("#qEditBtn2", "click", function () { openQuoteEditor(s.id); });
     stmtOn("#qPrintBtn", "click", function () { window.print(); });
+  }
+
+  function exportQuoteExcel(s) {
+    var meta = [
+      ["견적 번호", s.docNo], ["견적 일자", s.quoteDate], ["유효 기간", s.validUntil || "—"],
+      ["고객명", [s.customerName, s.contactName].filter(Boolean).join(" / ")],
+      ["상태", s.status],
+    ];
+    var foot = [];
+    if (s.repName || s.repPhone || s.repEmail) foot.push(["담당자", [s.repName, s.repPhone, s.repEmail].filter(Boolean).join("  ")]);
+    if (s.notes) foot.push(["특이사항", s.notes]);
+    var body = billExcelBody({ title: "견적서", meta: meta, items: s.items, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
+    xlsDownload("견적서_" + safeName(s.docNo || s.quoteDate) + "_" + safeName(s.customerName) + ".xls", body);
+  }
+
+  /* ======================================================
+     청구 관리 — 청구서 (INVOICE)
+     견적서와 동일한 양식/디자인. 공급자 = 링키지랩, 단가 = 부가세 별도.
+     견적서 대비 입금기한 + 입금계좌 정보를 추가로 담습니다.
+     ====================================================== */
+  var invMode = null;      // null=목록 | "edit" | "view"
+  var invEditId = null;
+  var invDraft = null;
+
+  function loadInvoiceExtra() {
+    try { return JSON.parse(localStorage.getItem("sg-invoice-extra") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function saveInvoiceExtra(e) {
+    try { localStorage.setItem("sg-invoice-extra", JSON.stringify(e)); } catch (x) {}
+  }
+
+  function renderInvoice() {
+    if (invMode === "edit") { renderInvoiceEditor(); return; }
+    if (invMode === "view") {
+      var vq = findById(window.INVOICES || [], invEditId);
+      if (vq) { renderInvoiceView(vq); return; }
+      invMode = null;
+    }
+    renderInvoiceList();
+  }
+
+  function renderInvoiceList() {
+    var list = (window.INVOICES || []).slice().sort(function (a, b) {
+      return (b.invoiceDate || "") < (a.invoiceDate || "") ? -1 : (b.invoiceDate || "") > (a.invoiceDate || "") ? 1 : 0;
+    });
+    var yr = d(TODAY).getFullYear();
+    var thisYear = list.filter(function (s) { return (s.invoiceDate || "").slice(0, 4) === String(yr); });
+    var sumTotal = thisYear.reduce(function (a, s) { return a + (+s.total || 0); }, 0);
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Billing / Invoice</p>'
+      + '<h2>청구 관리</h2>'
+      + '<p class="sub">고객사별 청구서를 등록·관리하고 인쇄/PDF로 출력합니다. <span class="muted">행을 클릭하면 청구서를 볼 수 있어요.</span></p></div>'
+      + '<div class="page-head__actions">'
+        + billTabsHTML("invoice")
+        + '<button class="btn btn--primary" id="invAddBtn">+ 청구서 등록</button>'
+      + '</div>'
+      + '</div>';
+
+    html += '<div class="stats">'
+      + statCard("acid", list.length, "건", "Total", "전체 청구서")
+      + statCard("green", thisYear.length, "건", "This year", yr + "년 등록")
+      + statCard("", won(sumTotal), "원", "Amount", yr + "년 청구금액")
+      + '</div>';
+
+    if (!list.length) {
+      html += '<div class="board">'
+        + '<div class="board__empty">아직 등록된 청구서가 없습니다.<br><span class="muted">우측 상단 <b style="color:var(--accent-text)">+ 청구서 등록</b>으로 첫 청구서를 작성해보세요.</span></div>'
+        + '</div>';
+    } else {
+      var body = list.map(function (s, i) {
+        var first = (s.items[0] && s.items[0].name) || "—";
+        var more = s.items.length > 1 ? ' <span class="muted">외 ' + (s.items.length - 1) + '건</span>' : '';
+        var stCls = s.status === "완료" ? "badge--active" : (s.status === "발행" ? "badge--leave" : "badge--leave");
+        return '<tr class="board__row" data-inv-id="' + esc(s.id) + '">'
+          + '<td class="board__no">' + (list.length - i) + '</td>'
+          + '<td class="board__no mono">' + esc(s.docNo || "—") + '</td>'
+          + '<td class="board__date mono">' + esc(s.invoiceDate || "—") + '</td>'
+          + '<td class="board__supplier"><b>' + esc(s.customerName || "—") + '</b>' + (s.contactName ? ' <span class="muted">(' + esc(s.contactName) + ')</span>' : '') + '</td>'
+          + '<td class="board__prod">' + esc(first) + more + '</td>'
+          + '<td class="board__amt mono">' + won(s.supplyAmount) + '</td>'
+          + '<td class="board__amt mono">' + won(s.vat) + '</td>'
+          + '<td class="board__amt board__amt--total mono"><b>' + won(s.total) + '</b></td>'
+          + '<td class="board__st"><span class="badge ' + stCls + '">' + esc(s.status) + '</span></td>'
+          + '<td class="board__act">'
+            + '<button class="btn btn--xs" data-act="edit" data-id="' + esc(s.id) + '">수정</button>'
+            + '<button class="btn btn--xs" data-act="del" data-id="' + esc(s.id) + '">삭제</button>'
+          + '</td>'
+          + '</tr>';
+      }).join("");
+      html += '<div class="board">'
+        + '<div class="board__scroll"><table class="board__table board__table--stmt"><thead><tr>'
+        + '<th>번호</th><th>청구번호</th><th>청구일자</th><th>고객명</th><th>품목</th><th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th>상태</th><th></th>'
+        + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+        + '</div>';
+    }
+    view.innerHTML = html;
+
+    bindBillTabs();
+    stmtOn("#invAddBtn", "click", function () { openInvoiceEditor(null); });
+    stmtOnAll(".board__table--stmt .board__row[data-inv-id]", "click", function (ev) {
+      if (ev.target.closest("button")) return;
+      invMode = "view"; invEditId = this.getAttribute("data-inv-id"); renderInvoice();
+    });
+    stmtOnAll('.board__act button[data-act="edit"]', "click", function () { openInvoiceEditor(this.getAttribute("data-id")); });
+    stmtOnAll('.board__act button[data-act="del"]', "click", function () { deleteInvoice(this.getAttribute("data-id")); });
+  }
+
+  /** 청구번호 자동 생성 : LKG-YYYY-MM-NNN (예: LKG-2026-08-007) — 해당 월 순번 */
+  function genInvoiceNo() {
+    var ym = TODAY.slice(0, 4) + "-" + TODAY.slice(5, 7); // YYYY-MM
+    var prefix = "LKG-" + ym + "-";
+    var max = 0;
+    (window.INVOICES || []).forEach(function (s) {
+      var dn = String(s.docNo || "");
+      if (dn.indexOf(prefix) === 0) { var n = +dn.slice(prefix.length); if (n > max) max = n; }
+    });
+    return prefix + ("00" + (max + 1)).slice(-3);
+  }
+
+  function openInvoiceEditor(id) {
+    var src = id ? findById(window.INVOICES || [], id) : null;
+    if (src) {
+      invDraft = JSON.parse(JSON.stringify(src));
+    } else {
+      var extra = loadInvoiceExtra();
+      invDraft = {
+        id: "", docNo: genInvoiceNo(), invoiceDate: TODAY, dueDate: "",
+        customerName: "", contactName: "", customerBizNo: "",
+        customerPhone: "", customerEmail: "",
+        repName: extra.repName || "", repPhone: extra.repPhone || "", repEmail: extra.repEmail || "",
+        bankName: extra.bankName || "", accountNo: extra.accountNo || "", accountHolder: extra.accountHolder || "",
+        accountingName: extra.accountingName || "", accountingEmail: extra.accountingEmail || "",
+        purpose: "상기와 같이 위탁운영대금 지급을 정히 청구합니다.",
+        items: [{ name: "", spec: "", unit: "", price: 0, qty: 0 }], shipping: 0,
+        notes: "", status: "작성",
+      };
+    }
+    invEditId = id || "";
+    invMode = "edit";
+    renderInvoice();
+  }
+
+  function invItemRowHTML(it, i) {
+    var l = stmtLine(it);
+    return '<tr data-i="' + i + '">'
+      + '<td class="stmt-idx">' + (i + 1) + '</td>'
+      + '<td><input class="stmt-in" data-f="name" data-i="' + i + '" value="' + esc(it.name || "") + '" placeholder="품목명"></td>'
+      + '<td><input class="stmt-in" data-f="spec" data-i="' + i + '" value="' + esc(it.spec || "") + '" placeholder="규격"></td>'
+      + '<td><input class="stmt-in stmt-in--sm" data-f="unit" data-i="' + i + '" value="' + esc(it.unit || "") + '" placeholder="단위"></td>'
+      + '<td><input class="stmt-in stmt-in--num" data-f="price" data-i="' + i + '" type="number" min="0" value="' + (it.price || "") + '" placeholder="0"></td>'
+      + '<td><input class="stmt-in stmt-in--num stmt-in--qty" data-f="qty" data-i="' + i + '" type="number" min="0" value="' + (it.qty || "") + '" placeholder="0"></td>'
+      + '<td class="num stmt-cell-supply">' + won(l.supply) + '</td>'
+      + '<td class="num stmt-cell-vat">' + won(l.vat) + '</td>'
+      + '<td class="num stmt-cell-total"><b>' + won(l.total) + '</b></td>'
+      + '<td><button class="btn btn--xs stmt-del-item" data-i="' + i + '" title="행 삭제" aria-label="행 삭제">&times;</button></td>'
+      + '</tr>';
+  }
+
+  function renderInvoiceEditor() {
+    var s = invDraft;
+    var g = stmtGrand(s.items, s.shipping);
+    var partners = window.PARTNERS || [];
+    var curCust = null;
+    for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.customerName) { curCust = partners[pi]; break; } }
+    var custOpts = '<option value="">거래처 선택 / 직접입력</option>'
+      + partners.map(function (p) { return '<option value="' + esc(p.id) + '"' + (curCust && curCust.id === p.id ? ' selected' : '') + '>' + esc(p.name) + (p.contact ? ' (' + esc(p.contact) + ')' : '') + '</option>'; }).join("");
+    var co = company();
+
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Billing / Invoice</p>'
+      + '<h2>' + (invEditId ? "청구서 수정" : "청구서 등록") + '</h2>'
+      + '<p class="sub">공급자는 <b>' + esc(co.name) + '</b>. 단가는 <b>부가세 별도</b>로 입력하면 공급가액·세액·합계가 자동 계산됩니다.</p></div>'
+      + '<div class="page-head__actions">'
+        + '<button class="btn" id="invCancelBtn">목록으로</button>'
+        + '<button class="btn btn--primary" id="invSaveBtn">저장</button>'
+      + '</div>'
+      + '</div>';
+
+    html += '<div class="stmt-editor">';
+
+    // 문서 정보
+    html += '<div class="stmt-section-label">문서 정보</div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>청구번호</span><input class="stmt-in" id="invDocNo" value="' + esc(s.docNo || "") + '" placeholder="LKG-2026-08-007"></label>'
+      + '<label class="stmt-field"><span>청구일자</span><input class="stmt-in" id="invDate" type="date" value="' + esc(s.invoiceDate || "") + '"></label>'
+      + '<label class="stmt-field"><span>입금기한</span><input class="stmt-in" id="invDueDate" type="date" value="' + esc(s.dueDate || "") + '"></label>'
+      + '<label class="stmt-field"><span>상태</span><select class="stmt-in" id="invStatus">'
+        + ['작성', '발행', '완료'].map(function (o) { return '<option' + (s.status === o ? ' selected' : '') + '>' + o + '</option>'; }).join("")
+      + '</select></label>'
+      + '</div>';
+
+    // 고객 정보 (수신)
+    html += '<div class="stmt-section-label">수신처 (고객) <span class="stmt-hint">거래처 관리에 등록한 고객을 선택하면 자동 입력됩니다</span></div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field stmt-field--wide"><span>거래처 선택</span><select class="stmt-in" id="invCustSel">' + custOpts + '</select></label>'
+      + '<label class="stmt-field"><span>고객명 (상호)</span><input class="stmt-in" id="invCustName" value="' + esc(s.customerName || "") + '" placeholder="예: 카카오페이(주)"></label>'
+      + '<label class="stmt-field"><span>담당자명</span><input class="stmt-in" id="invContact" value="' + esc(s.contactName || "") + '" placeholder="예: 최선"></label>'
+      + '<label class="stmt-field"><span>담당자 연락처</span><input class="stmt-in" id="invCustPhone" value="' + esc(s.customerPhone || "") + '" placeholder="010-0000-0000"></label>'
+      + '<label class="stmt-field"><span>담당자 이메일</span><input class="stmt-in" id="invCustEmail" value="' + esc(s.customerEmail || "") + '" placeholder="name@company.com"></label>'
+      + '<label class="stmt-field"><span>사업자등록번호</span><input class="stmt-in" id="invCustBizNo" value="' + esc(s.customerBizNo || "") + '" placeholder="000-00-00000"></label>'
+      + '</div>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="invSaveCust" checked> 이 고객 정보를 거래처 관리에 저장/갱신</label>';
+
+    // 발행처 담당자
+    html += '<div class="stmt-section-label">발행처 담당자 <span class="stmt-hint">한 번 입력하면 다음 청구서에 자동으로 채워집니다</span></div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>담당자명</span><input class="stmt-in" id="invRepName" value="' + esc(s.repName || "") + '" placeholder="예: 서준오 팀장"></label>'
+      + '<label class="stmt-field"><span>연락처</span><input class="stmt-in" id="invRepPhone" value="' + esc(s.repPhone || "") + '" placeholder="010-0000-0000"></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>이메일</span><input class="stmt-in" id="invRepEmail" value="' + esc(s.repEmail || "") + '" placeholder="sales@linkagelab.co.kr"></label>'
+      + '</div>';
+
+    // 입금 계좌 정보 (청구서 전용)
+    html += '<div class="stmt-section-label">입금 계좌 · 회계 담당 <span class="stmt-hint">한 번 입력하면 다음 청구서에 자동으로 채워집니다</span></div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>입금 은행</span><input class="stmt-in" id="invBankName" value="' + esc(s.bankName || "") + '" placeholder="예: 신한은행"></label>'
+      + '<label class="stmt-field"><span>입금 계좌</span><input class="stmt-in" id="invAccountNo" value="' + esc(s.accountNo || "") + '" placeholder="140-011-258045"></label>'
+      + '<label class="stmt-field"><span>예금주</span><input class="stmt-in" id="invAccountHolder" value="' + esc(s.accountHolder || "") + '" placeholder="주식회사 링키지랩"></label>'
+      + '<label class="stmt-field"><span>회계 담당</span><input class="stmt-in" id="invAcctName" value="' + esc(s.accountingName || "") + '" placeholder="예: 박선희"></label>'
+      + '<label class="stmt-field"><span>회계 담당 이메일</span><input class="stmt-in" id="invAcctEmail" value="' + esc(s.accountingEmail || "") + '" placeholder="name@company.com"></label>'
+      + '</div>';
+
+    // 품목 테이블
+    html += '<div class="stmt-section-label">품목 <span class="stmt-hint">단가는 부가세 별도 금액</span></div>';
+    html += '<div class="table-wrap"><table class="crew-table stmt-item-table"><thead><tr>'
+      + '<th class="stmt-idx">구분</th><th>품목</th><th>규격</th><th>단위</th><th class="num">단가</th><th class="num">수량</th>'
+      + '<th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th></th>'
+      + '</tr></thead><tbody id="invItemBody">'
+      + s.items.map(invItemRowHTML).join("")
+      + '</tbody><tfoot>'
+      + '<tr class="stmt-ship-row">'
+        + '<td colspan="6">배송비 <span class="stmt-hint">부가세 별도</span></td>'
+        + '<td class="num"><input class="stmt-in stmt-in--num" id="invShip" type="number" min="0" value="' + (s.shipping || "") + '" placeholder="0"></td>'
+        + '<td class="num" id="invShipVat">' + won(g.shipVat) + '</td>'
+        + '<td class="num" id="invShipTotal">' + won(g.shipping + g.shipVat) + '</td>'
+        + '<td></td>'
+      + '</tr>'
+      + '<tr class="stmt-total-row">'
+        + '<td colspan="6">합계</td>'
+        + '<td class="num" id="invTotSupply">' + won(g.supply) + '</td>'
+        + '<td class="num" id="invTotVat">' + won(g.vat) + '</td>'
+        + '<td class="num" id="invTotTotal"><b>' + won(g.total) + '</b></td>'
+        + '<td></td>'
+      + '</tr></tfoot></table></div>';
+    html += '<button class="btn btn--sm" id="invAddItemBtn">+ 품목 추가</button>';
+
+    // 청구 문구
+    html += '<label class="stmt-field stmt-field--wide" style="margin-top:16px"><span>청구 문구</span>'
+      + '<input class="stmt-in" id="invPurpose" value="' + esc(s.purpose || "") + '" placeholder="상기와 같이 위탁운영대금 지급을 정히 청구합니다."></label>';
+
+    // 특이사항
+    html += '<label class="stmt-field stmt-field--wide" style="margin-top:16px"><span>특이사항 (선택)</span>'
+      + '<input class="stmt-in" id="invNotes" value="' + esc(s.notes || "") + '" placeholder="예: 세금계산서 별도 발행 / 입금기한 내 미입금 시 협의"></label>';
+
+    html += '</div>'; // .stmt-editor
+
+    view.innerHTML = html;
+    bindInvoiceEditor();
+  }
+
+  function bindInvoiceEditor() {
+    stmtOn("#invCancelBtn", "click", function () { invMode = null; invDraft = null; renderInvoice(); });
+    stmtOn("#invSaveBtn", "click", saveInvoice);
+    stmtOn("#invAddItemBtn", "click", function () {
+      syncInvoiceMeta();
+      invDraft.items.push({ name: "", spec: "", unit: "", price: 0, qty: 0 });
+      renderInvoiceEditor();
+    });
+
+    ["#invDocNo", "#invDate", "#invDueDate", "#invStatus", "#invCustName", "#invContact",
+     "#invCustPhone", "#invCustEmail", "#invCustBizNo",
+     "#invRepName", "#invRepPhone", "#invRepEmail", "#invBankName", "#invAccountNo", "#invAccountHolder",
+     "#invAcctName", "#invAcctEmail", "#invPurpose", "#invNotes"].forEach(function (sel) {
+      stmtOn(sel, "input", syncInvoiceMeta);
+    });
+
+    stmtOn("#invCustSel", "change", function () {
+      var p = findById(window.PARTNERS || [], this.value);
+      if (!p) return;
+      stmtQ("#invCustName").value = p.name;
+      stmtQ("#invContact").value = p.contact || "";
+      if (stmtQ("#invCustBizNo")) stmtQ("#invCustBizNo").value = p.bizNo || "";
+      syncInvoiceMeta();
+    });
+
+    stmtOnAll(".stmt-item-table input.stmt-in[data-i]", "input", function () {
+      var i = +this.getAttribute("data-i"), f = this.getAttribute("data-f");
+      var val = (f === "price" || f === "qty") ? (+this.value || 0) : this.value;
+      invDraft.items[i][f] = val;
+      if (f === "price" || f === "qty") recomputeInvoiceRow(i);
+    });
+
+    stmtOn("#invShip", "input", function () {
+      invDraft.shipping = +this.value || 0;
+      recomputeInvoiceRow(-1);
+    });
+
+    stmtOnAll(".stmt-del-item", "click", function () {
+      var i = +this.getAttribute("data-i");
+      syncInvoiceMeta();
+      invDraft.items.splice(i, 1);
+      if (!invDraft.items.length) invDraft.items.push({ name: "", spec: "", unit: "", price: 0, qty: 0 });
+      renderInvoiceEditor();
+    });
+  }
+
+  function syncInvoiceMeta() {
+    if (!invDraft) return;
+    var g = function (sel) { var el = stmtQ(sel); return el ? el.value : ""; };
+    invDraft.docNo = g("#invDocNo");
+    invDraft.invoiceDate = g("#invDate");
+    invDraft.dueDate = g("#invDueDate");
+    invDraft.status = g("#invStatus");
+    invDraft.customerName = g("#invCustName");
+    invDraft.contactName = g("#invContact");
+    invDraft.customerPhone = g("#invCustPhone");
+    invDraft.customerEmail = g("#invCustEmail");
+    invDraft.customerBizNo = g("#invCustBizNo");
+    invDraft.repName = g("#invRepName");
+    invDraft.repPhone = g("#invRepPhone");
+    invDraft.repEmail = g("#invRepEmail");
+    invDraft.bankName = g("#invBankName");
+    invDraft.accountNo = g("#invAccountNo");
+    invDraft.accountHolder = g("#invAccountHolder");
+    invDraft.accountingName = g("#invAcctName");
+    invDraft.accountingEmail = g("#invAcctEmail");
+    invDraft.purpose = g("#invPurpose");
+    invDraft.notes = g("#invNotes");
+    if (stmtQ("#invShip")) invDraft.shipping = +stmtQ("#invShip").value || 0;
+  }
+
+  function recomputeInvoiceRow(i) {
+    if (i >= 0) {
+      var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
+      if (row) {
+        var l = stmtLine(invDraft.items[i]);
+        row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
+        row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
+        row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
+      }
+    }
+    var g = stmtGrand(invDraft.items, invDraft.shipping);
+    if (stmtQ("#invShipVat")) stmtQ("#invShipVat").textContent = won(g.shipVat);
+    if (stmtQ("#invShipTotal")) stmtQ("#invShipTotal").textContent = won(g.shipping + g.shipVat);
+    if (stmtQ("#invTotSupply")) stmtQ("#invTotSupply").textContent = won(g.supply);
+    if (stmtQ("#invTotVat")) stmtQ("#invTotVat").textContent = won(g.vat);
+    if (stmtQ("#invTotTotal")) stmtQ("#invTotTotal").innerHTML = "<b>" + won(g.total) + "</b>";
+  }
+
+  function saveInvoice() {
+    syncInvoiceMeta();
+    var s = invDraft;
+    if (!s.customerName.trim()) { alert("고객명을 입력하세요."); if (stmtQ("#invCustName")) stmtQ("#invCustName").focus(); return; }
+    var validItems = s.items.filter(function (it) { return (it.name || "").trim() || (+it.price) || (+it.qty); });
+    if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
+    s.items = validItems;
+
+    var g = stmtGrand(s.items, s.shipping);
+    s.supplyAmount = g.supply; s.vat = g.vat; s.total = g.total;
+    if (!s.id) s.id = newId("inv");
+    if (!s.createdAt) s.createdAt = s.invoiceDate ? (s.invoiceDate + "T00:00:00.000Z") : "";
+
+    var rec = normInvoice(s);
+    if (!window.INVOICES) window.INVOICES = [];
+    var idx = indexById(window.INVOICES, rec.id);
+    if (idx > -1) window.INVOICES[idx] = rec; else window.INVOICES.push(rec);
+
+    saveToSheet({
+      type: "invoice", action: (idx > -1 ? "update" : "add"),
+      id: rec.id, docNo: rec.docNo, invoiceDate: rec.invoiceDate, dueDate: rec.dueDate,
+      customerName: rec.customerName, contactName: rec.contactName, customerBizNo: rec.customerBizNo,
+      customerPhone: rec.customerPhone, customerEmail: rec.customerEmail,
+      repName: rec.repName, repPhone: rec.repPhone, repEmail: rec.repEmail,
+      bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
+      accountingName: rec.accountingName, accountingEmail: rec.accountingEmail,
+      purpose: rec.purpose,
+      items: JSON.stringify(rec.items), shipping: rec.shipping,
+      supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
+      notes: rec.notes, status: rec.status, createdAt: rec.createdAt,
+    }).then(function (res) {
+      if (!res || typeof res.json !== "function") return null;
+      return res.json().catch(function () { return null; });
+    }).then(function (j) {
+      if (j && j.driveUrl) {
+        var ix = indexById(window.INVOICES, rec.id);
+        if (ix > -1) window.INVOICES[ix].driveUrl = j.driveUrl;
+        if (invMode === "view" && String(invEditId) === String(rec.id)) renderInvoice();
+      }
+    }).catch(function () {});
+
+    saveInvoiceExtra({
+      repName: rec.repName, repPhone: rec.repPhone, repEmail: rec.repEmail,
+      bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
+      accountingName: rec.accountingName, accountingEmail: rec.accountingEmail,
+    });
+
+    if (stmtQ("#invSaveCust") && stmtQ("#invSaveCust").checked) {
+      upsertPartner({ name: rec.customerName, contact: rec.contactName, bizNo: rec.customerBizNo || undefined });
+    }
+
+    invDraft = null;
+    invMode = "view"; invEditId = rec.id;
+    renderInvoice();
+  }
+
+  function deleteInvoice(id) {
+    var s = findById(window.INVOICES || [], id);
+    if (!s) return;
+    if (!confirm((s.invoiceDate || "") + " · " + (s.customerName || "") + " 청구서를 삭제할까요?")) return;
+    window.INVOICES = (window.INVOICES || []).filter(function (x) { return String(x.id) !== String(id); });
+    saveToSheet({ type: "invoice", action: "delete", id: id });
+    invMode = null; renderInvoice();
+  }
+
+  /** 청구서 레이아웃 (보기/인쇄 공용) — 발신/수신 + 청구금액 강조 + 입금계좌·회계담당 + 대표자 인감 */
+  function invoiceSheetHTML(s) {
+    var co = company();
+    var g = stmtGrand(s.items, s.shipping);
+    var rows = "";
+    var maxRows = Math.max(s.items.length, 4);
+    for (var i = 0; i < maxRows; i++) {
+      var it = s.items[i];
+      if (it) {
+        var l = stmtLine(it);
+        var nm = esc(it.name || "");
+        if (it.spec) nm += '<div class="stmt-sheet__isub">' + esc(it.spec) + '</div>';
+        rows += '<tr>'
+          + '<td class="l">' + nm + '</td>'
+          + '<td class="r">' + esc(it.unit || "") + '</td>'
+          + '<td class="r">' + won(it.qty) + '</td>'
+          + '<td class="r">' + won(it.price) + '</td>'
+          + '<td class="r">' + won(l.supply) + '</td>'
+          + '<td class="r">' + won(l.vat) + '</td>'
+          + '<td class="r">' + won(l.total) + '</td>'
+          + '</tr>';
+      } else {
+        rows += '<tr class="stmt-sheet__blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      }
+    }
+    var logo = '<img class="stmt-sheet__logo" src="' + esc(co.logo) + '" alt="' + esc(co.name) + '" '
+      + 'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'inline-block\';">'
+      + '<span class="stmt-sheet__logo-fallback" style="display:none">' + esc(co.name) + '</span>';
+
+    // 연락처 P / 이메일 M 라인 헬퍼
+    function pm(phone, email) {
+      var out = "";
+      if (phone) out += '<div class="stmt-sheet__pm"><span class="pmk">P</span> ' + esc(phone) + '</div>';
+      if (email) out += '<div class="stmt-sheet__pm"><span class="pmk">M</span> ' + esc(email) + '</div>';
+      return out;
+    }
+
+    var hasBank = s.bankName || s.accountNo || s.accountHolder;
+    var bankLine = hasBank
+      ? esc([s.bankName, s.accountNo].filter(Boolean).join("  ")) + (s.accountHolder ? '  <span style="color:#888">(예금주 ' + esc(s.accountHolder) + ')</span>' : '')
+      : '<span class="muted">계좌 정보 없음</span>';
+    var acctLine = (s.accountingName || s.accountingEmail)
+      ? esc([s.accountingName, s.accountingEmail].filter(Boolean).join("  ")) : "";
+
+    var seal = co.seal
+      ? '<img class="stmt-sheet__seal" src="' + esc(co.seal) + '" alt="인감" onerror="this.style.display=\'none\'">'
+      : '';
+
+    return '<div class="stmt-sheet stmt-sheet--v2 stmt-sheet--inv" id="stmtPrintArea">'
+      // 상단 : 청구서 타이틀 + 발신
+      + '<div class="stmt-sheet__top">'
+        + '<div class="stmt-sheet__brand">'
+          + '<div class="stmt-sheet__title">청구서</div>'
+          + '<div class="stmt-sheet__subtitle">CONSIGNMENT OPERATION BILL</div>'
+          + '<div class="stmt-sheet__logowrap">' + logo + '</div>'
+        + '</div>'
+        + '<div class="stmt-sheet__co">'
+          + '<div class="stmt-sheet__meta-h">발신</div>'
+          + '<div class="stmt-sheet__co-name">' + esc(s.repName || co.name) + '</div>'
+          + '<div class="stmt-sheet__co-line">' + esc(co.name) + '</div>'
+          + pm(s.repPhone, s.repEmail)
+        + '</div>'
+      + '</div>'
+      + '<div class="stmt-sheet__rule"></div>'
+      // 수신 + 청구 금액/정보
+      + '<div class="stmt-sheet__meta">'
+        + '<div class="stmt-sheet__meta-col">'
+          + '<div class="stmt-sheet__meta-h">수신</div>'
+          + '<div class="stmt-sheet__to-name">' + esc(s.contactName || s.customerName || "") + (s.contactName && s.customerName ? '' : '') + '</div>'
+          + (s.customerName ? '<div class="stmt-sheet__co-line">' + esc(s.customerName) + '</div>' : '')
+          + (s.customerBizNo ? '<div class="stmt-sheet__co-line">사업자등록번호 ' + esc(s.customerBizNo) + '</div>' : '')
+          + pm(s.customerPhone, s.customerEmail)
+        + '</div>'
+        + '<div class="stmt-sheet__meta-col stmt-sheet__meta-col--r">'
+          + '<div class="stmt-sheet__amtbox"><span class="stmt-sheet__amtbox-k">청구 금액</span><span class="stmt-sheet__amtbox-v">₩' + won(s.total) + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">청구 일자</span><span class="mv">' + esc(s.invoiceDate || "") + '</span></div>'
+          + '<div class="stmt-sheet__mrow"><span class="mk">청구 번호</span><span class="mv">' + esc(s.docNo || "") + '</span></div>'
+          + (s.dueDate ? '<div class="stmt-sheet__mrow"><span class="mk">입금 기한</span><span class="mv">' + esc(s.dueDate) + '</span></div>' : '')
+        + '</div>'
+      + '</div>'
+      // 한글 금액
+      + '<div class="stmt-sheet__mrow" style="margin:-8px 0 16px"><span class="mv"><b>일금 ' + numToKorean(s.total) + '원정 (₩' + won(s.total) + ')</b> <span style="color:#888">· VAT 포함</span></span></div>'
+      // 품목 표
+      + '<table class="stmt-sheet__items"><thead><tr>'
+        + '<th class="l">항목</th><th class="r">단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table>'
+      + '<div class="stmt-sheet__unit-note">(단위 : 원, VAT 별도)</div>'
+      // 합계
+      + '<div class="stmt-sheet__totals">'
+        + (g.shipping ? '<div class="stmt-sheet__trow"><span class="tk">품목 공급가액</span><span class="tv">' + won(g.itemsSupply) + '</span></div>'
+            + '<div class="stmt-sheet__trow"><span class="tk">배송비</span><span class="tv">' + won(g.shipping) + '</span></div>' : '')
+        + '<div class="stmt-sheet__trow"><span class="tk">공급가액 (VAT 별도)</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">부가세액</span><span class="tv">' + won(s.vat) + '</span></div>'
+        + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">합계</span><span class="tv">' + won(s.total) + '</span></div>'
+      + '</div>'
+      // 입금 계좌 · 회계 담당
+      + '<div class="stmt-sheet__memo"><div class="stmt-sheet__memo-h">입금 계좌</div><div class="stmt-sheet__memo-b">' + bankLine
+        + (acctLine ? '<div style="margin-top:4px;color:#555">회계 담당 : ' + acctLine + '</div>' : '') + '</div></div>'
+      // 특이사항
+      + (s.notes ? '<div class="stmt-sheet__memo"><div class="stmt-sheet__memo-h">특이사항</div><div class="stmt-sheet__memo-b">' + esc(s.notes) + '</div></div>' : '')
+      // 청구 문구
+      + '<div class="stmt-sheet__purpose">' + esc(s.purpose || "상기와 같이 위탁운영대금 지급을 정히 청구합니다.") + '</div>'
+      // 서명 : 발행처 + 대표자 인감
+      + '<div class="stmt-sheet__sign">'
+        + '<div class="stmt-sheet__sign-co">'
+          + '<div class="stmt-sheet__co-name">' + esc(co.name) + '</div>'
+          + '<div class="stmt-sheet__co-line">' + esc(co.addr) + '</div>'
+          + '<div class="stmt-sheet__co-line">사업자등록번호 ' + esc(co.bizNo) + '</div>'
+        + '</div>'
+        + '<div class="stmt-sheet__sign-ceo">대표자 : ' + esc(co.ceo) + ' <span class="stmt-sheet__inmark">(인)</span>' + seal + '</div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  /* ---------- Excel 내보내기 (외부 라이브러리 없이 HTML 표 기반 .xls) ---------- */
+  function xlsDownload(filename, bodyHTML) {
+    var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'
+      + '<head><meta charset="utf-8">'
+      + '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
+      + '<x:Name>Sheet1</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>'
+      + '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->'
+      + '<style>table{border-collapse:collapse;} td,th{border:1px solid #d0d0d0;padding:6px 10px;font-size:12px;vertical-align:middle;}'
+      + '.t{font-size:20px;font-weight:bold;border:none;} .sub{color:#888;border:none;font-size:11px;}'
+      + '.k{background:#f5f5f5;font-weight:bold;} .h{background:#efefef;font-weight:bold;text-align:center;}'
+      + '.r{text-align:right;mso-number-format:"\\#\\,\\#\\#0";} .noborder td{border:none;} .grand{font-size:14px;font-weight:bold;background:#fafafa;}</style>'
+      + '</head><body>' + bodyHTML + '</body></html>';
+    var blob = new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 120);
+  }
+  function xlsRow(pairs) { // [[k,v],...] → 2열 표 행들
+    return pairs.map(function (p) {
+      return '<tr><td class="k">' + esc(p[0]) + '</td><td colspan="6">' + esc(p[1] == null ? "" : String(p[1])) + '</td></tr>';
+    }).join("");
+  }
+  /** 청구서·견적서·거래명세서 공용 Excel 표 생성 */
+  function billExcelBody(cfg) {
+    var co = company();
+    var COLS = 7;
+    var h = '<table>';
+    h += '<tr><td class="t" colspan="' + COLS + '">' + esc(cfg.title) + '</td></tr>';
+    h += '<tr><td class="sub" colspan="' + COLS + '">' + esc(co.name) + ' · 사업자등록번호 ' + esc(co.bizNo) + ' · 대표 ' + esc(co.ceo) + '</td></tr>';
+    h += '<tr><td class="sub" colspan="' + COLS + '">' + esc(co.addr) + '</td></tr>';
+    h += '<tr><td colspan="' + COLS + '" style="border:none;height:6px"></td></tr>';
+    h += xlsRow(cfg.meta);
+    h += '<tr><td colspan="' + COLS + '" style="border:none;height:6px"></td></tr>';
+    // 품목
+    h += '<tr>'
+      + '<th class="h">항목</th><th class="h">규격</th><th class="h">단위</th><th class="h">수량</th>'
+      + '<th class="h">단가</th><th class="h">공급가액</th><th class="h">합계(VAT포함)</th></tr>';
+    (cfg.items || []).forEach(function (it) {
+      var l = stmtLine(it);
+      h += '<tr>'
+        + '<td>' + esc(it.name || "") + '</td>'
+        + '<td>' + esc(it.spec || "") + '</td>'
+        + '<td>' + esc(it.unit || "") + '</td>'
+        + '<td class="r">' + (+it.qty || 0) + '</td>'
+        + '<td class="r">' + (+it.price || 0) + '</td>'
+        + '<td class="r">' + l.supply + '</td>'
+        + '<td class="r">' + l.total + '</td>'
+        + '</tr>';
+    });
+    // 합계
+    h += '<tr><td class="k" colspan="5">공급가액 (VAT 별도)</td><td class="r" colspan="2">' + (+cfg.supplyAmount || 0) + '</td></tr>';
+    h += '<tr><td class="k" colspan="5">부가세액</td><td class="r" colspan="2">' + (+cfg.vat || 0) + '</td></tr>';
+    h += '<tr><td class="k grand" colspan="5">합계 금액</td><td class="r grand" colspan="2">' + (+cfg.total || 0) + '</td></tr>';
+    if (cfg.foot && cfg.foot.length) {
+      h += '<tr><td colspan="' + COLS + '" style="border:none;height:6px"></td></tr>';
+      h += xlsRow(cfg.foot);
+    }
+    h += '</table>';
+    return h;
+  }
+  function safeName(str) { return String(str || "").replace(/[\\/:*?"<>|]+/g, "_").replace(/\s+/g, "_"); }
+
+  function exportInvoiceExcel(s) {
+    var meta = [
+      ["청구 번호", s.docNo], ["청구 일자", s.invoiceDate], ["입금 기한", s.dueDate || "—"],
+      ["수신 (고객)", [s.customerName, s.contactName].filter(Boolean).join(" / ")],
+      ["수신 연락처", [s.customerPhone, s.customerEmail].filter(Boolean).join("  ")],
+      ["상태", s.status],
+    ];
+    var foot = [
+      ["입금 계좌", [s.bankName, s.accountNo].filter(Boolean).join("  ") + (s.accountHolder ? "  (예금주 " + s.accountHolder + ")" : "")],
+      ["회계 담당", [s.accountingName, s.accountingEmail].filter(Boolean).join("  ") || "—"],
+      ["청구 문구", s.purpose || ""],
+    ];
+    if (s.notes) foot.push(["특이사항", s.notes]);
+    var body = billExcelBody({ title: "청구서", meta: meta, items: s.items, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
+    xlsDownload("청구서_" + safeName(s.docNo || s.invoiceDate) + "_" + safeName(s.customerName) + ".xls", body);
+  }
+
+  function renderInvoiceView(s) {
+    var html = "";
+    html += '<div class="page-head stmt-actions">'
+      + '<div><p class="eyebrow">Billing / Invoice</p>'
+      + '<h2>청구서 보기</h2>'
+      + '<p class="sub">' + esc(s.docNo || "") + ' · ' + esc(s.invoiceDate || "") + ' · ' + esc(s.customerName || "") + '</p></div>'
+      + '<div class="page-head__actions">'
+        + '<button class="btn" id="invBackBtn">목록으로</button>'
+        + (s.driveUrl ? '<a class="btn" href="' + esc(s.driveUrl) + '" target="_blank" rel="noopener">📁 Drive에서 열기</a>' : '')
+        + '<button class="btn" id="invEditBtn2">수정</button>'
+        + '<button class="btn" id="invExcelBtn">📊 Excel</button>'
+        + '<button class="btn btn--primary" id="invPrintBtn">🖨 인쇄 / PDF</button>'
+      + '</div>'
+      + '</div>';
+    html += invoiceSheetHTML(s);
+    view.innerHTML = html;
+
+    stmtOn("#invBackBtn", "click", function () { invMode = null; renderInvoice(); });
+    stmtOn("#invEditBtn2", "click", function () { openInvoiceEditor(s.id); });
+    stmtOn("#invExcelBtn", "click", function () { exportInvoiceExcel(s); });
+    stmtOn("#invPrintBtn", "click", function () { window.print(); });
   }
 
   /* ======================================================
@@ -6674,6 +7449,7 @@
   var VIEWS = {
     statement:   { title: "BILLING", render: renderBilling },
     quote:       { title: "BILLING", render: renderBilling },
+    invoice:     { title: "BILLING", render: renderBilling },
     partner:     { title: "PARTNER", render: renderPartner },
     dashboard:   { title: "DASHBOARD", render: renderDashboard },
     crew:        { title: "CREW", render: renderCrew },
@@ -6691,14 +7467,15 @@
   };
 
   function go(name) {
-    // #quote · #partner 딥링크는 청구 관리의 해당 탭으로 진입
-    var billDeepTab = (name === "quote" || name === "partner") ? name : null;
+    // #quote · #invoice · #partner 딥링크는 청구 관리의 해당 탭으로 진입
+    var billDeepTab = (name === "quote" || name === "invoice" || name === "partner") ? name : null;
     if (billDeepTab) name = "statement";
     if (!VIEWS[name]) name = "schedule";
     // 사이드바로 청구관리 진입 시 항상 목록부터 (이전 보기/편집 상태 초기화)
     if (name === "statement") {
       stmtMode = null; stmtEditId = null; stmtDraft = null;
       qMode = null; qEditId = null; qDraft = null;
+      invMode = null; invEditId = null; invDraft = null;
       billTab = billDeepTab || "statement";
     }
     navItems.forEach(function (a) { a.classList.toggle("is-active", a.getAttribute("data-view") === name); });

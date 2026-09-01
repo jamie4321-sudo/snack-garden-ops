@@ -60,6 +60,8 @@ var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","befor
 var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","customerBizNo","bankName","accountNo","accountHolder","phone","email","items","shipping","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
 // 견적서 : 거래명세서와 동일 양식. items 각 품목 = {name,spec,unit,price,qty}. repName/repPhone/repEmail = 발행처 담당자.
 var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","customerBizNo","repName","repPhone","repEmail","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
+// 청구서 : 견적서 + 입금기한/입금계좌 + 수신 연락처·회계담당·청구문구. 대표자 인감은 발행처(회사) 정보에서 관리.
+var INVOICE_FIELDS = ["id","docNo","invoiceDate","dueDate","customerName","contactName","customerBizNo","customerPhone","customerEmail","repName","repPhone","repEmail","bankName","accountNo","accountHolder","accountingName","accountingEmail","purpose","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
 // 업무 프로세스 HUB(개인용) : 중첩 구조(단계·판단기준·보고·담당·자료·사례)는 JSON 문자열로 저장한다.
 //   tags = 태그 JSON 배열 · favorite = "Y"|"" · processSteps/decisionPoints/relatedResources/pastCases = JSON 배열 · reportRules/stakeholders = JSON 객체
@@ -241,6 +243,7 @@ function doGet(e) {
   if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
   if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
   if (action === "quotes")     return json_(mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]));
+  if (action === "invoices")   return json_(mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]));
   if (action === "processes")  return json_(mapProcesses_(rows_("processes", PROCESS_FIELDS)));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
@@ -261,6 +264,7 @@ function doGet(e) {
     partners: rows_("partners", PARTNER_FIELDS),
     statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]),
     quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]),
+    invoices: mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]),
     processes: mapProcesses_(rows_("processes", PROCESS_FIELDS))
   });
 }
@@ -503,6 +507,7 @@ function doPost(e) {
   if (data.type === "partner")  return handlePartner_(action, data);
   if (data.type === "statement") return handleStatement_(action, data);
   if (data.type === "quote")    return handleQuote_(action, data);
+  if (data.type === "invoice")  return handleInvoice_(action, data);
   if (data.type === "process")  return handleProcess_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
@@ -802,6 +807,41 @@ function handleQuote_(action, data) {
     var id = data.id || Utilities.getUuid();
     var payload = Object.assign({}, data, { id: id });
     upsertRowByHeader_(sh, id, quoteValuesObj_(payload));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
+/* ---------- 청구서(invoice) 저장/삭제 : 견적서 + 입금기한·입금계좌 ---------- */
+function invoiceValuesObj_(data) {
+  return {
+    id: data.id, docNo: data.docNo || "", invoiceDate: data.invoiceDate || "", dueDate: data.dueDate || "",
+    customerName: data.customerName || "", contactName: data.contactName || "", customerBizNo: data.customerBizNo || "",
+    customerPhone: data.customerPhone || "", customerEmail: data.customerEmail || "",
+    repName: data.repName || "", repPhone: data.repPhone || "", repEmail: data.repEmail || "",
+    bankName: data.bankName || "", accountNo: data.accountNo || "", accountHolder: data.accountHolder || "",
+    accountingName: data.accountingName || "", accountingEmail: data.accountingEmail || "",
+    purpose: data.purpose || "",
+    items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
+    shipping: data.shipping || 0,
+    supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
+    notes: data.notes || "", status: data.status || "작성", createdAt: data.createdAt || "",
+    driveUrl: data.driveUrl || ""
+  };
+}
+
+function handleInvoice_(action, data) {
+  var sh = sheet_("invoices", INVOICE_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    var payload = Object.assign({}, data, { id: id });
+    upsertRowByHeader_(sh, id, invoiceValuesObj_(payload));
     return json_({ ok: true, id: id });
   }
   if (action === "delete") {

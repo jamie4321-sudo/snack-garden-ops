@@ -192,6 +192,27 @@ window.QUOTES = [
     status:"작성", createdAt:"2026-06-30T00:00:00.000Z" },
 ];
 
+/* --- 청구서 : 시트 "invoices"
+   (헤더 = id,docNo,invoiceDate,dueDate,customerName,contactName,customerBizNo,repName,repPhone,repEmail,bankName,accountNo,accountHolder,items,shipping,supplyAmount,vat,total,notes,status,createdAt)
+   견적서와 동일 양식·계산식(단가 = 부가세 별도). 공급자 = 주식회사 링키지랩(고정).
+   견적서 대비 입금기한(dueDate)과 입금계좌(bankName/accountNo/accountHolder)를 추가로 담습니다.
+   status : 작성 | 발행 | 완료 --- */
+window.INVOICES = [
+  { id:"inv1", docNo:"LKG-2026-08-007", invoiceDate:"2026-08-31", dueDate:"",
+    customerName:"카카오페이(주)", contactName:"최선", customerBizNo:"",
+    customerPhone:"010-7177-0160", customerEmail:"moana.sun@kakaocorp.com",
+    repName:"초록비(jamie.4321)", repPhone:"010-9821-4321", repEmail:"jamie.4321@kakaocorp.com",
+    bankName:"신한은행", accountNo:"140-011-258045", accountHolder:"주식회사 링키지랩",
+    accountingName:"박선희", accountingEmail:"chloe.26@kakaocorp.com",
+    purpose:"상기와 같이 위탁운영대금 지급을 정히 청구합니다.",
+    items:[
+      { name:"2026. 08월 카카오 모빌리티 (알파돔)", spec:"조경 관리 업무", unit:"월", price:1927000, qty:1 },
+    ],
+    shipping:0,
+    supplyAmount:1927000, vat:192700, total:2119700,
+    notes:"", status:"발행", createdAt:"2026-08-31T00:00:00.000Z" },
+];
+
 /* --- 상단 요약 : 시트 "summary" 또는 대시보드 카드 --- */
 window.SUMMARY = {
   monthLabel: "2026년 7월",

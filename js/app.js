@@ -390,6 +390,7 @@
         if (d && d.quotes) window.QUOTES = d.quotes.map(normQuote);
         if (d && d.invoices) window.INVOICES = d.invoices.map(normInvoice);
         if (d && d.processes) window.PROCESS_HUB_DATA = d.processes; // 업무 프로세스 HUB(process-hub.js)
+        if (d && d.drivehub) window.DRIVEHUB_DATA = d.drivehub;      // 드라이브 HUB(drive-hub.js)
         return true;
       })
       .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
@@ -421,7 +422,7 @@
     var links = evtLinks(evt);
     return {
       type: "schedule", action: action, id: evt.id, date: evt.date, time: evt.time, title: evt.title,
-      category: evt.category, done: evt.done, assignee: evt.assignee,
+      category: evt.category, halfDay: evt.halfDay || "", done: evt.done, assignee: evt.assignee,
       link: links[0] || "", links: JSON.stringify(links),
       alarm: evt.alarm, alarmTime: evt.alarmTime || "",
     };
@@ -647,6 +648,7 @@
     form.time.value = (prefill && prefill.time) || "";
     form.title.value = (prefill && prefill.title) || "";
     form.category.value = (prefill && prefill.category) || "운영";
+    form.halfDay.value = (prefill && prefill.halfDay) || "";
     form.assignee.value = (prefill && prefill.assignee) || "";
     renderEventLinks(el.querySelector("#eventLinks"), evtLinks(prefill));
     form.done.checked = !!(prefill && prefill.done);
@@ -686,6 +688,11 @@
         + '</select></label>'
       + '</div>'
       + '<label class="fld"><span>제목</span><input type="text" name="title" maxlength="60" placeholder="일정 제목"></label>'
+      + '<label class="fld"><span>반차 <em>(선택)</em></span><select name="halfDay">'
+        + '<option value="">해당 없음</option>'
+        + '<option value="오전">오전 반차</option>'
+        + '<option value="오후">오후 반차</option>'
+      + '</select></label>'
       + '<label class="fld fld--check" id="eventRepeatWrap"><input type="checkbox" name="repeatWeekly"><span>매주 반복</span></label>'
       + '<label class="fld" id="eventRepeatEndWrap" hidden><span>반복 종료일</span><input type="date" name="repeatUntil"></label>'
       + '<label class="fld"><span>담당 <em>(선택)</em></span><input type="text" name="assignee" maxlength="20" placeholder="담당자 / 팀"></label>'
@@ -748,7 +755,10 @@
         f.date.focus();
         return;
       }
+      var half = f.halfDay.value || "";
       var title = f.title.value.trim();
+      // 반차만 선택하고 제목을 비워둔 경우 — 제목을 '오전/오후 반차'로 자동 채운다
+      if (!title && half) title = half + " 반차";
       if (!title) {
         alert("제목을 입력해주세요.");
         f.title.focus();
@@ -767,6 +777,7 @@
         time: f.time.value || "",
         title: title,
         category: f.category.value,
+        halfDay: half,
         done: f.done.checked,
         assignee: f.assignee.value.trim(),
         link: _links[0] || "",
@@ -854,9 +865,10 @@
       + (e.done ? '' : ' style="border-color:' + color + '"')
       + ' aria-pressed="' + (e.done ? "true" : "false") + '" title="' + (e.done ? "완료 해제" : "완료 처리") + '">'
       + (e.done ? "&check;" : "") + '</button>');
-    return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
+    var halfMark = e.halfDay ? '<span class="evt__half evt__half--' + (e.halfDay === "오전" ? "am" : "pm") + '">' + esc(e.halfDay) + ' 반차</span>' : '';
+    return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.halfDay ? " · " + esc(e.halfDay) + " 반차" : "") + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
       + toggle
-      + '<span class="evt__body">' + lead + '<span class="evt__text">' + esc(e.title) + '</span></span>'
+      + '<span class="evt__body">' + lead + '<span class="evt__text">' + esc(e.title) + halfMark + '</span></span>'
       + link
       + actions
       + '</div>';
@@ -7072,15 +7084,16 @@
   function invoiceSheetHTML(s) {
     var co = company();
     var g = stmtGrand(s.items, s.shipping);
+    // 실제 품목만 렌더 — 빈 줄 padding 없음 (항목이 1개면 그 1줄만 나온다)
+    var items = (s.items || []).filter(function (it) { return it && (it.name || it.spec || +it.qty || +it.price); });
     var rows = "";
-    var maxRows = Math.max(s.items.length, 4);
-    for (var i = 0; i < maxRows; i++) {
-      var it = s.items[i];
-      if (it) {
+    if (items.length) {
+      items.forEach(function (it, i) {
         var l = stmtLine(it);
         var nm = esc(it.name || "");
         if (it.spec) nm += '<div class="stmt-sheet__isub">' + esc(it.spec) + '</div>';
         rows += '<tr>'
+          + '<td class="c">' + ("0" + (i + 1)).slice(-2) + '</td>'
           + '<td class="l">' + nm + '</td>'
           + '<td class="r">' + esc(it.unit || "") + '</td>'
           + '<td class="r">' + won(it.qty) + '</td>'
@@ -7089,9 +7102,9 @@
           + '<td class="r">' + won(l.vat) + '</td>'
           + '<td class="r">' + won(l.total) + '</td>'
           + '</tr>';
-      } else {
-        rows += '<tr class="stmt-sheet__blank"><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
-      }
+      });
+    } else {
+      rows = '<tr><td class="stmt-sheet__noitem" colspan="8">등록된 품목이 없습니다.</td></tr>';
     }
     var logo = '<img class="stmt-sheet__logo" src="' + esc(co.logo) + '" alt="' + esc(co.name) + '" '
       + 'onerror="this.style.display=\'none\';this.nextSibling.style.display=\'inline-block\';">'
@@ -7117,51 +7130,56 @@
       : '';
 
     return '<div class="stmt-sheet stmt-sheet--v2 stmt-sheet--inv" id="stmtPrintArea">'
-      // 상단 : 청구서 타이틀 + 발신
+      // 상단 : 청구서 타이틀 + 로고
       + '<div class="stmt-sheet__top">'
         + '<div class="stmt-sheet__brand">'
           + '<div class="stmt-sheet__title">청구서</div>'
           + '<div class="stmt-sheet__subtitle">CONSIGNMENT OPERATION BILL</div>'
-          + '<div class="stmt-sheet__logowrap">' + logo + '</div>'
         + '</div>'
-        + '<div class="stmt-sheet__co">'
-          + '<div class="stmt-sheet__meta-h">발신</div>'
-          + '<div class="stmt-sheet__co-name">' + esc(s.repName || co.name) + '</div>'
-          + '<div class="stmt-sheet__co-line">' + esc(co.name) + '</div>'
-          + pm(s.repPhone, s.repEmail)
-        + '</div>'
+        + '<div class="stmt-sheet__logowrap">' + logo + '</div>'
       + '</div>'
       + '<div class="stmt-sheet__rule"></div>'
-      // 수신 + 청구 금액/정보
-      + '<div class="stmt-sheet__meta">'
-        + '<div class="stmt-sheet__meta-col">'
-          + '<div class="stmt-sheet__meta-h">수신</div>'
-          + '<div class="stmt-sheet__to-name">' + esc(s.contactName || s.customerName || "") + (s.contactName && s.customerName ? '' : '') + '</div>'
-          + (s.customerName ? '<div class="stmt-sheet__co-line">' + esc(s.customerName) + '</div>' : '')
+      // 발신 / 수신 (2단)
+      + '<div class="stmt-sheet__parties">'
+        + '<div class="stmt-sheet__party">'
+          + '<div class="stmt-sheet__meta-h">발신 · 청구처</div>'
+          + '<div class="stmt-sheet__party-name">' + esc(s.repName || co.name) + '</div>'
+          + pm(s.repPhone, s.repEmail)
+        + '</div>'
+        + '<div class="stmt-sheet__party">'
+          + '<div class="stmt-sheet__meta-h">수신 · 고객</div>'
+          + '<div class="stmt-sheet__party-name">' + esc(s.contactName || s.customerName || "") + '</div>'
+          + (s.contactName && s.customerName ? '<div class="stmt-sheet__co-line">' + esc(s.customerName) + '</div>' : '')
           + (s.customerBizNo ? '<div class="stmt-sheet__co-line">사업자등록번호 ' + esc(s.customerBizNo) + '</div>' : '')
           + pm(s.customerPhone, s.customerEmail)
         + '</div>'
-        + '<div class="stmt-sheet__meta-col stmt-sheet__meta-col--r">'
-          + '<div class="stmt-sheet__amtbox"><span class="stmt-sheet__amtbox-k">청구 금액</span><span class="stmt-sheet__amtbox-v">₩' + won(s.total) + '</span></div>'
-          + '<div class="stmt-sheet__mrow"><span class="mk">청구 일자</span><span class="mv">' + esc(s.invoiceDate || "") + '</span></div>'
-          + '<div class="stmt-sheet__mrow"><span class="mk">청구 번호</span><span class="mv">' + esc(s.docNo || "") + '</span></div>'
-          + (s.dueDate ? '<div class="stmt-sheet__mrow"><span class="mk">입금 기한</span><span class="mv">' + esc(s.dueDate) + '</span></div>' : '')
-        + '</div>'
       + '</div>'
-      // 한글 금액
-      + '<div class="stmt-sheet__mrow" style="margin:-8px 0 16px"><span class="mv"><b>일금 ' + numToKorean(s.total) + '원정 (₩' + won(s.total) + ')</b> <span style="color:#888">· VAT 포함</span></span></div>'
+      // 청구 금액 (히어로) — 금액은 여기 한 곳에서 강조
+      + '<div class="stmt-sheet__hero">'
+        + '<div class="stmt-sheet__hero-l">'
+          + '<span class="stmt-sheet__hero-k">청구 금액</span>'
+          + '<span class="stmt-sheet__hero-sub">일금 ' + numToKorean(s.total) + '원정 · VAT 포함</span>'
+        + '</div>'
+        + '<div class="stmt-sheet__hero-v">₩' + won(s.total) + '</div>'
+      + '</div>'
+      // 청구 메타 칩 (번호 · 일자 · 기한)
+      + '<div class="stmt-sheet__billmeta">'
+        + '<div><span>청구 번호</span><b>' + esc(s.docNo || "—") + '</b></div>'
+        + '<div><span>청구 일자</span><b>' + esc(s.invoiceDate || "—") + '</b></div>'
+        + (s.dueDate ? '<div><span>입금 기한</span><b>' + esc(s.dueDate) + '</b></div>' : '')
+      + '</div>'
       // 품목 표
       + '<table class="stmt-sheet__items"><thead><tr>'
-        + '<th class="l">항목</th><th class="r">단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th>'
+        + '<th class="c">No.</th><th class="l">항목</th><th class="r">단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table>'
       + '<div class="stmt-sheet__unit-note">(단위 : 원, VAT 별도)</div>'
-      // 합계
+      // 합계 (공급가액 → 부가세 → 합계 계산)
       + '<div class="stmt-sheet__totals">'
         + (g.shipping ? '<div class="stmt-sheet__trow"><span class="tk">품목 공급가액</span><span class="tv">' + won(g.itemsSupply) + '</span></div>'
             + '<div class="stmt-sheet__trow"><span class="tk">배송비</span><span class="tv">' + won(g.shipping) + '</span></div>' : '')
         + '<div class="stmt-sheet__trow"><span class="tk">공급가액 (VAT 별도)</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
         + '<div class="stmt-sheet__trow"><span class="tk">부가세액</span><span class="tv">' + won(s.vat) + '</span></div>'
-        + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">합계</span><span class="tv">' + won(s.total) + '</span></div>'
+        + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">합계</span><span class="tv">₩' + won(s.total) + '</span></div>'
       + '</div>'
       // 입금 계좌 · 회계 담당
       + '<div class="stmt-sheet__memo"><div class="stmt-sheet__memo-h">입금 계좌</div><div class="stmt-sheet__memo-b">' + bankLine
@@ -7170,7 +7188,7 @@
       + (s.notes ? '<div class="stmt-sheet__memo"><div class="stmt-sheet__memo-h">특이사항</div><div class="stmt-sheet__memo-b">' + esc(s.notes) + '</div></div>' : '')
       // 청구 문구
       + '<div class="stmt-sheet__purpose">' + esc(s.purpose || "상기와 같이 위탁운영대금 지급을 정히 청구합니다.") + '</div>'
-      // 서명 : 발행처 + 대표자 인감
+      // 서명 : 발행처(법인) + 대표자 인감 — 법인명은 여기 한 곳에만
       + '<div class="stmt-sheet__sign">'
         + '<div class="stmt-sheet__sign-co">'
           + '<div class="stmt-sheet__co-name">' + esc(co.name) + '</div>'
@@ -7446,6 +7464,14 @@
     }
   }
 
+  function renderDriveHub() {
+    if (window.DriveHub && typeof window.DriveHub.render === "function") {
+      window.DriveHub.render(view);
+    } else {
+      view.innerHTML = '<div class="board__empty">드라이브 HUB 모듈을 불러오지 못했습니다.</div>';
+    }
+  }
+
   var VIEWS = {
     statement:   { title: "BILLING", render: renderBilling },
     quote:       { title: "BILLING", render: renderBilling },
@@ -7464,6 +7490,7 @@
     workreport:  { title: "WORK REPORT", render: renderWorkReport },
     kpi:         { title: "2026 KPI", render: renderKpi },
     process:     { title: "PROCESS HUB", render: renderProcess },
+    drivehub:    { title: "DRIVE HUB", render: renderDriveHub },
   };
 
   function go(name) {

@@ -9,7 +9,7 @@
  *                 | contractType | contractEndDate | birthDate | disability | disabilityType | emergencyContact | badgeNumber | workHours
  *                 (leftDate = 퇴사일, status="퇴사"일 때만 의미 있음)
  *                 (contractEndDate = 계약 종료일, contractType="단기계약"일 때만 의미 있음)
- *  - "schedule" : id | date | time | title | category | done | assignee | link
+ *  - "schedule" : id | date | time | title | category | halfDay | done | assignee | link
  *  - "interviews"  : id | date | time | crewId | crewName | type | condition | recorder | content | followUp | followUpNote | privateNote
  *  - "attendance"  : id | date | time | crewId | crewName | kind | reason | recorder  (kind = 지각|조퇴)
  *  - "education"   : id | category | title | crewId | crewName | date | dueDate | status | provider | hours | note | link | checklist
@@ -43,7 +43,7 @@ var CREW_FIELDS = [
   "contractType","contractEndDate","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
 ];
 // link = 대표(첫 번째) 링크 · links = 최대 5개 링크의 JSON 배열 문자열
-var SCH_FIELDS = ["id","date","time","title","category","done","assignee","link","links","alarm","alarmTime"];
+var SCH_FIELDS = ["id","date","time","title","category","halfDay","done","assignee","link","links","alarm","alarmTime"];
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
 var REPORT_FIELDS = ["id","text","link","urgent","done","reportedAt"];
@@ -66,6 +66,8 @@ var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
 // 업무 프로세스 HUB(개인용) : 중첩 구조(단계·판단기준·보고·담당·자료·사례)는 JSON 문자열로 저장한다.
 //   tags = 태그 JSON 배열 · favorite = "Y"|"" · processSteps/decisionPoints/relatedResources/pastCases = JSON 배열 · reportRules/stakeholders = JSON 객체
 var PROCESS_FIELDS = ["id","title","category","subCategory","purpose","trigger","priority","tags","processSteps","decisionPoints","reportRules","stakeholders","relatedResources","pastCases","favorite","createdAt","updatedAt"];
+// 드라이브 HUB : 아지트/구글드라이브/기타 그룹 아래 폴더 경로(path, "A > B")별 링크(이름+URL) 모음. 평면 저장.
+var DRIVEHUB_FIELDS = ["id","group","path","name","url","createdAt","updatedAt"];
 
 // 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
 var COMPANY = {
@@ -245,6 +247,7 @@ function doGet(e) {
   if (action === "quotes")     return json_(mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]));
   if (action === "invoices")   return json_(mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]));
   if (action === "processes")  return json_(mapProcesses_(rows_("processes", PROCESS_FIELDS)));
+  if (action === "drivehub")   return json_(mapDrivehub_(rows_("drivehub", DRIVEHUB_FIELDS)));
   if (action === "journal")    return json_(getJournalData_());
   if (action === "kpi")        return json_(getKpi_());
   if (action === "drivefolders") return json_(getDriveFolders_());
@@ -265,7 +268,17 @@ function doGet(e) {
     statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]),
     quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]),
     invoices: mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]),
-    processes: mapProcesses_(rows_("processes", PROCESS_FIELDS))
+    processes: mapProcesses_(rows_("processes", PROCESS_FIELDS)),
+    drivehub: mapDrivehub_(rows_("drivehub", DRIVEHUB_FIELDS))
+  });
+}
+
+/** 드라이브 HUB : 날짜 컬럼만 정리해서 그대로 반환한다. */
+function mapDrivehub_(list) {
+  return list.map(function (r) {
+    r.createdAt = r.createdAt ? fmtDate_(r.createdAt) : "";
+    r.updatedAt = r.updatedAt ? fmtDate_(r.updatedAt) : "";
+    return r;
   });
 }
 
@@ -509,6 +522,7 @@ function doPost(e) {
   if (data.type === "quote")    return handleQuote_(action, data);
   if (data.type === "invoice")  return handleInvoice_(action, data);
   if (data.type === "process")  return handleProcess_(action, data);
+  if (data.type === "drivehub") return handleDrivehub_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
   if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
@@ -584,7 +598,7 @@ function handleCrew_(action, data) {
 function scheduleValuesObj_(data) {
   return {
     id: data.id, date: data.date || "", time: data.time || "", title: data.title || "",
-    category: data.category || "", done: data.done ? "완료" : "", assignee: data.assignee || "", link: data.link || "",
+    category: data.category || "", halfDay: data.halfDay || "", done: data.done ? "완료" : "", assignee: data.assignee || "", link: data.link || "",
     links: (typeof data.links === "string") ? data.links : JSON.stringify(data.links || []),
     alarm: data.alarm ? "켜짐" : "", alarmTime: data.alarmTime || ""
   };
@@ -878,6 +892,31 @@ function handleProcess_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, processValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
+/* ---------- 드라이브 HUB(drivehub) 저장/삭제 ---------- */
+function drivehubValuesObj_(data) {
+  return {
+    id: data.id, group: data.group || "", path: data.path || "",
+    name: data.name || "", url: data.url || "",
+    createdAt: data.createdAt || "", updatedAt: data.updatedAt || ""
+  };
+}
+
+function handleDrivehub_(action, data) {
+  var sh = sheet_("drivehub", DRIVEHUB_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, drivehubValuesObj_(Object.assign({}, data, { id: id })));
     return json_({ ok: true, id: id });
   }
   if (action === "delete") {

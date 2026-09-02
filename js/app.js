@@ -626,6 +626,10 @@
     var max = 3;
     var holChip = holName ? '<div class="mchip mchip--hol" title="법정 공휴일">' + esc(holName) + '</div>' : "";
     var shown = events.slice(0, max).map(function (e) {
+      if (isAnnualLeave(e)) {
+        return '<div class="mchip mchip--leave" data-id="' + esc(e.id || "") + '" title="' + esc(e.title) + ' · 종일 휴식">'
+          + '<span class="mchip__t">' + esc(e.title) + '</span></div>';
+      }
       var color = CATCOLOR[e.category] || "#cbd5e1";
       return '<div class="mchip' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.title) + '">'
         + '<span class="mchip__dot" style="background:' + color + '"></span>'
@@ -891,7 +895,26 @@
       + '</div>';
   }
 
+  // 연차(종일 휴식) 판별 — 제목에 "연차" 포함이면서 반차가 아닌 일정
+  function isAnnualLeave(e) { return !e.halfDay && String(e.title || "").indexOf("연차") !== -1; }
+  var LEAF_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 3.6-2 6-4.5 6"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/></svg>';
+
+  // 연차 = "쉬는 날" 리프레시 칩 (완료 체크 없음)
+  function leaveRow(e) {
+    return '<div class="evt evt--leave" data-id="' + esc(e.id || "") + '" title="연차 · 종일 휴식 · 클릭하여 수정">'
+      + '<span class="evt-leave2">'
+        + '<span class="evt-leave2__ic">' + LEAF_SVG + '</span>'
+        + '<span class="evt-leave2__t">' + esc(e.title) + '</span>'
+        + '<span class="evt-leave2__tag">종일</span>'
+      + '</span>'
+      + '<span class="evt__actions">'
+        + '<button type="button" class="evt__act evt__act--del" data-id="' + esc(e.id || "") + '" title="삭제">&times;</button>'
+      + '</span>'
+      + '</div>';
+  }
+
   function evtRow(e) {
+    if (isAnnualLeave(e)) return leaveRow(e);
     var color = CATCOLOR[e.category] || "#cbd5e1";
     var alarmMark = e.alarm ? '<span class="evt__alarm-mark" title="알림 ' + esc(e.alarmTime || e.time || "") + '">🔔</span>' : '';
     var lead = (e.time || alarmMark) ? '<span class="evt__time">' + (e.time ? esc(e.time) : '') + alarmMark + '</span>' : '';

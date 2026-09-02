@@ -432,6 +432,13 @@ html[data-authed="1"] .lock { display: none; }
 .evt__toggle:hover { border-color: var(--accent) !important; transform: scale(1.12); }
 .evt.is-done .evt__toggle { background: var(--accent); border-color: var(--accent) !important; color: var(--accent-ink); }
 .evt__alarm-mark { font-size: 8px; margin-left: 3px; opacity: .8; vertical-align: 1px; }
+/* 연차 = 리프레시 칩 (종일 휴식) */
+.evt--leave { align-items: center; padding: 3px 2px; }
+.evt--leave:hover { background: transparent; }
+.evt-leave2 { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 8px 11px; border-radius: 11px; background: color-mix(in srgb, var(--green) 15%, transparent); }
+.evt-leave2__ic { color: var(--green); display: grid; place-items: center; flex: none; }
+.evt-leave2__t { font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evt-leave2__tag { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--green); background: color-mix(in srgb, var(--green) 20%, transparent); padding: 2px 8px; border-radius: 999px; flex: none; }
 /* 반차 마커 — 완료 체크 대신 '반나절 휴무'를 뜻하는 반쯤 채운 원(클릭 불가) */
 .evt__leave {
   width: 16px; height: 16px; border-radius: 50%; flex: none; margin-top: 1px;
@@ -515,6 +522,9 @@ html[data-authed="1"] .lock { display: none; }
 .mchip--more { color: var(--ink-3); font-family: var(--mono); }
 .mchip--hol { color: var(--red); font-weight: 700; background: color-mix(in srgb, var(--red) 12%, transparent); cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .mchip--hol:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
+.mchip--leave { background: color-mix(in srgb, var(--green) 14%, transparent); }
+.mchip--leave .mchip__t { color: var(--green); font-weight: 700; }
+.mchip--leave:hover { background: color-mix(in srgb, var(--green) 14%, transparent); }
 
 /* =========================================================
    INTERVIEW · 면담 & 근무 기록

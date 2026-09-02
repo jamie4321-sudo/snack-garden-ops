@@ -4752,6 +4752,23 @@
   // 온보딩 드라이브 루트 (크루별 하위 폴더 링크를 붙여 관리)
   var ONBOARD_DRIVE_ROOT = "https://drive.google.com/drive/folders/1imSrDwPWdnItj3mXmrO2p9SL1_YTaDVW?usp=drive_link";
 
+  // 교육사진 드라이브 폴더 (이 기기에 저장 · 처음 연결 시 URL 입력)
+  function eduPhotoFolderUrl() { try { return localStorage.getItem("sg-edu-photo-folder") || ""; } catch (e) { return ""; } }
+  function setEduPhotoFolder(u) { try { localStorage.setItem("sg-edu-photo-folder", u || ""); } catch (e) {} }
+  function eduPhotoBtnHTML() {
+    var u = eduPhotoFolderUrl();
+    if (u) return '<a class="btn btn--ghost" href="' + esc(u) + '" target="_blank" rel="noopener">📷 교육사진 폴더</a>'
+      + '<button class="btn btn--ghost" id="eduPhotoSetBtn" title="교육사진 폴더 링크 변경" aria-label="교육사진 폴더 링크 변경">✎</button>';
+    return '<button class="btn btn--ghost" id="eduPhotoSetBtn">📷 교육사진 폴더 연결</button>';
+  }
+  function promptEduPhotoFolder() {
+    var cur = eduPhotoFolderUrl();
+    var v = prompt("교육사진 구글 드라이브 폴더 URL을 입력하세요.", cur);
+    if (v === null) return;
+    setEduPhotoFolder(v.trim());
+    renderEducation();
+  }
+
   /* ---- 온보딩 체크리스트 정의 ---- */
   var ONBOARD_STATUS = [
     { key: "none",     label: "미교육",       c: "var(--slate)" },
@@ -4936,17 +4953,22 @@
   function eduHeadActions() {
     if (eduSection === "onboarding") {
       return '<div class="page-head__actions">'
+        + eduPhotoBtnHTML()
         + '<a class="btn btn--ghost" href="' + ONBOARD_DRIVE_ROOT + '" target="_blank" rel="noopener">📁 온보딩 드라이브</a>'
         + '<button class="btn btn--primary" id="addOnboardBtn">+ 온보딩 추가</button>'
         + '</div>';
     }
     if (eduSection === "regular") {
       return '<div class="page-head__actions">'
+        + eduPhotoBtnHTML()
         + '<a class="btn btn--ghost" href="' + EDU_SIGN_URL + '" target="_blank" rel="noopener">✍️ 교육 서명 관리</a>'
         + '<button class="btn btn--primary" id="addEducationBtn">+ 교육 등록</button>'
         + '</div>';
     }
-    return '<button class="btn btn--primary" id="addEducationBtn">+ 교육 등록</button>';
+    return '<div class="page-head__actions">'
+      + eduPhotoBtnHTML()
+      + '<button class="btn btn--primary" id="addEducationBtn">+ 교육 등록</button>'
+      + '</div>';
   }
 
   /* ---------- 온보딩 섹션 ---------- */
@@ -5089,6 +5111,7 @@
       + '<td>' + eduDueCell(r) + '</td>'
       + '<td><span class="edu-badge" style="--c:' + eduStatusOf(r.status).c + '">' + esc(r.status) + '</span></td>'
       + '<td class="muted">' + esc(r.provider || "—") + (r.hours ? ' <span class="edu-hours">' + esc(r.hours) + '</span>' : '') + '</td>'
+      + '<td>' + (r.link ? '<a class="btn btn--sm" href="' + esc(r.link) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="교육자료 열기">🔗 자료</a>' : '<span class="muted">—</span>') + '</td>'
       + '<td><a class="btn btn--sm" data-edu-signup href="' + esc(eduSignUrl(r)) + '" target="_blank" rel="noopener">서명 등록</a></td>'
       + '</tr>';
   }
@@ -5123,10 +5146,10 @@
 
     var rows = filteredCatEducation(cat);
     html += '<div class="board"><div class="board__scroll"><table class="board__table board__table--edu2"><thead><tr>'
-      + '<th>교육명</th><th>대상</th><th>실시일</th><th>이수기한</th><th>상태</th><th>담당 · 기관</th><th>서명</th>'
+      + '<th>교육명</th><th>대상</th><th>실시일</th><th>이수기한</th><th>상태</th><th>담당 · 기관</th><th>자료</th><th>서명</th>'
       + '</tr></thead><tbody id="eduBody">'
       + (rows.length ? rows.map(eduTableRow).join("")
-          : '<tr><td colspan="7" class="board__empty">등록된 교육이 없습니다. <b style="color:var(--accent-text)">+ 교육 등록</b>으로 추가해보세요.</td></tr>')
+          : '<tr><td colspan="8" class="board__empty">등록된 교육이 없습니다. <b style="color:var(--accent-text)">+ 교육 등록</b>으로 추가해보세요.</td></tr>')
       + '</tbody></table></div></div>';
     return html;
   }
@@ -5371,6 +5394,7 @@
     form.provider.value = (prefill && prefill.provider) || "";
     form.hours.value = (prefill && prefill.hours) || "";
     form.note.value = (prefill && prefill.note) || "";
+    form.link.value = (prefill && prefill.link) || "";
 
     var cat = (prefill && prefill.category) || (eduSection === "regular" ? "정기교육" : "법정의무교육");
     form.category.value = cat;
@@ -5432,6 +5456,7 @@
         + '<label class="fld"><span>교육시간 <em>(선택)</em></span><input type="text" name="hours" maxlength="20" placeholder="예) 1시간"></label>'
       + '</div>'
       + '<label class="fld"><span>비고 <em>(선택)</em></span><textarea name="note" rows="2" maxlength="200" placeholder="특이사항을 입력하세요…"></textarea></label>'
+      + '<label class="fld"><span>교육자료 링크 <em>(선택 · 입력 시 목록에 🔗 자료 버튼 생성)</em></span><input type="url" name="link" placeholder="https://drive.google.com/..."></label>'
       + '<div class="modal__foot">'
         + '<button type="button" class="btn btn--danger" id="educationDelBtn" hidden>삭제</button>'
         + '<div class="modal__spacer"></div>'
@@ -5473,7 +5498,8 @@
         date: f.date.value || "", dueDate: f.dueDate.value || "",
         status: f.status.value || "예정",
         provider: f.provider.value.trim(), hours: f.hours.value.trim(), note: f.note.value.trim(),
-        link: "", checklist: "{}",
+        link: f.link.value.trim(),
+        checklist: (id && (findById(window.EDUCATION || [], id) || {}).checklist) || "{}",
       };
       if (!window.EDUCATION) window.EDUCATION = [];
       var idx = id ? indexById(window.EDUCATION, id) : -1;
@@ -7653,6 +7679,7 @@
       var atStatBtn = ev.target.closest(".stat--clickable[data-kind]");
       if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }
 
+      if (ev.target.closest("#eduPhotoSetBtn")) { promptEduPhotoFolder(); return; }
       if (ev.target.closest("#addEducationBtn")) { openEducationModal(null); return; }
       if (ev.target.closest("#addOnboardBtn")) {
         openOnboardModal({ id: "", crewId: "", crewName: "", date: "", link: "", checklist: "{}" }, true);

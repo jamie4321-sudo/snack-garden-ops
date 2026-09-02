@@ -861,10 +861,18 @@
       + '<button type="button" class="evt__act evt__act--next" data-id="' + esc(e.id || "") + '" title="다음 날로 업무 이관">&rarr;</button>'
       + '<button type="button" class="evt__act evt__act--del" data-id="' + esc(e.id || "") + '" title="삭제">&times;</button>'
       + '</span>';
-    var toggle = e.category === "휴일" ? '' : ('<button type="button" class="evt__toggle" data-id="' + esc(e.id || "") + '"'
-      + (e.done ? '' : ' style="border-color:' + color + '"')
-      + ' aria-pressed="' + (e.done ? "true" : "false") + '" title="' + (e.done ? "완료 해제" : "완료 처리") + '">'
-      + (e.done ? "&check;" : "") + '</button>');
+    var toggle;
+    if (e.category === "휴일") {
+      toggle = '';
+    } else if (e.halfDay === "오후") {
+      // 오후 반차 = 근무 종료(휴무)라 완료 체크 대상이 아님 → 클릭 불가한 반차 마커(반쯤 채운 원)로 대체
+      toggle = '<span class="evt__leave" title="오후 반차" aria-hidden="true"></span>';
+    } else {
+      toggle = '<button type="button" class="evt__toggle" data-id="' + esc(e.id || "") + '"'
+        + (e.done ? '' : ' style="border-color:' + color + '"')
+        + ' aria-pressed="' + (e.done ? "true" : "false") + '" title="' + (e.done ? "완료 해제" : "완료 처리") + '">'
+        + (e.done ? "&check;" : "") + '</button>';
+    }
     var halfMark = e.halfDay ? '<span class="evt__half evt__half--' + (e.halfDay === "오전" ? "am" : "pm") + '">' + esc(e.halfDay) + ' 반차</span>' : '';
     return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.halfDay ? " · " + esc(e.halfDay) + " 반차" : "") + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
       + toggle

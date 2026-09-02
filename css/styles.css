@@ -381,6 +381,16 @@ html[data-authed="1"] .lock { display: none; }
 .day:hover { border-color: var(--line); }
 .day.is-today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px var(--today-glow); }
 .day.is-holiday { background: linear-gradient(180deg, var(--holiday-tint), var(--card-bg)); }
+/* 법정 공휴일 = 빨간날 (사내 휴일 이벤트의 초록 틴트와 구분) */
+.day.is-pubhol { background: linear-gradient(180deg, color-mix(in srgb, var(--red) 11%, transparent), var(--card-bg)); }
+.day.is-pubhol .day__date { color: var(--red); }
+.day__holiday {
+  align-self: flex-start; max-width: 100%; box-sizing: border-box;
+  margin: 2px 0 4px; padding: 4px 9px; border-radius: 999px;
+  background: color-mix(in srgb, var(--red) 13%, transparent); color: var(--red);
+  font-family: var(--mono); font-size: 11px; font-weight: 700; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .day__head { display: flex; align-items: baseline; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--line-soft); }
 .day__date { font-family: var(--mono); font-weight: 700; font-size: 15px; }
 .day__date small { color: var(--ink-3); font-weight: 500; font-size: 11px; margin-left: 4px; }
@@ -492,6 +502,7 @@ html[data-authed="1"] .lock { display: none; }
 .mcell:hover { border-color: var(--line); }
 .mcell.is-out { opacity: .38; }
 .mcell.is-today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mcell.is-pubhol { background: color-mix(in srgb, var(--red) 8%, transparent); }
 .mcell__head { display: flex; }
 .mcell__d { font-family: var(--mono); font-weight: 700; font-size: 12.5px; }
 .mcell__d.is-sun { color: var(--red); }
@@ -502,6 +513,8 @@ html[data-authed="1"] .lock { display: none; }
 .mchip__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .mchip.is-done .mchip__t { color: var(--ink-3); text-decoration: line-through; }
 .mchip--more { color: var(--ink-3); font-family: var(--mono); }
+.mchip--hol { color: var(--red); font-weight: 700; background: color-mix(in srgb, var(--red) 12%, transparent); cursor: default; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.mchip--hol:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
 
 /* =========================================================
    INTERVIEW · 면담 & 근무 기록

@@ -22,6 +22,42 @@
   function isoOf(dt) { return dt.getFullYear() + "-" + pad2(dt.getMonth() + 1) + "-" + pad2(dt.getDate()); }
   function addDays(iso, n) { var dt = d(iso); dt.setDate(dt.getDate() + n); return isoOf(dt); }
   function startOfWeek(iso) { var day = wd(iso); return addDays(iso, day === 0 ? -6 : 1 - day); } // 월요일 시작
+
+  /* ---------- 법정 공휴일 · 대체공휴일 (공식 정보 기준: 2026~2027) ----------
+     출처: publicholidays.co.kr · 정부 공휴일 규정. 2026 제헌절 재지정 반영, 2026 추석 대체공휴일 없음.
+     매년 갱신 필요(음력·주말겹침에 따라 대체공휴일 변동). */
+  var HOLIDAYS = {
+    // 2026
+    "2026-01-01": "신정",
+    "2026-02-16": "설날 연휴", "2026-02-17": "설날", "2026-02-18": "설날 연휴",
+    "2026-03-01": "삼일절", "2026-03-02": "대체공휴일(삼일절)",
+    "2026-05-05": "어린이날",
+    "2026-05-24": "부처님오신날", "2026-05-25": "대체공휴일(부처님오신날)",
+    "2026-06-06": "현충일",
+    "2026-07-17": "제헌절",
+    "2026-08-15": "광복절", "2026-08-17": "대체공휴일(광복절)",
+    "2026-09-24": "추석 연휴", "2026-09-25": "추석", "2026-09-26": "추석 연휴",
+    "2026-10-03": "개천절", "2026-10-05": "대체공휴일(개천절)",
+    "2026-10-09": "한글날",
+    "2026-12-25": "성탄절",
+    // 2027
+    "2027-01-01": "신정",
+    "2027-02-06": "설날 연휴", "2027-02-07": "설날", "2027-02-08": "설날 연휴", "2027-02-09": "대체공휴일(설날)",
+    "2027-03-01": "삼일절",
+    "2027-05-05": "어린이날",
+    "2027-05-13": "부처님오신날",
+    "2027-06-06": "현충일", "2027-06-07": "대체공휴일(현충일)",
+    "2027-07-17": "제헌절",
+    "2027-08-15": "광복절", "2027-08-16": "대체공휴일(광복절)",
+    "2027-09-14": "추석 연휴", "2027-09-15": "추석", "2027-09-16": "추석 연휴",
+    "2027-10-03": "개천절", "2027-10-04": "대체공휴일(개천절)",
+    "2027-10-09": "한글날", "2027-10-11": "대체공휴일(한글날)",
+    "2027-12-25": "성탄절", "2027-12-27": "대체공휴일(성탄절)",
+  };
+  function holidayName(iso) { return HOLIDAYS[iso] || ""; }
+  function isOffDay(iso) { var w = wd(iso); return w === 0 || w === 6 || !!HOLIDAYS[iso]; } // 주말·공휴일 = 비근무일
+  /** iso 다음 근무일 — 토·일·공휴일은 건너뛴다 (금요일→월요일, 연휴 다음 평일) */
+  function nextWorkday(iso) { var cur = addDays(iso, 1); var guard = 0; while (isOffDay(cur) && guard++ < 30) cur = addDays(cur, 1); return cur; }
   function startOfMonth(iso) { var p = iso.split("-"); return p[0] + "-" + p[1] + "-01"; }
   function daysInMonth(y, m0) { return new Date(y, m0 + 1, 0).getDate(); }
   function addMonths(iso, n) {
@@ -586,7 +622,9 @@
       .sort(function (a, b) { return (a.time || "99").localeCompare(b.time || "99"); });
     var isToday = iso === TODAY;
     var isSun = wd(iso) === 0;
+    var holName = holidayName(iso);
     var max = 3;
+    var holChip = holName ? '<div class="mchip mchip--hol" title="법정 공휴일">' + esc(holName) + '</div>' : "";
     var shown = events.slice(0, max).map(function (e) {
       var color = CATCOLOR[e.category] || "#cbd5e1";
       return '<div class="mchip' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.title) + '">'
@@ -598,9 +636,9 @@
       : "";
     var dnum = +iso.split("-")[2];
 
-    return '<div class="mcell' + (inMonth ? "" : " is-out") + (isToday ? " is-today" : "") + '" data-date="' + iso + '">'
-      + '<div class="mcell__head"><span class="mcell__d' + (isSun ? " is-sun" : "") + '">' + dnum + '</span></div>'
-      + '<div class="mcell__body">' + shown + more + '</div>'
+    return '<div class="mcell' + (inMonth ? "" : " is-out") + (isToday ? " is-today" : "") + (holName ? " is-pubhol" : "") + '" data-date="' + iso + '">'
+      + '<div class="mcell__head"><span class="mcell__d' + (isSun || holName ? " is-sun" : "") + '">' + dnum + '</span></div>'
+      + '<div class="mcell__body">' + holChip + shown + more + '</div>'
       + '</div>';
   }
 
@@ -830,16 +868,20 @@
       .sort(function (a, b) { return (a.time || "99").localeCompare(b.time || "99"); });
     var isToday = iso === TODAY;
     var isSun = wd(iso) === 0;
-    var isHoliday = events.some(function (e) { return e.category === "휴일"; });
+    var holName = holidayName(iso);
+    var isHoliday = !!holName || events.some(function (e) { return e.category === "휴일"; });
     var doneCount = events.filter(function (e) { return e.done; }).length;
 
-    var cls = "day" + (isToday ? " is-today" : "") + (isSun ? " is-sun" : "") + (isHoliday ? " is-holiday" : "");
+    var cls = "day" + (isToday ? " is-today" : "") + (isSun ? " is-sun" : "") + (isHoliday ? " is-holiday" : "") + (holName ? " is-pubhol" : "");
+
+    // 공휴일 이름 칩 (클릭 불가) — 날짜 칸 상단
+    var holChip = holName ? '<div class="day__holiday" title="법정 공휴일">' + esc(holName) + '</div>' : '';
 
     var body;
     if (!events.length) {
-      body = '<div class="evt__add" data-date="' + iso + '">일정 입력…</div>';
+      body = holChip + '<div class="evt__add" data-date="' + iso + '">일정 입력…</div>';
     } else {
-      body = events.map(evtRow).join("") + '<div class="evt__add" data-date="' + iso + '">+ 추가</div>';
+      body = holChip + events.map(evtRow).join("") + '<div class="evt__add" data-date="' + iso + '">+ 추가</div>';
     }
 
     return '<div class="' + cls + '">'
@@ -887,7 +929,8 @@
   function moveEventToNextDay(id) {
     var evt = findById(window.SCHEDULE, id);
     if (!evt) return;
-    evt.date = addDays(evt.date, 1);
+    // 다음 근무일로 이관 — 금요일이면 토·일 건너뛰고 월요일, 연휴면 그 다음 평일
+    evt.date = nextWorkday(evt.date);
     saveToSheet(schedulePayload_(evt, "update"));
     renderSchedule();
   }

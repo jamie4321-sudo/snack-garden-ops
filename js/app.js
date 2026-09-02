@@ -4752,21 +4752,10 @@
   // 온보딩 드라이브 루트 (크루별 하위 폴더 링크를 붙여 관리)
   var ONBOARD_DRIVE_ROOT = "https://drive.google.com/drive/folders/1imSrDwPWdnItj3mXmrO2p9SL1_YTaDVW?usp=drive_link";
 
-  // 교육사진 드라이브 폴더 (이 기기에 저장 · 처음 연결 시 URL 입력)
-  function eduPhotoFolderUrl() { try { return localStorage.getItem("sg-edu-photo-folder") || ""; } catch (e) { return ""; } }
-  function setEduPhotoFolder(u) { try { localStorage.setItem("sg-edu-photo-folder", u || ""); } catch (e) {} }
+  // 교육사진 드라이브 폴더 (공유 고정 · 전 기기 동일)
+  var EDU_PHOTO_FOLDER = "https://drive.google.com/drive/folders/1-LvwttZFshGAfPbFgKGAyzGp-7c8WCPc?usp=drive_link";
   function eduPhotoBtnHTML() {
-    var u = eduPhotoFolderUrl();
-    if (u) return '<a class="btn btn--ghost" href="' + esc(u) + '" target="_blank" rel="noopener">📷 교육사진 폴더</a>'
-      + '<button class="btn btn--ghost" id="eduPhotoSetBtn" title="교육사진 폴더 링크 변경" aria-label="교육사진 폴더 링크 변경">✎</button>';
-    return '<button class="btn btn--ghost" id="eduPhotoSetBtn">📷 교육사진 폴더 연결</button>';
-  }
-  function promptEduPhotoFolder() {
-    var cur = eduPhotoFolderUrl();
-    var v = prompt("교육사진 구글 드라이브 폴더 URL을 입력하세요.", cur);
-    if (v === null) return;
-    setEduPhotoFolder(v.trim());
-    renderEducation();
+    return '<a class="btn btn--ghost" href="' + EDU_PHOTO_FOLDER + '" target="_blank" rel="noopener">📷 교육사진 폴더</a>';
   }
 
   /* ---- 온보딩 체크리스트 정의 ---- */
@@ -7679,7 +7668,6 @@
       var atStatBtn = ev.target.closest(".stat--clickable[data-kind]");
       if (atStatBtn) { openAttendanceKindModal(atStatBtn.getAttribute("data-kind")); return; }
 
-      if (ev.target.closest("#eduPhotoSetBtn")) { promptEduPhotoFolder(); return; }
       if (ev.target.closest("#addEducationBtn")) { openEducationModal(null); return; }
       if (ev.target.closest("#addOnboardBtn")) {
         openOnboardModal({ id: "", crewId: "", crewName: "", date: "", link: "", checklist: "{}" }, true);

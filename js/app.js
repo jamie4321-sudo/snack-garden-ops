@@ -864,9 +864,10 @@
     var toggle;
     if (e.category === "휴일") {
       toggle = '';
-    } else if (e.halfDay === "오후") {
-      // 오후 반차 = 근무 종료(휴무)라 완료 체크 대상이 아님 → 클릭 불가한 반차 마커(반쯤 채운 원)로 대체
-      toggle = '<span class="evt__leave" title="오후 반차" aria-hidden="true"></span>';
+    } else if (e.halfDay === "오전" || e.halfDay === "오후") {
+      // 반차 = 반나절 휴무라 완료 체크 대상이 아님 → 클릭 불가한 반차 마커(반쯤 채운 원)로 대체
+      // 오전 = 왼쪽 반 채움, 오후 = 오른쪽 반 채움 (한눈에 구분)
+      toggle = '<span class="evt__leave evt__leave--' + (e.halfDay === "오전" ? "am" : "pm") + '" title="' + esc(e.halfDay) + ' 반차" aria-hidden="true"></span>';
     } else {
       toggle = '<button type="button" class="evt__toggle" data-id="' + esc(e.id || "") + '"'
         + (e.done ? '' : ' style="border-color:' + color + '"')

@@ -189,7 +189,18 @@ function headerRow_(sh) {
   return sh.getRange(1, 1, 1, lastCol).getValues()[0];
 }
 
+// 읽기 진입점: 해당 컬렉션이 Supabase 로 이전됐으면(app_rows) 거기서, 아니면 시트에서.
+// Supabase 오류 시에는 시트로 자동 폴백해 화면이 깨지지 않게 한다.
 function rows_(name, fields) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_(name)) {
+    try { return sbRows_(name); }
+    catch (err) { Logger.log("[rows_ 폴백→시트] " + name + ": " + err); }
+  }
+  return sheetRows_(name, fields);
+}
+
+// 원본 시트 읽기 (마이그레이션·폴백에서 그대로 사용)
+function sheetRows_(name, fields) {
   var sh = sheet_(name, fields || []);
   var values = sh.getDataRange().getValues();
   if (values.length < 2) return [];
@@ -248,11 +259,12 @@ function doGet(e) {
   if (action === "invoices")   return json_(mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]));
   if (action === "processes")  return json_(mapProcesses_(rows_("processes", PROCESS_FIELDS)));
   if (action === "drivehub")   return json_(mapDrivehub_(rows_("drivehub", DRIVEHUB_FIELDS)));
-  if (action === "journal")    return json_(getJournalData_());
+  if (action === "journal")    return json_(getJournalFromSupabase_()); // Supabase 미러 우선(미설정 시 시트 폴백) · 원본 시트 읽기는 getJournalData_()
   if (action === "kpi")        return json_(getKpi_());
   if (action === "drivefolders") return json_(getDriveFolders_());
   if (action === "reportphotos") return json_(getReportPhotos_((e.parameter && e.parameter.docId) || ""));
   if (action === "debug")      return json_(getDebugInfo_());
+  if (typeof sbPrefetchAll_ === "function") sbPrefetchAll_(); // 이전된 테이블 전부 1회 조회(왕복 최소화)
   return json_({
     crew: rows_("crew", CREW_FIELDS),
     schedule: mapSchedule_(rows_("schedule", SCH_FIELDS)),
@@ -577,6 +589,7 @@ function crewValuesObj_(data) {
 }
 
 function handleCrew_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("crew")) return sbHandle_("crew", action, data, crewValuesObj_);
   var sh = sheet_("crew", CREW_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -605,6 +618,7 @@ function scheduleValuesObj_(data) {
 }
 
 function handleSchedule_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("schedule")) return sbHandle_("schedule", action, data, scheduleValuesObj_);
   var sh = sheet_("schedule", SCH_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -624,6 +638,7 @@ function handleSchedule_(action, data) {
 }
 
 function handleIssue_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("issues")) return sbHandle_("issues", action, data, function (d) { return { id: d.id, text: d.text || "", link: d.link || "" }; });
   var sh = sheet_("issues", ISSUE_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -653,6 +668,7 @@ function interviewValuesObj_(data) {
 }
 
 function handleInterview_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("interviews")) return sbHandle_("interviews", action, data, interviewValuesObj_);
   var sh = sheet_("interviews", INTERVIEW_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -680,6 +696,7 @@ function attendanceValuesObj_(data) {
 }
 
 function handleAttendance_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("attendance")) return sbHandle_("attendance", action, data, attendanceValuesObj_);
   var sh = sheet_("attendance", ATTENDANCE_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -709,6 +726,7 @@ function hrChangeValuesObj_(data) {
 }
 
 function handleHrChange_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("hrchanges")) return sbHandle_("hrchanges", action, data, hrChangeValuesObj_);
   var sh = sheet_("hrchanges", HRCHANGE_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -743,6 +761,7 @@ function partnerValuesObj_(data) {
 }
 
 function handlePartner_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("partners")) return sbHandle_("partners", action, data, partnerValuesObj_);
   var sh = sheet_("partners", PARTNER_FIELDS);
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
@@ -816,6 +835,7 @@ function quoteValuesObj_(data) {
 }
 
 function handleQuote_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("quotes")) return sbHandle_("quotes", action, data, quoteValuesObj_);
   var sh = sheet_("quotes", QUOTE_FIELDS);
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
@@ -851,6 +871,7 @@ function invoiceValuesObj_(data) {
 }
 
 function handleInvoice_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("invoices")) return sbHandle_("invoices", action, data, invoiceValuesObj_);
   var sh = sheet_("invoices", INVOICE_FIELDS);
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
@@ -888,6 +909,7 @@ function processValuesObj_(data) {
 }
 
 function handleProcess_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("processes")) return sbHandle_("processes", action, data, processValuesObj_);
   var sh = sheet_("processes", PROCESS_FIELDS);
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
@@ -913,6 +935,7 @@ function drivehubValuesObj_(data) {
 }
 
 function handleDrivehub_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("drivehub")) return sbHandle_("drivehub", action, data, drivehubValuesObj_);
   var sh = sheet_("drivehub", DRIVEHUB_FIELDS);
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
@@ -1260,6 +1283,7 @@ function educationValuesObj_(data) {
 }
 
 function handleEducation_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("education")) return sbHandle_("education", action, data, educationValuesObj_);
   var sh = sheet_("education", EDUCATION_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -1279,6 +1303,7 @@ function handleEducation_(action, data) {
 }
 
 function handlePoint_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("points")) return sbHandle_("points", action, data, function (d) { return { id: d.id, text: d.text || "" }; });
   var sh = sheet_("points", POINT_FIELDS);
 
   if (action === "add" || action === "update") {
@@ -1298,6 +1323,7 @@ function handlePoint_(action, data) {
 }
 
 function handleReport_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("reports")) return sbHandle_("reports", action, data, function (d) { return { id: d.id, text: d.text || "", link: d.link || "", urgent: d.urgent ? "긴급" : "", done: d.done ? "완료" : "", reportedAt: d.reportedAt || "" }; });
   var sh = sheet_("reports", REPORT_FIELDS);
 
   if (action === "add" || action === "update") {

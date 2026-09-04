@@ -402,34 +402,58 @@
     return { stage: "flat", days: 15 };
   }
 
-  /** 구글시트에서 크루·일정 로드 (실패 시 데모 데이터 유지)
-   *  Apps Script /exec 응답이 브라우저·중간 캐시에 잡히는 걸 막기 위해 매번 캐시버스팅 */
+  /* ---------- 로컬 캐시 (즉시 로딩 · stale-while-revalidate) ----------
+     Supabase/GAS 응답을 이 브라우저에 저장해두고, 다음 진입 때 즉시 화면을
+     그려준 뒤 뒤에서 최신본으로 갱신한다. (관리자 로그인 뒤에서만 열림) */
+  var CACHE_ALL_KEY = "sg-cache-all-v2";
+  function saveCacheAll(d) {
+    try { localStorage.setItem(CACHE_ALL_KEY, JSON.stringify({ t: Date.now(), d: d })); } catch (e) {}
+  }
+  function loadCacheAll() {
+    try {
+      var raw = localStorage.getItem(CACHE_ALL_KEY);
+      if (!raw) return null;
+      var o = JSON.parse(raw);
+      return (o && o.d) ? o.d : null;
+    } catch (e) { return null; }
+  }
+
+  /** 받은 전체 번들(d)을 window.* 로 반영 (fetch·캐시 공용) */
+  function applyAllData(d) {
+    if (!d) return;
+    if (d.crew && d.crew.length) window.CREW = d.crew.map(normCrew);
+    if (d.schedule && d.schedule.length) window.SCHEDULE = d.schedule;
+    if (d.issues) window.SUMMARY.issues = d.issues;
+    if (d.points) window.SUMMARY.points = d.points;
+    if (d.reports) window.SUMMARY.reports = d.reports;
+    if (d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
+    if (d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
+    if (d.education) window.EDUCATION = d.education.map(normEducation);
+    if (d.notes) window.NOTES = d.notes.map(normNote);
+    if (d.hrChanges) window.HR_CHANGES = d.hrChanges.map(normHrChange);
+    if (d.partners) window.PARTNERS = d.partners.map(normPartner);
+    if (d.statements) window.STATEMENTS = d.statements.map(normStatement);
+    if (d.quotes) window.QUOTES = d.quotes.map(normQuote);
+    if (d.invoices) window.INVOICES = d.invoices.map(normInvoice);
+    if (d.processes) window.PROCESS_HUB_DATA = d.processes; // 업무 프로세스 HUB(process-hub.js)
+    if (d.drivehub) window.DRIVEHUB_DATA = d.drivehub;      // 드라이브 HUB(drive-hub.js)
+  }
+
+  /** 서버(Supabase 경유 GAS)에서 전체 데이터 로드 → window.* 반영 + 캐시 저장.
+   *  응답이 중간 캐시에 잡히지 않게 매번 캐시버스팅. */
   function loadData() {
     var ep = endpoint();
     if (!ep) return Promise.resolve(false);
     var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=all&_ts=" + Date.now();
     return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d && d.crew && d.crew.length) window.CREW = d.crew.map(normCrew);
-        if (d && d.schedule && d.schedule.length) window.SCHEDULE = d.schedule;
-        if (d && d.issues) window.SUMMARY.issues = d.issues;
-        if (d && d.points) window.SUMMARY.points = d.points;
-        if (d && d.reports) window.SUMMARY.reports = d.reports;
-        if (d && d.interviews) window.INTERVIEWS = d.interviews.map(normInterview);
-        if (d && d.attendance) window.ATTENDANCE = d.attendance.map(normAttendance);
-        if (d && d.education) window.EDUCATION = d.education.map(normEducation);
-        if (d && d.notes) window.NOTES = d.notes.map(normNote);
-        if (d && d.hrChanges) window.HR_CHANGES = d.hrChanges.map(normHrChange);
-        if (d && d.partners) window.PARTNERS = d.partners.map(normPartner);
-        if (d && d.statements) window.STATEMENTS = d.statements.map(normStatement);
-        if (d && d.quotes) window.QUOTES = d.quotes.map(normQuote);
-        if (d && d.invoices) window.INVOICES = d.invoices.map(normInvoice);
-        if (d && d.processes) window.PROCESS_HUB_DATA = d.processes; // 업무 프로세스 HUB(process-hub.js)
-        if (d && d.drivehub) window.DRIVEHUB_DATA = d.drivehub;      // 드라이브 HUB(drive-hub.js)
-        return true;
-      })
-      .catch(function (e) { console.warn("[시트 로드 실패] 데모 데이터로 표시합니다.", e); return false; });
+      .then(function (d) { applyAllData(d); saveCacheAll(d); return true; })
+      .catch(function (e) { console.warn("[데이터 로드 실패] 캐시로 표시합니다.", e); return false; });
+  }
+
+  /** 편집 중 모달이 열려 있으면 백그라운드 갱신 시 다시 그리지 않는다(입력 방해 방지). */
+  function isModalOpen() {
+    return !!document.querySelector(".modal:not([hidden]), .dhub-modal, .vault-modal");
   }
 
   /** 시트에 저장/수정/삭제 (Content-Type 미지정 → CORS 프리플라이트 회피, fire-and-forget) */
@@ -477,7 +501,7 @@
     if (!foot) return;
     var status = foot.querySelector(".side__foot-status") || foot;
     var live = isLive();
-    status.innerHTML = '<span class="dot"></span> ' + (live ? "LIVE · 구글시트 연동" : "DEMO · 목업 데이터");
+    status.innerHTML = '<span class="dot"></span> ' + (live ? "LIVE · Supabase 연동" : "오프라인 · 연결 없음");
     foot.classList.toggle("is-live", live);
   }
 
@@ -8094,9 +8118,28 @@
   function boot() {
     updateModeBadge();
     var initial = location.hash.slice(1) || "schedule";
-    if (isLive()) {
-      view.innerHTML = '<div class="loading-screen"><div class="loading-spinner"></div>'
-        + '<p class="loading-text">구글시트에서 불러오는 중…</p></div>';
+    var cached = loadCacheAll();
+
+    if (cached) {
+      // 캐시 즉시 표시 → 뒤에서 조용히 최신본으로 갱신 (stale-while-revalidate)
+      applyAllData(cached);
+      go(initial);
+      checkCelebrationPopup();
+      checkEventAlarms();
+      loadData().then(function (ok) {
+        if (ok && !isModalOpen()) { go(location.hash.slice(1) || initial); checkEventAlarms(); }
+      });
+    } else if (isLive()) {
+      // 최초(캐시 없음): 부팅 로더 → 로드 완료 후 표시
+      view.innerHTML = ''
+        + '<div class="boot" role="status" aria-live="polite" aria-label="데이터 준비 중">'
+        +   '<div class="boot__mark">'
+        +     '<span class="boot__logo">SNACK<em>&amp;</em>GARDEN</span>'
+        +     '<span class="boot__ping"></span>'
+        +   '</div>'
+        +   '<div class="boot__bar"><span></span></div>'
+        +   '<p class="boot__sub">데이터를 준비하는 중이에요…</p>'
+        + '</div>';
       loadData().then(function () { go(initial); checkCelebrationPopup(); checkEventAlarms(); });
     } else {
       go(initial);

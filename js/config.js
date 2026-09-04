@@ -30,5 +30,13 @@ window.CONFIG = {
     pwHash: "bba155c5f227c6e52a8b2707a13e817137cbac50806b4822f99bbf0778c3f8fd"  // 4231
   },
 
+  /* ---------- 비밀번호 HUB 게이트 ----------
+     비밀번호 HUB(자격증명 게시판)에 들어갈 때 "한 번 더" 물어보는 비밀번호.
+     pwHash 를 비워두면 → 위 관리자 로그인 비밀번호(auth.pwHash)를 그대로 사용합니다.
+     별도 비밀번호를 쓰려면 위 안내대로 SHA-256 해시를 뽑아 pwHash 에 넣으세요.       */
+  vault: {
+    pwHash: ""   // 비우면 관리자 로그인 비밀번호(4231)로 진입
+  },
+
   journalSheetUrl: "https://docs.google.com/spreadsheets/d/1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc/edit"
 };

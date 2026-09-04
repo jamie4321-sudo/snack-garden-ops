@@ -7562,6 +7562,14 @@
     }
   }
 
+  function renderVault() {
+    if (window.VaultHub && typeof window.VaultHub.render === "function") {
+      window.VaultHub.render(view);
+    } else {
+      view.innerHTML = '<div class="board__empty">비밀번호 HUB 모듈을 불러오지 못했습니다.</div>';
+    }
+  }
+
   var VIEWS = {
     statement:   { title: "BILLING", render: renderBilling },
     quote:       { title: "BILLING", render: renderBilling },
@@ -7581,6 +7589,7 @@
     kpi:         { title: "2026 KPI", render: renderKpi },
     process:     { title: "PROCESS HUB", render: renderProcess },
     drivehub:    { title: "DRIVE HUB", render: renderDriveHub },
+    vault:       { title: "PASSWORD HUB", render: renderVault },
   };
 
   function go(name) {

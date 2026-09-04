@@ -2446,3 +2446,183 @@ textarea.phub-in { resize: vertical; line-height: 1.55; }
   .dhub__title { font-size: 25px; }
   .dhub-row__act { opacity: 1; }
 }
+
+/* =========================================================
+   비밀번호 HUB (vault-hub.js)
+   ========================================================= */
+.vault { max-width: 980px; }
+.vault__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.vault__title { font-size: 30px; font-weight: 800; letter-spacing: -.02em; margin: 0; line-height: 1.05; }
+.vault__sub { color: var(--ink-2); font-size: 13.5px; margin: 8px 0 0; }
+.vault__headact { flex: none; display: flex; align-items: center; gap: 8px; }
+.vault-lockbtn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---- 게이트 ---- */
+.vault-gate { min-height: 62vh; display: flex; align-items: center; justify-content: center; padding: 24px 0; }
+.vault-gate__card {
+  width: 100%; max-width: 380px; text-align: center;
+  background: var(--card-bg); border: 1px solid var(--line);
+  border-radius: 18px; padding: 34px 30px 26px;
+  animation: vault-pop .28s ease both;
+}
+.vault-gate__card.is-shake { animation: vault-shake .4s; }
+.vault-gate__badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 46px; height: 46px; border-radius: 14px; margin-bottom: 16px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-text); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.vault-gate__title { font-size: 24px; font-weight: 800; letter-spacing: -.02em; margin: 4px 0 0; }
+.vault-gate__sub { color: var(--ink-2); font-size: 13px; margin: 8px 0 22px; }
+.vault-gate__form { display: block; }
+.vault-gate__field { position: relative; display: flex; align-items: center; }
+.vault-gate__ficon { position: absolute; left: 13px; display: flex; color: var(--ink-3); pointer-events: none; }
+.vault-gate__in {
+  width: 100%; box-sizing: border-box; padding: 12px 14px 12px 38px;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; font-size: 14px;
+}
+.vault-gate__in::placeholder { color: var(--ink-3); }
+.vault-gate__in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.vault-gate__err { color: var(--red); font-size: 12px; margin: 12px 0 0; }
+.vault-gate__btn { width: 100%; margin-top: 16px; justify-content: center; }
+.vault-gate__note { color: var(--ink-3); font-size: 11.5px; margin: 18px 0 0; }
+
+/* ---- 검색 ---- */
+.vault-search { position: relative; margin-bottom: 14px; }
+.vault-search__ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
+.vault-search__in {
+  width: 100%; box-sizing: border-box; padding: 12px 14px 12px 44px;
+  background: var(--card-bg); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px; font-size: 14px;
+}
+.vault-search__in::placeholder { color: var(--ink-3); }
+.vault-search__in:focus { outline: none; border-color: var(--accent); }
+
+/* ---- 그룹 탭 ---- */
+.vault-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.vault-tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 100px;
+  background: transparent; color: var(--ink-2); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.vault-tab:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink-3) 55%, transparent); }
+.vault-tab.is-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.vault-tab__c {
+  font-family: var(--mono); font-size: 11px; min-width: 18px; text-align: center;
+  padding: 1px 6px; border-radius: 100px; background: color-mix(in srgb, var(--ink-3) 22%, transparent);
+}
+.vault-tab.is-on .vault-tab__c { background: color-mix(in srgb, var(--accent-ink) 18%, transparent); color: var(--accent-ink); }
+
+.vault-hint { color: var(--ink-3); font-size: 12.5px; margin: 0 0 14px; }
+.vault-count { color: var(--accent-text); font-family: var(--mono); }
+
+/* ---- 카드 리스트 ---- */
+.vault-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.vault-card {
+  position: relative; background: var(--card-bg); border: 1px solid var(--line);
+  border-radius: 14px; padding: 15px 16px 14px;
+  animation: vault-rise .28s ease both; animation-delay: calc(var(--i, 0) * 18ms);
+}
+.vault-card:hover { border-color: color-mix(in srgb, var(--ink-3) 45%, transparent); }
+.vault-card__top { display: flex; align-items: flex-start; gap: 10px; }
+.vault-card__ic {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 9px; margin-top: 1px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text);
+}
+.vault-card__ident { flex: 1; min-width: 0; }
+.vault-card__name { display: block; font-weight: 700; font-size: 14.5px; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vault-card__dom, .vault-card__ctx { display: block; color: var(--ink-3); font-size: 11.5px; margin-top: 2px; font-family: var(--mono); }
+.vault-card__ctx { color: var(--accent-text); }
+.vault-card__act { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.vault-card:hover .vault-card__act { opacity: 1; }
+.vault-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-2); cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.vault-iconbtn:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink-3) 55%, transparent); }
+.vault-iconbtn--del:hover { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, transparent); }
+.vault-card__open {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border-radius: 8px; color: var(--ink-3); transition: color .15s, transform .15s;
+}
+.vault-card__open:hover { color: var(--accent-text); transform: translate(1px, -1px); }
+
+.vault-card__body { margin-top: 12px; display: grid; gap: 7px; }
+.vault-field { display: flex; align-items: center; gap: 8px; }
+.vault-field__lb { flex: none; width: 52px; color: var(--ink-3); font-size: 11px; font-weight: 600; }
+.vault-field__val {
+  flex: 1; min-width: 0; font-size: 13px; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.vault-field__val.is-empty { color: var(--ink-3); font-style: italic; }
+.vault-field__pw { font-family: var(--mono); letter-spacing: .04em; }
+.vault-mini {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--ink-2); cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.vault-mini:hover { color: var(--ink); border-color: color-mix(in srgb, var(--ink-3) 55%, transparent); }
+.vault-mini.is-copied { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.vault-card__memo {
+  margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--line-soft);
+  color: var(--ink-2); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+
+/* ---- 빈 상태 ---- */
+.vault-empty { text-align: center; padding: 40px 20px; border: 1px dashed var(--line); border-radius: 14px; }
+.vault-empty__t { font-weight: 700; font-size: 14px; margin: 0; }
+.vault-empty__s { color: var(--ink-3); font-size: 12.5px; margin: 6px 0 16px; }
+
+/* ---- 모달 ---- */
+.vault-modal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.vault-modal__bd { position: absolute; inset: 0; background: color-mix(in srgb, #000 55%, transparent); backdrop-filter: blur(3px); animation: vault-fade .2s ease both; }
+.vault-modal__card {
+  position: relative; width: 100%; max-width: 440px; max-height: 88vh; overflow: auto;
+  background: var(--card-bg); border: 1px solid var(--line); border-radius: 16px;
+  animation: vault-pop .24s ease both;
+}
+.vault-modal__head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 12px; }
+.vault-modal__head h3 { margin: 0; font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+.vault-modal__x { width: 30px; height: 30px; border: none; background: transparent; color: var(--ink-3); font-size: 22px; line-height: 1; cursor: pointer; border-radius: 8px; }
+.vault-modal__x:hover { color: var(--ink); background: color-mix(in srgb, var(--ink-3) 14%, transparent); }
+.vault-modal__body { padding: 4px 20px 8px; display: grid; gap: 13px; }
+.vault-fld { display: grid; gap: 6px; }
+.vault-fld > span { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.vault-fld em { color: var(--ink-3); font-style: normal; font-weight: 500; font-size: 11px; }
+.vault-fld em.req { color: var(--red); }
+.vault-in {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 13.5px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px;
+}
+.vault-in::placeholder { color: var(--ink-3); }
+.vault-in:focus { outline: none; border-color: var(--accent); }
+.vault-in--area { resize: vertical; min-height: 46px; font-family: inherit; }
+.vault-in--err { border-color: var(--red); }
+.vault-pwwrap { position: relative; display: flex; align-items: center; }
+.vault-pwwrap .vault-in { padding-right: 42px; }
+.vault-pwtoggle {
+  position: absolute; right: 6px; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: none; background: transparent; color: var(--ink-3); cursor: pointer; border-radius: 7px;
+}
+.vault-pwtoggle:hover { color: var(--ink); }
+.vault-modal__foot { display: flex; align-items: center; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--line); margin-top: 6px; }
+.vault-modal__spacer { flex: 1; }
+
+@keyframes vault-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes vault-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vault-pop { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes vault-shake { 10%,90%{transform:translateX(-1px);} 30%,70%{transform:translateX(3px);} 50%{transform:translateX(-5px);} }
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-card, .vault-modal__bd, .vault-modal__card, .vault-gate__card { animation: none; }
+}
+@media (max-width: 720px) {
+  .vault__head { flex-direction: column; align-items: flex-start; }
+  .vault__title { font-size: 25px; }
+  .vault-card__act { opacity: 1; }
+  .vault-list { grid-template-columns: 1fr; }
+}

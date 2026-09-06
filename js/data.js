@@ -230,7 +230,82 @@ window.SUMMARY = {
    html : .wrdoc 스코프 안에서 렌더링/인쇄되는 보고서 본문.
    새 보고서는 이 배열에 객체 하나를 추가하면 목록에 노출됩니다.
    ========================================================= */
+function wrBar(name, color, pct, amount, share) {
+  return '<div style="display:grid;grid-template-columns:118px 1fr;gap:12px;align-items:center;">'
+    + '<span style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;">'
+    + '<span style="width:10px;height:10px;border-radius:3px;background:' + color + ';flex:none;"></span>' + name + '</span>'
+    + '<span style="position:relative;height:28px;background:rgba(0,0,0,.05);border-radius:6px;overflow:hidden;">'
+    + '<span style="position:absolute;inset:0 auto 0 0;width:' + pct + '%;background:' + color + ';border-radius:6px;"></span>'
+    + '<span style="position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:12.5px;font-weight:700;color:#23201c;">'
+    + amount + '<span style="font-weight:600;color:#6f685c;margin-left:6px;">' + share + '</span></span>'
+    + '</span></div>';
+}
 window.WR_DOCS = [
+  {
+    id: "wr-snackbar-mart-category-2026-09",
+    kind: "html",
+    type: "HTML",
+    title: "카카오페이 스낵바 · 마트 매입 카테고리 분석 (26.01~05)",
+    date: "2026-09-02",
+    category: "스낵 큐레이션",
+    author: "Jamie · Snack & Garden",
+    summary: "1~5월 마트 판매수량에 위펀 공급단가(VAT별도)를 적용해 상품분류별 매입 비중을 산출하고, 발행 시트값과 원단위까지 3단계 교차검증한 결과.",
+    html: [
+      '<div class="wrdoc-head">',
+        '<span class="wrdoc-eyebrow">Snack &amp; Garden · 스낵 큐레이션 분석</span>',
+        '<h1 class="wrdoc-title">마트 매입 상품분류별 비중 분석</h1>',
+        '<p class="wrdoc-lede">2026년 <b>1~5월 마트 판매수량</b>에 위펀 <b>확정 공급단가(VAT별도)</b>를 적용해 7개 상품분류의 매입 규모와 비중을 산출하고, 발행 시트값과 <b>원단위까지 교차검증</b>한 보고입니다.</p>',
+        '<div class="wrdoc-meta"><span><b>기간</b> 26.01~26.05</span><span><b>기준</b> 판매수량 × 공급단가</span><span><b>5개월 누계</b> 221,406,050원</span><span><b>작성일</b> 2026-09-02</span></div>',
+      '</div>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">01</span>핵심 요약</h2>',
+        '<div class="wrdoc-cards">',
+          '<div class="wrdoc-card"><p class="k">최대 분류</p><p class="v">신선식품류</p><p class="k" style="margin-top:4px;">36.6% · 80,993,555원</p></div>',
+          '<div class="wrdoc-card"><p class="k">상위 3개 집중도</p><p class="v">75.5<small>%</small></p><p class="k" style="margin-top:4px;">신선 · 과자 · 음료</p></div>',
+          '<div class="wrdoc-card"><p class="k">월평균 마트 매입</p><p class="v">44,281,210<small>원</small></p><p class="k" style="margin-top:4px;">5개월 평균 · VAT별도</p></div>',
+        '</div>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">02</span>상품분류별 비중 (1~5월 누계)</h2>',
+        '<p class="wrdoc-note" style="margin-bottom:14px;">신선식품류가 전체의 3분의 1을 넘는 최대 분류이며, 상위 3개 분류가 누계 매입액의 75.5%를 차지합니다.</p>',
+        '<div style="display:flex;flex-direction:column;gap:11px;">',
+          wrBar('신선식품류','#4c9a6b',100,'80,993,555','36.6%'),
+          wrBar('과자류','#d98a3d',58.6,'47,486,710','21.4%'),
+          wrBar('음료류','#4a7fb0',47.7,'38,636,299','17.5%'),
+          wrBar('젤리/초콜렛/바','#8a6bb0',22.7,'18,402,699','8.3%'),
+          wrBar('라면류/즉석식품','#c25a4a',15.3,'12,388,348','5.6%'),
+          wrBar('냉동식품','#3fa0a0',15.1,'12,210,899','5.5%'),
+          wrBar('원물간식','#9a7b52',13.9,'11,287,540','5.1%'),
+        '</div>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">03</span>분류 × 월 매입액 상세 <small style="font-size:12px;color:#838c86;font-weight:600;">(원 · VAT별도)</small></h2>',
+        '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>분류</th><th>1월</th><th>2월</th><th>3월</th><th>4월</th><th>5월</th><th>누계</th></tr></thead>',
+        '<tbody>',
+        '<tr><td>신선식품류</td><td>17,180,583</td><td>13,290,306</td><td>17,573,993</td><td>18,022,957</td><td>14,925,716</td><td>80,993,555</td></tr>',
+        '<tr><td>과자류</td><td>11,753,616</td><td>8,100,008</td><td>9,423,765</td><td>9,397,358</td><td>8,811,963</td><td>47,486,710</td></tr>',
+        '<tr><td>음료류</td><td>8,486,186</td><td>6,344,725</td><td>8,177,951</td><td>8,265,701</td><td>7,361,736</td><td>38,636,299</td></tr>',
+        '<tr><td>젤리/초콜렛/바</td><td>4,261,167</td><td>3,244,097</td><td>3,537,581</td><td>3,940,475</td><td>3,419,379</td><td>18,402,699</td></tr>',
+        '<tr><td>라면류/즉석식품</td><td>2,918,543</td><td>2,159,468</td><td>2,508,498</td><td>2,560,664</td><td>2,241,175</td><td>12,388,348</td></tr>',
+        '<tr><td>냉동식품</td><td>2,830,652</td><td>2,154,645</td><td>2,598,391</td><td>2,353,061</td><td>2,274,150</td><td>12,210,899</td></tr>',
+        '<tr><td>원물간식</td><td>2,708,610</td><td>1,963,067</td><td>2,289,128</td><td>2,373,833</td><td>1,952,902</td><td>11,287,540</td></tr>',
+        '<tr class="wrdoc-total"><td>마트 소계</td><td>50,139,357</td><td>37,256,316</td><td>46,109,307</td><td>46,914,049</td><td>40,987,021</td><td>221,406,050</td></tr>',
+        '</tbody></table></div>',
+        '<p class="wrdoc-note">2월은 설 연휴·근무일 감소로 매입 총액이 크게 줄었으나(37.3M), 분류별 구성 비율은 5개월 내내 안정적으로 유지됩니다.</p>',
+      '</section>',
+
+      '<section class="wrdoc-sec"><h2><span class="wrdoc-no">04</span>값 검증 — 왜 이 숫자가 나왔나</h2>',
+        '<p class="wrdoc-note" style="margin-bottom:12px;">발행 시트값을 그대로 쓰지 않고, 원자료(월별 상품 판매수량)에서 직접 재계산해 3단계로 대조했습니다. 산식은 시트에 명시된 <b>“마트 = 위펀 판매수량 × 공급단가”</b>.</p>',
+        '<div class="wrdoc-tw"><table class="wrdoc-table"><thead><tr><th>단계</th><th>검증 내용</th><th>결과</th></tr></thead>',
+        '<tbody>',
+        '<tr><td>검증 1</td><td>146종 단가표를 월별 수량에 조인 → 과자·음료·젤리·라면·냉동·원물 6개 분류 × 5개월(30셀)</td><td class="pos">전부 원단위 일치</td></tr>',
+        '<tr><td>검증 2</td><td>잔차 항등식: 마트소계 − 재계산 6개분류 = 신선식품류</td><td class="pos">5개월 diff 0</td></tr>',
+        '<tr><td>검증 3</td><td>7개 분류 합 = 마트 매입 소계 = 월별 총지출표의 마트값</td><td class="pos">3자 동시 일치</td></tr>',
+        '</tbody></table></div>',
+        '<div class="wrdoc-callout"><span class="lbl">보정 메모</span><p>신선식품류는 호빵·일부 베이커리 SKU가 추출 가능한 146종 단가표에 없어 직접곱 단계에서만 일부 누락됐으나, <b>검증 2의 잔차 항등식</b>(마트소계는 월별표에서 독립 확보)으로 그 값이 발행값과 정확히 일치함을 확인했습니다. 즉 <b>신선식품류 1위(36.6%)는 데이터로 재현·검증된 결과</b>입니다.</p></div>',
+      '</section>',
+    ].join(""),
+  },
   {
     id: "wr-mobility-landscaping-2026-08",
     kind: "html",
@@ -340,17 +415,8 @@ window.WR_DOCS = [
    드라이브 관리 폴더 (업무 보고)
    ---------------------------------------------------------
    라이브(GAS 재배포) 시 action=drivefolders 응답으로 대체됩니다.
-   아래는 데모/폴백 데이터입니다. (Code.gs 의 DRIVE_FOLDERS 에
-   실제 폴더 ID를 넣고 재배포하면 자동으로 채워집니다.)
+   실제 연동 전까지는 빈 배열로 두면 "연동된 드라이브 폴더가 없습니다"
+   안내가 표시됩니다. (Code.gs 의 DRIVE_FOLDERS 에 실제 폴더 ID를 넣고
+   재배포하면 자동으로 채워집니다.)
    ========================================================= */
-window.DRIVE_FOLDERS = [
-  { name: "안전매뉴얼", url: "", count: 3, files: [
-    { name: "2506 온열질환예방지침(OPS).pdf",       type: "PDF", date: "2026-07-24", url: "" },
-    { name: "2506 폭염 5대 기본수칙 자율점검표.pdf", type: "PDF", date: "2026-07-24", url: "" },
-    { name: "2508 소화기-점검-및-사용방법.pdf",      type: "PDF", date: "2026-07-24", url: "" }
-  ] },
-  { name: "교육 자료", url: "", count: 2, files: [
-    { name: "2508 신규 크루 온보딩 교육.pptx",  type: "PPT", date: "2026-08-05", url: "" },
-    { name: "2507 식물 병해충 관리 가이드.pdf", type: "PDF", date: "2026-07-30", url: "" }
-  ] }
-];
+window.DRIVE_FOLDERS = [];

@@ -115,7 +115,7 @@
       ? { type: "process", action: "delete", id: p.id }
       : Object.assign({ type: "process", action: action }, serializeProcess(p));
     try {
-      fetch(endpoint(), { method: "POST", body: JSON.stringify(body) })
+      fetch(endpoint(), { method: "POST", body: JSON.stringify(Object.assign({ pw: window.SG_API_PW || "" }, body)) })
         .catch(function (e) { console.warn("[HUB 시트 저장 실패]", e); });
     } catch (e) { console.warn("[HUB 시트 저장 예외]", e); }
   }

@@ -331,7 +331,7 @@
     showStep(2);
     byId("viErr").hidden = true;
     if (!ep) { showErr("구글시트 연동(endpoint)이 설정되지 않았어요. js/config.js 확인 후 이용해주세요."); return; }
-    fetch(ep, { method: "POST", body: JSON.stringify(Object.assign({ type: "summarize" }, payload)) })
+    fetch(ep, { method: "POST", body: JSON.stringify(Object.assign({ type: "summarize", pw: window.SG_API_PW || "" }, payload)) })
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data || !data.ok) { showErr((data && data.error) || "정리에 실패했어요. 잠시 후 다시 시도해주세요."); return; }
@@ -414,7 +414,7 @@
     var ep = endpoint();
     byId("viErr").hidden = true;
     if (!ep) { showErr("구글시트 연동(endpoint)이 설정되지 않았어요. js/config.js 확인 후 이용해주세요."); return; }
-    fetch(ep, { method: "POST", body: JSON.stringify(Object.assign({ type: "summarizeAudio" }, payload)) })
+    fetch(ep, { method: "POST", body: JSON.stringify(Object.assign({ type: "summarizeAudio", pw: window.SG_API_PW || "" }, payload)) })
       .then(function (res) { return res.json(); })
       .then(function (data) {
         if (!data || !data.ok) { showErr((data && data.error) || "정리에 실패했어요. 잠시 후 다시 시도해주세요."); return; }

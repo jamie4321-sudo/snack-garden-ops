@@ -76,7 +76,7 @@
       ? { type: "drivehub", action: "delete", id: e.id }
       : Object.assign({ type: "drivehub", action: action }, serialize(e));
     try {
-      fetch(endpoint(), { method: "POST", body: JSON.stringify(body) })
+      fetch(endpoint(), { method: "POST", body: JSON.stringify(Object.assign({ pw: window.SG_API_PW || "" }, body)) })
         .catch(function (err) { console.warn("[드라이브HUB 시트 저장 실패]", err); });
     } catch (err) { console.warn("[드라이브HUB 시트 저장 예외]", err); }
   }

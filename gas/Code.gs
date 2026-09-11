@@ -244,8 +244,25 @@ function upsertRowByHeader_(sh, id, valuesObj) {
 }
 
 /** 조회: GET ?action=crew | schedule | issues | all */
+// ---------- API 인증 : 로그인 비밀번호 없이는 어떤 액션도 응답하지 않는다 ----------
+// URL만 알아도 데이터를 그대로 받아갈 수 있던 문제를 막기 위한 서버 쪽 검증.
+// pwHash 는 config.js 의 auth.pwHash 와 항상 같은 값으로 유지할 것(비밀번호를 바꾸면 둘 다 갱신).
+var API_PW_HASH = "bba155c5f227c6e52a8b2707a13e817137cbac50806b4822f99bbf0778c3f8fd"; // 4231
+
+function sha256Hex_(str) {
+  var raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, str, Utilities.Charset.UTF_8);
+  return raw.map(function (b) {
+    var v = (b < 0 ? b + 256 : b).toString(16);
+    return v.length === 1 ? "0" + v : v;
+  }).join("");
+}
+function checkAuth_(pw) {
+  return !!pw && sha256Hex_(pw) === API_PW_HASH;
+}
+
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || "all";
+  if (!checkAuth_(e && e.parameter && e.parameter.pw)) return json_({ ok: false, error: "unauthorized" });
   if (action === "crew")     return json_(rows_("crew", CREW_FIELDS));
   if (action === "schedule") return json_(mapSchedule_(rows_("schedule", SCH_FIELDS)));
   if (action === "issues")   return json_(rows_("issues", ISSUE_FIELDS));
@@ -522,6 +539,7 @@ function fmtTime_(v) {
 function doPost(e) {
   var data = {};
   try { data = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: "bad json" }); }
+  if (!checkAuth_(data.pw)) return json_({ ok: false, error: "unauthorized" });
   var action = data.action || "add";
 
   if (data.type === "crew")     return handleCrew_(action, data);

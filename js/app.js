@@ -107,6 +107,10 @@
   function endpoint() { return (window.CONFIG && window.CONFIG.endpoint || "").trim(); }
   function isLive() { return !!endpoint(); }
 
+  /** GAS 호출 인증: URL엔 pw 파라미터로, POST 바디엔 pw 필드로 실어 보낸다(HTTPS로 암호화 전송, 서버가 해시로 검증). */
+  function withPw_(url) { return url + "&pw=" + encodeURIComponent(API_PW); }
+  function withPwBody_(payload) { return Object.assign({ pw: API_PW }, payload); }
+
   function toArr(v) {
     if (Array.isArray(v)) return v;
     return String(v || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
@@ -470,7 +474,7 @@
   function loadData() {
     var ep = endpoint();
     if (!ep) return Promise.resolve(false);
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=all&_ts=" + Date.now();
+    var url = withPw_(ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=all&_ts=" + Date.now());
     return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (d) { applyAllData(d); saveCacheAll(d); return true; })
@@ -486,7 +490,7 @@
   function saveToSheet(payload) {
     var ep = endpoint();
     if (!ep) return Promise.resolve();
-    return fetch(ep, { method: "POST", body: JSON.stringify(payload) })
+    return fetch(ep, { method: "POST", body: JSON.stringify(withPwBody_(payload)) })
       .catch(function (e) { console.warn("[시트 저장 실패]", e); });
   }
 
@@ -1485,8 +1489,8 @@
   function loadDocPhotos(docId) {
     var ep = endpoint();
     if (!ep) { wrDocPhotoLoaded[docId] = true; refreshDocPhotos(docId); return; }
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?")
-      + "action=reportphotos&docId=" + encodeURIComponent(docId) + "&_ts=" + Date.now();
+    var url = withPw_(ep + (ep.indexOf("?") > -1 ? "&" : "?")
+      + "action=reportphotos&docId=" + encodeURIComponent(docId) + "&_ts=" + Date.now());
     fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
       if (Array.isArray(d)) wrDocPhotos[docId] = d;
     }).catch(function () { /* 실패 시 빈 목록 */ })
@@ -1518,10 +1522,10 @@
       var reader = new FileReader();
       reader.onload = function () {
         var b64 = String(reader.result).split(",")[1] || "";
-        fetch(ep, { method: "POST", body: JSON.stringify({
+        fetch(ep, { method: "POST", body: JSON.stringify(withPwBody_({
           type: "reportPhoto", action: "add", docId: docId,
           dataBase64: b64, mimeType: f.type, name: f.name
-        }) }).then(function (r) { return r.json(); }).then(function (res) {
+        })) }).then(function (r) { return r.json(); }).then(function (res) {
           if (res && res.ok && res.photo) wrDocPhotos[docId] = [res.photo].concat(wrDocPhotos[docId] || []);
           else failed++;
         }).catch(function () { failed++; }).then(step);
@@ -1537,7 +1541,7 @@
     var ep = endpoint(); if (!ep) return;
     wrDocPhotos[docId] = (wrDocPhotos[docId] || []).filter(function (p) { return String(p.id) !== String(id); });
     refreshDocPhotos(docId);
-    fetch(ep, { method: "POST", body: JSON.stringify({ type: "reportPhoto", action: "delete", id: id }) })
+    fetch(ep, { method: "POST", body: JSON.stringify(withPwBody_({ type: "reportPhoto", action: "delete", id: id })) })
       .catch(function () { /* 화면은 이미 갱신됨 */ });
   }
 
@@ -1581,7 +1585,7 @@
     if (wrDriveLoaded) return;
     var ep = endpoint(); if (!ep) return;   // 데모 모드는 폴백 데이터 사용
     wrDriveLoaded = true;
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=drivefolders&_ts=" + Date.now();
+    var url = withPw_(ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=drivefolders&_ts=" + Date.now());
     fetch(url, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (d) {
       if (Array.isArray(d)) {   // 신규 GAS 배포됨 → 라이브 폴더로 교체
         window.DRIVE_FOLDERS = d;
@@ -4704,7 +4708,7 @@
     if (window.JOURNAL) return Promise.resolve(window.JOURNAL);
     var ep = endpoint();
     if (!ep) { window.JOURNAL = { tabs: [] }; return Promise.resolve(window.JOURNAL); }
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=journal&_ts=" + Date.now();
+    var url = withPw_(ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=journal&_ts=" + Date.now());
     return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (d) { window.JOURNAL = (d && d.tabs) ? d : { tabs: [] }; return window.JOURNAL; })
@@ -5685,7 +5689,7 @@
     if (window.KPI_PROGRESS) return Promise.resolve(window.KPI_PROGRESS);
     var ep = endpoint();
     if (!ep) { window.KPI_PROGRESS = {}; return Promise.resolve(window.KPI_PROGRESS); }
-    var url = ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=kpi&_ts=" + Date.now();
+    var url = withPw_(ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=kpi&_ts=" + Date.now());
     return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (d) { window.KPI_PROGRESS = d || {}; return window.KPI_PROGRESS; })
@@ -8333,17 +8337,29 @@
     });
   }
 
-  function unlock(remember) {
+  /** GAS 호출마다 함께 보내는 관리자 비밀번호(평문, HTTPS로 전송) — 서버(GAS)가 해시로 검증한다.
+   *  로그인 시에만 메모리에 채워지고, 로그인 유지 체크 시에만 브라우저(local/sessionStorage)에 남는다. */
+  var API_PW = "";
+
+  function unlock(remember, pw) {
+    API_PW = pw || "";
+    window.SG_API_PW = API_PW; // 드라이브HUB·업무프로세스HUB·음성면담 등 다른 모듈에서도 GAS 호출 시 사용
     try {
-      if (remember) localStorage.setItem("sg-auth", "ok");
-      else { localStorage.removeItem("sg-auth"); sessionStorage.setItem("sg-auth", "ok"); }
+      if (remember) { localStorage.setItem("sg-auth", "ok"); localStorage.setItem("sg-auth-pw", API_PW); }
+      else {
+        localStorage.removeItem("sg-auth"); localStorage.removeItem("sg-auth-pw");
+        sessionStorage.setItem("sg-auth", "ok"); sessionStorage.setItem("sg-auth-pw", API_PW);
+      }
     } catch (e) {}
     document.documentElement.setAttribute("data-authed", "1");
     boot();
   }
 
   function logout() {
-    try { localStorage.removeItem("sg-auth"); sessionStorage.removeItem("sg-auth"); } catch (e) {}
+    try {
+      localStorage.removeItem("sg-auth"); localStorage.removeItem("sg-auth-pw");
+      sessionStorage.removeItem("sg-auth"); sessionStorage.removeItem("sg-auth-pw");
+    } catch (e) {}
     location.reload();
   }
 
@@ -8373,7 +8389,7 @@
       Promise.all([sha256Hex(id.toLowerCase()), sha256Hex(pw)]).then(function (h) {
         btn.disabled = false;
         if (h[0] === cfg.idHash && h[1] === cfg.pwHash) {
-          unlock(remember ? remember.checked : true);
+          unlock(remember ? remember.checked : true, pw);
         } else {
           err.hidden = false;
           shake();
@@ -8397,6 +8413,8 @@
 
   wireLogout();
   if (alreadyAuthed) {
+    try { API_PW = localStorage.getItem("sg-auth-pw") || sessionStorage.getItem("sg-auth-pw") || ""; } catch (e) {}
+    window.SG_API_PW = API_PW;
     document.documentElement.setAttribute("data-authed", "1");
     boot();
   } else {

@@ -57,12 +57,15 @@ var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueD
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
 // 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
 // driveUrl : 저장 시 생성해 드라이브에 보관한 PDF 링크(서버에서 채움).
-var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","customerBizNo","bankName","accountNo","accountHolder","phone","email","items","shipping","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
+// vatExempt : "Y"="부가세 제외(면세)로 계산" 체크, ""=기본(부가세 10% 적용).
+var STATEMENT_FIELDS = ["id","docNo","billDate","dueDate","customerName","contactName","customerBizNo","bankName","accountNo","accountHolder","phone","email","items","shipping","vatExempt","supplyAmount","vat","total","memo","status","createdAt","driveUrl"];
 // 견적서 : 거래명세서와 동일 양식. items 각 품목 = {name,spec,unit,price,qty}. repName/repPhone/repEmail = 발행처 담당자.
-var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","customerBizNo","repName","repPhone","repEmail","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
+var QUOTE_FIELDS = ["id","docNo","quoteDate","validUntil","customerName","contactName","customerBizNo","repName","repPhone","repEmail","items","shipping","vatExempt","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
 // 청구서 : 견적서 + 입금기한/입금계좌 + 수신 연락처·회계담당·청구문구. 대표자 인감은 발행처(회사) 정보에서 관리.
-var INVOICE_FIELDS = ["id","docNo","invoiceDate","dueDate","customerName","contactName","customerBizNo","customerPhone","customerEmail","repName","repPhone","repEmail","bankName","accountNo","accountHolder","accountingName","accountingEmail","purpose","items","shipping","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
+var INVOICE_FIELDS = ["id","docNo","invoiceDate","dueDate","customerName","contactName","customerBizNo","customerPhone","customerEmail","repName","repPhone","repEmail","bankName","accountNo","accountHolder","accountingName","accountingEmail","purpose","items","shipping","vatExempt","supplyAmount","vat","total","notes","status","createdAt","driveUrl"];
 var PARTNER_FIELDS = ["id","name","contact","bizNo","ceo","addr"];
+// 크루 민감정보(1인 1행) : 건강/의료·응급연락처·장애 관련·법적행정+기타. guardianDesignated="Y"|"".
+var SENSITIVE_FIELDS = ["id","crewId","conditions","medications","allergies","healthNotes","guardianName","guardianRelation","guardianPhone","disabilityType","disabilityGrade","welfareCardNo","assistiveDevices","guardianDesignated","legalDocLocation","otherNotes","updatedAt"];
 // 업무 프로세스 HUB(개인용) : 중첩 구조(단계·판단기준·보고·담당·자료·사례)는 JSON 문자열로 저장한다.
 //   tags = 태그 JSON 배열 · favorite = "Y"|"" · processSteps/decisionPoints/relatedResources/pastCases = JSON 배열 · reportRules/stakeholders = JSON 객체
 var PROCESS_FIELDS = ["id","title","category","subCategory","purpose","trigger","priority","tags","processSteps","decisionPoints","reportRules","stakeholders","relatedResources","pastCases","favorite","createdAt","updatedAt"];
@@ -254,6 +257,7 @@ function doGet(e) {
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
   if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
   if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
+  if (action === "sensitive")  return json_(rows_("sensitive", SENSITIVE_FIELDS));
   if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
   if (action === "quotes")     return json_(mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]));
   if (action === "invoices")   return json_(mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]));
@@ -277,6 +281,7 @@ function doGet(e) {
     education: mapEducation_(rows_("education", EDUCATION_FIELDS)),
     hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]),
     partners: rows_("partners", PARTNER_FIELDS),
+    sensitive: rows_("sensitive", SENSITIVE_FIELDS),
     statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]),
     quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]),
     invoices: mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]),
@@ -530,6 +535,7 @@ function doPost(e) {
   if (data.type === "education") return handleEducation_(action, data);
   if (data.type === "hrchange") return handleHrChange_(action, data);
   if (data.type === "partner")  return handlePartner_(action, data);
+  if (data.type === "sensitive") return handleSensitive_(action, data);
   if (data.type === "statement") return handleStatement_(action, data);
   if (data.type === "quote")    return handleQuote_(action, data);
   if (data.type === "invoice")  return handleInvoice_(action, data);
@@ -777,6 +783,38 @@ function handlePartner_(action, data) {
   return json_({ ok: false, error: "unknown action" });
 }
 
+/* ---------- 크루 민감정보(sensitive) : 1인 1행, 건강/응급연락처/장애/법적행정+기타 ---------- */
+function sensitiveValuesObj_(data) {
+  return {
+    id: data.id, crewId: data.crewId || "",
+    conditions: data.conditions || "", medications: data.medications || "",
+    allergies: data.allergies || "", healthNotes: data.healthNotes || "",
+    guardianName: data.guardianName || "", guardianRelation: data.guardianRelation || "", guardianPhone: data.guardianPhone || "",
+    disabilityType: data.disabilityType || "", disabilityGrade: data.disabilityGrade || "",
+    welfareCardNo: data.welfareCardNo || "", assistiveDevices: data.assistiveDevices || "",
+    guardianDesignated: (data.guardianDesignated === true || data.guardianDesignated === "Y") ? "Y" : "",
+    legalDocLocation: data.legalDocLocation || "", otherNotes: data.otherNotes || "",
+    updatedAt: data.updatedAt || ""
+  };
+}
+
+function handleSensitive_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("sensitive")) return sbHandle_("sensitive", action, data, sensitiveValuesObj_);
+  var sh = sheet_("sensitive", SENSITIVE_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, sensitiveValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
 function statementValuesObj_(data) {
   return {
     id: data.id, docNo: data.docNo || "", billDate: data.billDate || "", dueDate: data.dueDate || "",
@@ -785,6 +823,7 @@ function statementValuesObj_(data) {
     phone: data.phone || "", email: data.email || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
     shipping: data.shipping || 0,
+    vatExempt: (data.vatExempt === true || data.vatExempt === "Y") ? "Y" : "",
     supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
     memo: data.memo || "", status: data.status || "작성", createdAt: data.createdAt || "",
     driveUrl: data.driveUrl || ""
@@ -828,6 +867,7 @@ function quoteValuesObj_(data) {
     repName: data.repName || "", repPhone: data.repPhone || "", repEmail: data.repEmail || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
     shipping: data.shipping || 0,
+    vatExempt: (data.vatExempt === true || data.vatExempt === "Y") ? "Y" : "",
     supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
     notes: data.notes || "", status: data.status || "작성", createdAt: data.createdAt || "",
     driveUrl: data.driveUrl || ""
@@ -864,6 +904,7 @@ function invoiceValuesObj_(data) {
     purpose: data.purpose || "",
     items: (typeof data.items === "string") ? data.items : JSON.stringify(data.items || []),
     shipping: data.shipping || 0,
+    vatExempt: (data.vatExempt === true || data.vatExempt === "Y") ? "Y" : "",
     supplyAmount: data.supplyAmount || 0, vat: data.vat || 0, total: data.total || 0,
     notes: data.notes || "", status: data.status || "작성", createdAt: data.createdAt || "",
     driveUrl: data.driveUrl || ""
@@ -1147,12 +1188,13 @@ function saveStatementPdf_(data) {
     + "\n입금계좌 : " + [data.bankName, data.accountNo, data.accountHolder].filter(function (x) { return x; }).join(" / "));
   meta.setFontSize(10);
 
-  // 품목 표
+  // 품목 표 (vatExempt 면 부가세 제외(면세)로 계산 — 세액 0)
+  var noVat = (data.vatExempt === true || data.vatExempt === "Y");
   var rows = [["품목", "단가", "수량", "공급가액", "세액", "합계"]];
   var tS = 0, tV = 0, tT = 0;
   items.forEach(function (it) {
     var supply = Math.round((+it.price || 0) * (+it.qty || 0));
-    var vat = Math.round(supply * 0.1);
+    var vat = noVat ? 0 : Math.round(supply * 0.1);
     var total = supply + vat;
     tS += supply; tV += vat; tT += total;
     rows.push([String(it.name || ""), won_(it.price), String(+it.qty || 0), won_(supply), won_(vat), won_(total)]);
@@ -1160,7 +1202,7 @@ function saveStatementPdf_(data) {
   // 배송비 (부가세 별도)
   var ship = +data.shipping || 0;
   if (ship > 0) {
-    var shipVat = Math.round(ship * 0.1);
+    var shipVat = noVat ? 0 : Math.round(ship * 0.1);
     tS += ship; tV += shipVat; tT += ship + shipVat;
     rows.push(["배송비", "", "", won_(ship), won_(shipVat), won_(ship + shipVat)]);
   }

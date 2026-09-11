@@ -187,6 +187,24 @@
     };
   }
 
+  /* ---------- 크루 민감정보(sensitive) 정규화 : 1인 1행 ---------- */
+  function normSensitiveInfo(r) {
+    return {
+      id: r.id || "", crewId: r.crewId || "",
+      conditions: r.conditions || "", medications: r.medications || "",
+      allergies: r.allergies || "", healthNotes: r.healthNotes || "",
+      guardianName: r.guardianName || "", guardianRelation: r.guardianRelation || "", guardianPhone: r.guardianPhone || "",
+      disabilityType: r.disabilityType || "", disabilityGrade: r.disabilityGrade || "",
+      welfareCardNo: r.welfareCardNo || "", assistiveDevices: r.assistiveDevices || "",
+      guardianDesignated: (r.guardianDesignated === true || r.guardianDesignated === "Y"),
+      legalDocLocation: r.legalDocLocation || "", otherNotes: r.otherNotes || "",
+      updatedAt: r.updatedAt || "",
+    };
+  }
+  function findSensitiveByCrew(crewId) {
+    return (window.SENSITIVE_INFO || []).filter(function (r) { return String(r.crewId) === String(crewId); })[0] || null;
+  }
+
   /** items 는 시트에서 JSON 문자열로 내려올 수 있어 배열로 파싱 */
   function parseItems_(v) {
     if (Array.isArray(v)) return v;
@@ -198,7 +216,8 @@
       return { name: it.name || "", price: +it.price || 0, qty: +it.qty || 0 };
     });
     var shipping = +r.shipping || 0;
-    var g = stmtGrand(items, shipping);
+    var vatExempt = (r.vatExempt === true || r.vatExempt === "Y");
+    var g = stmtGrand(items, shipping, vatExempt);
     return {
       id: r.id || "", docNo: r.docNo || "",
       billDate: fmtDay(r.billDate || r.date), dueDate: fmtDay(r.dueDate),
@@ -206,6 +225,7 @@
       bankName: r.bankName || "", accountNo: r.accountNo || "", accountHolder: r.accountHolder || "",
       phone: r.phone || "", email: r.email || "",
       items: items, shipping: shipping,
+      vatExempt: vatExempt,
       supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : g.supply,
       vat: r.vat != null && r.vat !== "" ? +r.vat : g.vat,
       total: r.total != null && r.total !== "" ? +r.total : g.total,
@@ -225,13 +245,15 @@
       };
     });
     var shipping = +r.shipping || 0;
-    var g = stmtGrand(items, shipping);
+    var vatExempt = (r.vatExempt === true || r.vatExempt === "Y");
+    var g = stmtGrand(items, shipping, vatExempt);
     return {
       id: r.id || "", docNo: r.docNo || "",
       quoteDate: fmtDay(r.quoteDate || r.date), validUntil: fmtDay(r.validUntil),
       customerName: r.customerName || "", contactName: r.contactName || "", customerBizNo: r.customerBizNo || "",
       repName: r.repName || "", repPhone: r.repPhone || "", repEmail: r.repEmail || "",
       items: items, shipping: shipping,
+      vatExempt: vatExempt,
       supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : g.supply,
       vat: r.vat != null && r.vat !== "" ? +r.vat : g.vat,
       total: r.total != null && r.total !== "" ? +r.total : g.total,
@@ -251,7 +273,8 @@
       };
     });
     var shipping = +r.shipping || 0;
-    var g = stmtGrand(items, shipping);
+    var vatExempt = (r.vatExempt === true || r.vatExempt === "Y");
+    var g = stmtGrand(items, shipping, vatExempt);
     return {
       id: r.id || "", docNo: r.docNo || "",
       invoiceDate: fmtDay(r.invoiceDate || r.date), dueDate: fmtDay(r.dueDate),
@@ -262,6 +285,7 @@
       accountingName: r.accountingName || "", accountingEmail: r.accountingEmail || "",
       purpose: r.purpose != null ? r.purpose : "상기와 같이 위탁운영대금 지급을 정히 청구합니다.",
       items: items, shipping: shipping,
+      vatExempt: vatExempt,
       supplyAmount: r.supplyAmount != null && r.supplyAmount !== "" ? +r.supplyAmount : g.supply,
       vat: r.vat != null && r.vat !== "" ? +r.vat : g.vat,
       total: r.total != null && r.total !== "" ? +r.total : g.total,
@@ -297,24 +321,25 @@
   }
 
   /* ---------- 거래명세서 계산 (공급자=링키지랩, 단가 = 부가세 별도) ----------
-     공급가액 = round(단가 × 수량) / 세액 = round(공급가액 × 0.1) / 합계 = 공급가액 + 세액 */
-  function stmtLine(it) {
+     공급가액 = round(단가 × 수량) / 세액 = round(공급가액 × 0.1) / 합계 = 공급가액 + 세액
+     noVat 가 true 면 부가세 제외(면세)로 계산 — 세액 0, 합계 = 공급가액 */
+  function stmtLine(it, noVat) {
     var supply = Math.round((+it.price || 0) * (+it.qty || 0));
-    var vat = Math.round(supply * 0.1);
+    var vat = noVat ? 0 : Math.round(supply * 0.1);
     return { supply: supply, vat: vat, total: supply + vat };
   }
-  function stmtTotals(items) {
+  function stmtTotals(items, noVat) {
     return (items || []).reduce(function (acc, it) {
-      var l = stmtLine(it);
+      var l = stmtLine(it, noVat);
       acc.supply += l.supply; acc.vat += l.vat; acc.total += l.total;
       return acc;
     }, { supply: 0, vat: 0, total: 0 });
   }
   /** 품목 합계 + 배송비(부가세 별도)를 합산한 최종 합계 */
-  function stmtGrand(items, shipping) {
-    var t = stmtTotals(items);
+  function stmtGrand(items, shipping, noVat) {
+    var t = stmtTotals(items, noVat);
     var ship = +shipping || 0;
-    var shipVat = Math.round(ship * 0.1);
+    var shipVat = noVat ? 0 : Math.round(ship * 0.1);
     return {
       itemsSupply: t.supply, itemsVat: t.vat,
       shipping: ship, shipVat: shipVat,
@@ -432,6 +457,7 @@
     if (d.notes) window.NOTES = d.notes.map(normNote);
     if (d.hrChanges) window.HR_CHANGES = d.hrChanges.map(normHrChange);
     if (d.partners) window.PARTNERS = d.partners.map(normPartner);
+    if (d.sensitive) window.SENSITIVE_INFO = d.sensitive.map(normSensitiveInfo);
     if (d.statements) window.STATEMENTS = d.statements.map(normStatement);
     if (d.quotes) window.QUOTES = d.quotes.map(normQuote);
     if (d.invoices) window.INVOICES = d.invoices.map(normInvoice);
@@ -1640,10 +1666,7 @@
       html += '<div class="wr-tl__month"><div class="wr-tl__mark"></div>'
         + '<div class="wr-tl__head">' + (+m.slice(5, 7)) + '월 <span class="chip-mono">' + items.length + '건</span></div>'
         + '<ul class="wr-tl__list">'
-        + items.map(function (rp) {
-            var link = rp.link ? ' <a class="link-chip" href="' + esc(rp.link) + '" target="_blank" rel="noopener">🔗</a>' : "";
-            return '<li><span class="wr-tl__date">' + esc((rp.reportedAt || "").slice(5)) + '</span><span class="issue-text">' + esc(rp.text) + '</span>' + link + '</li>';
-          }).join("")
+        + items.map(workReportRow).join("")
         + '</ul></div>';
     });
     return html + '</div>';
@@ -2409,6 +2432,7 @@
     if (tab === "leave") return crewLeaveBoard(c);
     if (tab === "change") return crewHrChangeBoard(c);
     if (tab === "ai") return crewSummaryCard(c);
+    if (tab === "sensitive") return crewSensitivePanel(c);
     if (tab !== "basic") {
       return '<div class="placeholder placeholder--sm"><p class="muted">이 탭은 준비 중입니다.</p></div>';
     }
@@ -3483,6 +3507,126 @@
       + '<th>날짜</th><th>유형</th><th>내용</th><th>사유</th><th>기록자</th>'
       + '</tr></thead><tbody>' + body + '</tbody></table></div>'
       + '</div>';
+  }
+
+  /* ---------- 크루 상세 · 민감정보 탭 (건강/응급연락처/장애/법적행정+기타) ----------
+     세션 동안만 유지되는 2차 게이트(관리자 비밀번호 재입력) 통과 후 열람/수정 가능. */
+  var SENSITIVE_SESSION_KEY = "sg-crew-sensitive-ok";
+  function sensitiveIsUnlocked() {
+    try { return sessionStorage.getItem(SENSITIVE_SESSION_KEY) === "ok"; } catch (e) { return false; }
+  }
+  function sensitiveSetUnlocked(v) {
+    try { v ? sessionStorage.setItem(SENSITIVE_SESSION_KEY, "ok") : sessionStorage.removeItem(SENSITIVE_SESSION_KEY); } catch (e) {}
+  }
+  // 우선순위: CONFIG.sensitive.pwHash → 없으면 로그인 비밀번호(CONFIG.auth.pwHash)
+  function sensitiveGateHash() {
+    var cfg = window.CONFIG || {};
+    return (cfg.sensitive && cfg.sensitive.pwHash) || (cfg.auth && cfg.auth.pwHash) || "";
+  }
+  function submitSensitiveGate() {
+    var inp = document.getElementById("sensiGatePw");
+    var err = document.getElementById("sensiGateErr");
+    if (!inp) return;
+    var pw = inp.value || "";
+    var target = sensitiveGateHash();
+    if (err) err.hidden = true;
+    if (!pw || !target) { if (err) err.hidden = false; return; }
+    sha256Hex(pw).then(function (h) {
+      if (h === target) { sensitiveSetUnlocked(true); renderCrew(); }
+      else { if (err) err.hidden = false; inp.value = ""; inp.focus(); }
+    }).catch(function () { if (err) err.hidden = false; });
+  }
+
+  function crewSensitivePanel(c) {
+    if (!sensitiveIsUnlocked()) {
+      return '<div class="board sensi-gate">'
+        + '<p class="eyebrow">Secured</p>'
+        + '<h3 class="board__title">🔒 민감정보</h3>'
+        + '<p class="muted">건강·장애·응급연락처 등 민감한 개인정보입니다. 열람하려면 관리자 비밀번호를 한 번 더 입력하세요.</p>'
+        + '<div class="stmt-form-grid" style="margin-top:12px;max-width:340px">'
+          + '<label class="stmt-field stmt-field--wide"><span>관리자 비밀번호</span><input class="stmt-in" type="password" id="sensiGatePw" placeholder="비밀번호" autocomplete="off"></label>'
+        + '</div>'
+        + '<p class="sensi-gate__err" id="sensiGateErr" hidden style="color:var(--red);font-size:12.5px;margin:2px 0 0">비밀번호가 올바르지 않습니다.</p>'
+        + '<button type="button" class="btn btn--primary" id="sensiGateBtn" style="margin-top:12px">잠금 해제</button>'
+        + '</div>';
+    }
+
+    var s = findSensitiveByCrew(c.id) || {};
+    var html = '<div class="board">'
+      + '<div class="board__head"><h3 class="board__title">민감정보</h3>'
+        + '<button type="button" class="btn btn--sm" id="sensiLockBtn">🔒 잠그기</button></div>'
+      + '<div class="sensi-body">'
+      + '<p class="muted" style="margin:0 0 14px">건강·응급연락처·장애·법적 정보입니다. 근거 있는 사실만 신중하게 기록해주세요.</p>';
+
+    html += '<div class="stmt-section-label">건강 / 의료</div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>지병</span><input class="stmt-in" id="sensiConditions" value="' + esc(s.conditions || "") + '" placeholder="예: 당뇨, 고혈압"></label>'
+      + '<label class="stmt-field"><span>복용약물</span><input class="stmt-in" id="sensiMedications" value="' + esc(s.medications || "") + '" placeholder="약물명 · 복용 시간대"></label>'
+      + '<label class="stmt-field"><span>알레르기</span><input class="stmt-in" id="sensiAllergies" value="' + esc(s.allergies || "") + '" placeholder="예: 갑각류, 페니실린"></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>응급 시 유의사항</span><input class="stmt-in" id="sensiHealthNotes" value="' + esc(s.healthNotes || "") + '" placeholder="발작 대응법, 금지 행동 등"></label>'
+      + '</div>';
+
+    html += '<div class="stmt-section-label">응급연락처</div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>보호자/후견인 성함</span><input class="stmt-in" id="sensiGuardianName" value="' + esc(s.guardianName || "") + '"></label>'
+      + '<label class="stmt-field"><span>관계</span><input class="stmt-in" id="sensiGuardianRelation" value="' + esc(s.guardianRelation || "") + '" placeholder="예: 모, 배우자"></label>'
+      + '<label class="stmt-field"><span>연락처</span><input class="stmt-in" id="sensiGuardianPhone" value="' + esc(s.guardianPhone || "") + '" placeholder="010-0000-0000"></label>'
+      + '</div>';
+
+    html += '<div class="stmt-section-label">장애 관련</div>';
+    html += '<div class="stmt-form-grid">'
+      + '<label class="stmt-field"><span>장애유형</span><input class="stmt-in" id="sensiDisabilityType" value="' + esc(s.disabilityType || "") + '"></label>'
+      + '<label class="stmt-field"><span>장애등급</span><input class="stmt-in" id="sensiDisabilityGrade" value="' + esc(s.disabilityGrade || "") + '"></label>'
+      + '<label class="stmt-field"><span>복지카드번호</span><input class="stmt-in" id="sensiWelfareCardNo" value="' + esc(s.welfareCardNo || "") + '"></label>'
+      + '<label class="stmt-field"><span>보조공학기기</span><input class="stmt-in" id="sensiAssistiveDevices" value="' + esc(s.assistiveDevices || "") + '" placeholder="보청기, 휠체어 등"></label>'
+      + '</div>';
+
+    html += '<div class="stmt-section-label">법적/행정 · 기타</div>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="sensiGuardianDesignated"' + (s.guardianDesignated ? ' checked' : '') + '> 법정 후견인 지정됨</label>';
+    html += '<div class="stmt-form-grid" style="margin-top:10px">'
+      + '<label class="stmt-field stmt-field--wide"><span>관련 서류 보관 위치</span><input class="stmt-in" id="sensiLegalDocLocation" value="' + esc(s.legalDocLocation || "") + '" placeholder="예: 인사팀 캐비닛 3번"></label>'
+      + '<label class="stmt-field stmt-field--wide"><span>기타 민감 이슈</span><textarea class="stmt-in" id="sensiOtherNotes" rows="3" placeholder="극히 민감한 사안은 신중히 기록">' + esc(s.otherNotes || "") + '</textarea></label>'
+      + '</div>';
+
+    html += '<div style="margin-top:16px;display:flex;justify-content:flex-end;align-items:center;gap:8px">'
+      + (s.updatedAt ? '<span class="muted" style="font-size:12px;margin-right:auto">마지막 수정 ' + esc(s.updatedAt) + '</span>' : '')
+      + '<button type="button" class="btn btn--primary" id="sensiSaveBtn">저장</button>'
+      + '</div>';
+
+    html += '</div></div>';
+    return html;
+  }
+
+  function saveSensitiveInfo(crewId) {
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; };
+    var existing = findSensitiveByCrew(crewId);
+    var guardianEl = document.getElementById("sensiGuardianDesignated");
+    var rec = {
+      id: existing ? existing.id : newId("sens"), crewId: crewId,
+      conditions: g("sensiConditions"), medications: g("sensiMedications"),
+      allergies: g("sensiAllergies"), healthNotes: g("sensiHealthNotes"),
+      guardianName: g("sensiGuardianName"), guardianRelation: g("sensiGuardianRelation"), guardianPhone: g("sensiGuardianPhone"),
+      disabilityType: g("sensiDisabilityType"), disabilityGrade: g("sensiDisabilityGrade"),
+      welfareCardNo: g("sensiWelfareCardNo"), assistiveDevices: g("sensiAssistiveDevices"),
+      guardianDesignated: !!(guardianEl && guardianEl.checked),
+      legalDocLocation: g("sensiLegalDocLocation"), otherNotes: g("sensiOtherNotes"),
+      updatedAt: TODAY,
+    };
+    var rn = normSensitiveInfo(rec);
+    if (!window.SENSITIVE_INFO) window.SENSITIVE_INFO = [];
+    var idx = indexById(window.SENSITIVE_INFO, rn.id);
+    if (idx > -1) window.SENSITIVE_INFO[idx] = rn; else window.SENSITIVE_INFO.push(rn);
+
+    saveToSheet({
+      type: "sensitive", action: (existing ? "update" : "add"), id: rn.id, crewId: rn.crewId,
+      conditions: rn.conditions, medications: rn.medications, allergies: rn.allergies, healthNotes: rn.healthNotes,
+      guardianName: rn.guardianName, guardianRelation: rn.guardianRelation, guardianPhone: rn.guardianPhone,
+      disabilityType: rn.disabilityType, disabilityGrade: rn.disabilityGrade,
+      welfareCardNo: rn.welfareCardNo, assistiveDevices: rn.assistiveDevices,
+      guardianDesignated: rn.guardianDesignated ? "Y" : "",
+      legalDocLocation: rn.legalDocLocation, otherNotes: rn.otherNotes, updatedAt: rn.updatedAt,
+    });
+    renderCrew();
   }
 
   function renderHrChange() {
@@ -5926,7 +6070,7 @@
         bankName: extra.bankName || "", accountNo: extra.accountNo || "",
         accountHolder: extra.accountHolder || company().name,
         phone: extra.phone || "", email: extra.email || "",
-        items: [{ name: "", price: 0, qty: 0 }], shipping: 0,
+        items: [{ name: "", price: 0, qty: 0 }], shipping: 0, vatExempt: false,
         memo: "", status: "작성",
       };
     }
@@ -5935,8 +6079,8 @@
     renderStatement();
   }
 
-  function stmtItemRowHTML(it, i) {
-    var l = stmtLine(it);
+  function stmtItemRowHTML(it, i, noVat) {
+    var l = stmtLine(it, noVat);
     return '<tr data-i="' + i + '">'
       + '<td class="stmt-idx">' + (i + 1) + '</td>'
       + '<td><input class="stmt-in" data-f="name" data-i="' + i + '" value="' + esc(it.name || "") + '" placeholder="품목명"></td>'
@@ -5951,7 +6095,7 @@
 
   function renderStatementEditor() {
     var s = stmtDraft;
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     var partners = window.PARTNERS || [];
     var curCust = null;
     for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.customerName) { curCust = partners[pi]; break; } }
@@ -6005,11 +6149,12 @@
 
     // 품목 테이블
     html += '<div class="stmt-section-label">품목 <span class="stmt-hint">단가는 부가세 별도 금액</span></div>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="stmtVatExempt"' + (s.vatExempt ? ' checked' : '') + '> 부가세 제외(면세)로 계산 — 세액 0원, 합계 = 공급가액</label>';
     html += '<div class="table-wrap"><table class="crew-table stmt-item-table"><thead><tr>'
       + '<th class="stmt-idx">구분</th><th>품목</th><th class="num">단가</th><th class="num">수량</th>'
       + '<th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th></th>'
       + '</tr></thead><tbody id="stmtItemBody">'
-      + s.items.map(stmtItemRowHTML).join("")
+      + s.items.map(function (it, i) { return stmtItemRowHTML(it, i, s.vatExempt); }).join("")
       + '</tbody><tfoot>'
       + '<tr class="stmt-ship-row">'
         + '<td colspan="4">배송비 <span class="stmt-hint">부가세 별도</span></td>'
@@ -6076,6 +6221,13 @@
       recomputeStatementRow(-1);
     });
 
+    // 부가세 제외 토글 → 전체 재계산 (모든 행의 세액이 바뀌므로 재렌더)
+    stmtOn("#stmtVatExempt", "change", function () {
+      syncDraftMeta();
+      stmtDraft.vatExempt = this.checked;
+      renderStatementEditor();
+    });
+
     // 행 삭제
     stmtOnAll(".stmt-del-item", "click", function () {
       var i = +this.getAttribute("data-i");
@@ -6110,13 +6262,13 @@
     if (i >= 0) {
       var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
       if (row) {
-        var l = stmtLine(stmtDraft.items[i]);
+        var l = stmtLine(stmtDraft.items[i], stmtDraft.vatExempt);
         row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
         row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
         row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
       }
     }
-    var g = stmtGrand(stmtDraft.items, stmtDraft.shipping);
+    var g = stmtGrand(stmtDraft.items, stmtDraft.shipping, stmtDraft.vatExempt);
     if (stmtQ("#stmtShipVat")) stmtQ("#stmtShipVat").textContent = won(g.shipVat);
     if (stmtQ("#stmtShipTotal")) stmtQ("#stmtShipTotal").textContent = won(g.shipping + g.shipVat);
     if (stmtQ("#stmtTotSupply")) stmtQ("#stmtTotSupply").textContent = won(g.supply);
@@ -6132,7 +6284,7 @@
     if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
     s.items = validItems;
 
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     s.supplyAmount = g.supply; s.vat = g.vat; s.total = g.total;
     if (!s.id) s.id = newId("st");
     if (!s.createdAt) s.createdAt = s.billDate ? (s.billDate + "T00:00:00.000Z") : "";
@@ -6149,7 +6301,7 @@
       customerName: rec.customerName, contactName: rec.contactName, customerBizNo: rec.customerBizNo,
       bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
       phone: rec.phone, email: rec.email,
-      items: JSON.stringify(rec.items), shipping: rec.shipping,
+      items: JSON.stringify(rec.items), shipping: rec.shipping, vatExempt: rec.vatExempt ? "Y" : "",
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
       memo: rec.memo, status: rec.status, createdAt: rec.createdAt,
     }).then(function (res) {
@@ -6207,13 +6359,13 @@
   /** 거래명세서 레이아웃 (보기/인쇄 공용) — 링키지랩(공급자) 발행 양식 */
   function statementSheetHTML(s) {
     var co = company();
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     var rows = "";
     var maxRows = Math.max(s.items.length, 4); // 빈 줄 포함
     for (var i = 0; i < maxRows; i++) {
       var it = s.items[i];
       if (it) {
-        var l = stmtLine(it);
+        var l = stmtLine(it, s.vatExempt);
         rows += '<tr>'
           + '<td class="l">' + esc(it.name || "") + '</td>'
           + '<td class="r">' + won(it.price) + '</td>'
@@ -6273,7 +6425,7 @@
         + (g.shipping ? '<div class="stmt-sheet__trow"><span class="tk">품목 공급가액</span><span class="tv">' + won(g.itemsSupply) + '</span></div>'
             + '<div class="stmt-sheet__trow"><span class="tk">배송비</span><span class="tv">' + won(g.shipping) + '</span></div>' : '')
         + '<div class="stmt-sheet__trow"><span class="tk">총 공급가액</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
-        + '<div class="stmt-sheet__trow"><span class="tk">총 세액</span><span class="tv">' + won(s.vat) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">총 세액' + (s.vatExempt ? ' <span style="color:#888;font-weight:400">(면세)</span>' : '') + '</span><span class="tv">' + won(s.vat) + '</span></div>'
         + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">총 합계</span><span class="tv">' + won(s.total) + '</span></div>'
       + '</div>'
       // 비고
@@ -6313,7 +6465,7 @@
     var foot = [];
     if (s.bankName || s.accountNo) foot.push(["입금 계좌", [s.bankName, s.accountNo].filter(Boolean).join("  ") + (s.accountHolder ? "  (예금주 " + s.accountHolder + ")" : "")]);
     if (s.memo) foot.push(["메모", s.memo]);
-    var body = billExcelBody({ title: "거래명세서", meta: meta, items: s.items, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
+    var body = billExcelBody({ title: "거래명세서", meta: meta, items: s.items, vatExempt: s.vatExempt, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
     xlsDownload("거래명세서_" + safeName(s.docNo || s.billDate) + "_" + safeName(s.customerName) + ".xls", body);
   }
 
@@ -6431,7 +6583,7 @@
         id: "", docNo: genQuoteNo(), quoteDate: TODAY, validUntil: "",
         customerName: "", contactName: "", customerBizNo: "",
         repName: extra.repName || "", repPhone: extra.repPhone || "", repEmail: extra.repEmail || "",
-        items: [{ name: "", spec: "", unit: "", price: 0, qty: 0 }], shipping: 0,
+        items: [{ name: "", spec: "", unit: "", price: 0, qty: 0 }], shipping: 0, vatExempt: false,
         notes: "", status: "작성",
       };
     }
@@ -6440,8 +6592,8 @@
     renderQuote();
   }
 
-  function qItemRowHTML(it, i) {
-    var l = stmtLine(it);
+  function qItemRowHTML(it, i, noVat) {
+    var l = stmtLine(it, noVat);
     return '<tr data-i="' + i + '">'
       + '<td class="stmt-idx">' + (i + 1) + '</td>'
       + '<td><input class="stmt-in" data-f="name" data-i="' + i + '" value="' + esc(it.name || "") + '" placeholder="품목명"></td>'
@@ -6458,7 +6610,7 @@
 
   function renderQuoteEditor() {
     var s = qDraft;
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     var partners = window.PARTNERS || [];
     var curCust = null;
     for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.customerName) { curCust = partners[pi]; break; } }
@@ -6510,11 +6662,12 @@
 
     // 품목 테이블
     html += '<div class="stmt-section-label">품목 <span class="stmt-hint">단가는 부가세 별도 금액</span></div>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="qVatExempt"' + (s.vatExempt ? ' checked' : '') + '> 부가세 제외(면세)로 계산 — 세액 0원, 합계 = 공급가액</label>';
     html += '<div class="table-wrap"><table class="crew-table stmt-item-table"><thead><tr>'
       + '<th class="stmt-idx">구분</th><th>품목</th><th>규격</th><th>단위</th><th class="num">단가</th><th class="num">수량</th>'
       + '<th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th></th>'
       + '</tr></thead><tbody id="qItemBody">'
-      + s.items.map(qItemRowHTML).join("")
+      + s.items.map(function (it, i) { return qItemRowHTML(it, i, s.vatExempt); }).join("")
       + '</tbody><tfoot>'
       + '<tr class="stmt-ship-row">'
         + '<td colspan="6">배송비 <span class="stmt-hint">부가세 별도</span></td>'
@@ -6577,6 +6730,12 @@
       recomputeQuoteRow(-1);
     });
 
+    stmtOn("#qVatExempt", "change", function () {
+      syncQuoteMeta();
+      qDraft.vatExempt = this.checked;
+      renderQuoteEditor();
+    });
+
     stmtOnAll(".stmt-del-item", "click", function () {
       var i = +this.getAttribute("data-i");
       syncQuoteMeta();
@@ -6607,13 +6766,13 @@
     if (i >= 0) {
       var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
       if (row) {
-        var l = stmtLine(qDraft.items[i]);
+        var l = stmtLine(qDraft.items[i], qDraft.vatExempt);
         row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
         row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
         row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
       }
     }
-    var g = stmtGrand(qDraft.items, qDraft.shipping);
+    var g = stmtGrand(qDraft.items, qDraft.shipping, qDraft.vatExempt);
     if (stmtQ("#qShipVat")) stmtQ("#qShipVat").textContent = won(g.shipVat);
     if (stmtQ("#qShipTotal")) stmtQ("#qShipTotal").textContent = won(g.shipping + g.shipVat);
     if (stmtQ("#qTotSupply")) stmtQ("#qTotSupply").textContent = won(g.supply);
@@ -6629,7 +6788,7 @@
     if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
     s.items = validItems;
 
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     s.supplyAmount = g.supply; s.vat = g.vat; s.total = g.total;
     if (!s.id) s.id = newId("q");
     if (!s.createdAt) s.createdAt = s.quoteDate ? (s.quoteDate + "T00:00:00.000Z") : "";
@@ -6644,7 +6803,7 @@
       id: rec.id, docNo: rec.docNo, quoteDate: rec.quoteDate, validUntil: rec.validUntil,
       customerName: rec.customerName, contactName: rec.contactName, customerBizNo: rec.customerBizNo,
       repName: rec.repName, repPhone: rec.repPhone, repEmail: rec.repEmail,
-      items: JSON.stringify(rec.items), shipping: rec.shipping,
+      items: JSON.stringify(rec.items), shipping: rec.shipping, vatExempt: rec.vatExempt ? "Y" : "",
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
       notes: rec.notes, status: rec.status, createdAt: rec.createdAt,
     }).then(function (res) {
@@ -6681,13 +6840,13 @@
   /** 견적서 레이아웃 (보기/인쇄 공용) — 거래명세서와 동일 양식 */
   function quoteSheetHTML(s) {
     var co = company();
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     var rows = "";
     var maxRows = Math.max(s.items.length, 4);
     for (var i = 0; i < maxRows; i++) {
       var it = s.items[i];
       if (it) {
-        var l = stmtLine(it);
+        var l = stmtLine(it, s.vatExempt);
         rows += '<tr>'
           + '<td class="l">' + esc(it.name || "") + '</td>'
           + '<td class="l">' + esc(it.spec || "") + '</td>'
@@ -6739,7 +6898,7 @@
         + '</div>'
       + '</div>'
       // 안내 문구 + 한글 합계
-      + '<div class="stmt-sheet__mrow" style="margin:-14px 0 18px"><span class="mv">아래와 같이 견적합니다. &nbsp;&nbsp; <b>일금 ' + numToKorean(s.total) + '원정 (₩' + won(s.total) + ')</b> <span style="color:#888">· VAT 포함</span></span></div>'
+      + '<div class="stmt-sheet__mrow" style="margin:-14px 0 18px"><span class="mv">아래와 같이 견적합니다. &nbsp;&nbsp; <b>일금 ' + numToKorean(s.total) + '원정 (₩' + won(s.total) + ')</b> <span style="color:#888">· ' + (s.vatExempt ? '부가세 면세' : 'VAT 포함') + '</span></span></div>'
       // 품목 표
       + '<table class="stmt-sheet__items"><thead><tr>'
         + '<th class="l">품목</th><th class="l">규격</th><th class="r">단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th>'
@@ -6748,8 +6907,8 @@
       + '<div class="stmt-sheet__totals">'
         + (g.shipping ? '<div class="stmt-sheet__trow"><span class="tk">품목 공급가액</span><span class="tv">' + won(g.itemsSupply) + '</span></div>'
             + '<div class="stmt-sheet__trow"><span class="tk">배송비</span><span class="tv">' + won(g.shipping) + '</span></div>' : '')
-        + '<div class="stmt-sheet__trow"><span class="tk">공급가액 (VAT 별도)</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
-        + '<div class="stmt-sheet__trow"><span class="tk">부가세액</span><span class="tv">' + won(s.vat) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">공급가액' + (s.vatExempt ? '' : ' (VAT 별도)') + '</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">부가세액' + (s.vatExempt ? ' <span style="color:#888;font-weight:400">(면세)</span>' : '') + '</span><span class="tv">' + won(s.vat) + '</span></div>'
         + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">합계 금액</span><span class="tv">' + won(s.total) + '</span></div>'
       + '</div>'
       // 특이사항
@@ -6789,7 +6948,7 @@
     var foot = [];
     if (s.repName || s.repPhone || s.repEmail) foot.push(["담당자", [s.repName, s.repPhone, s.repEmail].filter(Boolean).join("  ")]);
     if (s.notes) foot.push(["특이사항", s.notes]);
-    var body = billExcelBody({ title: "견적서", meta: meta, items: s.items, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
+    var body = billExcelBody({ title: "견적서", meta: meta, items: s.items, vatExempt: s.vatExempt, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
     xlsDownload("견적서_" + safeName(s.docNo || s.quoteDate) + "_" + safeName(s.customerName) + ".xls", body);
   }
 
@@ -6913,7 +7072,7 @@
         bankName: extra.bankName || "", accountNo: extra.accountNo || "", accountHolder: extra.accountHolder || "",
         accountingName: extra.accountingName || "", accountingEmail: extra.accountingEmail || "",
         purpose: "상기와 같이 위탁운영대금 지급을 정히 청구합니다.",
-        items: [{ name: "", spec: "", unit: "", price: 0, qty: 0 }], shipping: 0,
+        items: [{ name: "", spec: "", unit: "", price: 0, qty: 0 }], shipping: 0, vatExempt: false,
         notes: "", status: "작성",
       };
     }
@@ -6922,8 +7081,8 @@
     renderInvoice();
   }
 
-  function invItemRowHTML(it, i) {
-    var l = stmtLine(it);
+  function invItemRowHTML(it, i, noVat) {
+    var l = stmtLine(it, noVat);
     return '<tr data-i="' + i + '">'
       + '<td class="stmt-idx">' + (i + 1) + '</td>'
       + '<td><input class="stmt-in" data-f="name" data-i="' + i + '" value="' + esc(it.name || "") + '" placeholder="품목명"></td>'
@@ -6940,7 +7099,7 @@
 
   function renderInvoiceEditor() {
     var s = invDraft;
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     var partners = window.PARTNERS || [];
     var curCust = null;
     for (var pi = 0; pi < partners.length; pi++) { if (partners[pi].name && partners[pi].name === s.customerName) { curCust = partners[pi]; break; } }
@@ -7004,11 +7163,12 @@
 
     // 품목 테이블
     html += '<div class="stmt-section-label">품목 <span class="stmt-hint">단가는 부가세 별도 금액</span></div>';
+    html += '<label class="stmt-partner-save"><input type="checkbox" id="invVatExempt"' + (s.vatExempt ? ' checked' : '') + '> 부가세 제외(면세)로 계산 — 세액 0원, 합계 = 공급가액</label>';
     html += '<div class="table-wrap"><table class="crew-table stmt-item-table"><thead><tr>'
       + '<th class="stmt-idx">구분</th><th>품목</th><th>규격</th><th>단위</th><th class="num">단가</th><th class="num">수량</th>'
       + '<th class="num">공급가액</th><th class="num">세액</th><th class="num">합계</th><th></th>'
       + '</tr></thead><tbody id="invItemBody">'
-      + s.items.map(invItemRowHTML).join("")
+      + s.items.map(function (it, i) { return invItemRowHTML(it, i, s.vatExempt); }).join("")
       + '</tbody><tfoot>'
       + '<tr class="stmt-ship-row">'
         + '<td colspan="6">배송비 <span class="stmt-hint">부가세 별도</span></td>'
@@ -7077,6 +7237,12 @@
       recomputeInvoiceRow(-1);
     });
 
+    stmtOn("#invVatExempt", "change", function () {
+      syncInvoiceMeta();
+      invDraft.vatExempt = this.checked;
+      renderInvoiceEditor();
+    });
+
     stmtOnAll(".stmt-del-item", "click", function () {
       var i = +this.getAttribute("data-i");
       syncInvoiceMeta();
@@ -7115,13 +7281,13 @@
     if (i >= 0) {
       var row = view.querySelector('.stmt-item-table tbody tr[data-i="' + i + '"]');
       if (row) {
-        var l = stmtLine(invDraft.items[i]);
+        var l = stmtLine(invDraft.items[i], invDraft.vatExempt);
         row.querySelector(".stmt-cell-supply").textContent = won(l.supply);
         row.querySelector(".stmt-cell-vat").textContent = won(l.vat);
         row.querySelector(".stmt-cell-total").innerHTML = "<b>" + won(l.total) + "</b>";
       }
     }
-    var g = stmtGrand(invDraft.items, invDraft.shipping);
+    var g = stmtGrand(invDraft.items, invDraft.shipping, invDraft.vatExempt);
     if (stmtQ("#invShipVat")) stmtQ("#invShipVat").textContent = won(g.shipVat);
     if (stmtQ("#invShipTotal")) stmtQ("#invShipTotal").textContent = won(g.shipping + g.shipVat);
     if (stmtQ("#invTotSupply")) stmtQ("#invTotSupply").textContent = won(g.supply);
@@ -7137,7 +7303,7 @@
     if (!validItems.length) { alert("품목을 1개 이상 입력하세요."); return; }
     s.items = validItems;
 
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     s.supplyAmount = g.supply; s.vat = g.vat; s.total = g.total;
     if (!s.id) s.id = newId("inv");
     if (!s.createdAt) s.createdAt = s.invoiceDate ? (s.invoiceDate + "T00:00:00.000Z") : "";
@@ -7156,7 +7322,7 @@
       bankName: rec.bankName, accountNo: rec.accountNo, accountHolder: rec.accountHolder,
       accountingName: rec.accountingName, accountingEmail: rec.accountingEmail,
       purpose: rec.purpose,
-      items: JSON.stringify(rec.items), shipping: rec.shipping,
+      items: JSON.stringify(rec.items), shipping: rec.shipping, vatExempt: rec.vatExempt ? "Y" : "",
       supplyAmount: rec.supplyAmount, vat: rec.vat, total: rec.total,
       notes: rec.notes, status: rec.status, createdAt: rec.createdAt,
     }).then(function (res) {
@@ -7197,13 +7363,13 @@
   /** 청구서 레이아웃 (보기/인쇄 공용) — 발신/수신 + 청구금액 강조 + 입금계좌·회계담당 + 대표자 인감 */
   function invoiceSheetHTML(s) {
     var co = company();
-    var g = stmtGrand(s.items, s.shipping);
+    var g = stmtGrand(s.items, s.shipping, s.vatExempt);
     // 실제 품목만 렌더 — 빈 줄 padding 없음 (항목이 1개면 그 1줄만 나온다)
     var items = (s.items || []).filter(function (it) { return it && (it.name || it.spec || +it.qty || +it.price); });
     var rows = "";
     if (items.length) {
       items.forEach(function (it, i) {
-        var l = stmtLine(it);
+        var l = stmtLine(it, s.vatExempt);
         var nm = esc(it.name || "");
         if (it.spec) nm += '<div class="stmt-sheet__isub">' + esc(it.spec) + '</div>';
         rows += '<tr>'
@@ -7272,7 +7438,7 @@
       + '<div class="stmt-sheet__hero">'
         + '<div class="stmt-sheet__hero-l">'
           + '<span class="stmt-sheet__hero-k">청구 금액</span>'
-          + '<span class="stmt-sheet__hero-sub">일금 ' + numToKorean(s.total) + '원정 · VAT 포함</span>'
+          + '<span class="stmt-sheet__hero-sub">일금 ' + numToKorean(s.total) + '원정 · ' + (s.vatExempt ? '부가세 면세' : 'VAT 포함') + '</span>'
         + '</div>'
         + '<div class="stmt-sheet__hero-v">₩' + won(s.total) + '</div>'
       + '</div>'
@@ -7286,13 +7452,13 @@
       + '<table class="stmt-sheet__items"><thead><tr>'
         + '<th class="c">No.</th><th class="l">항목</th><th class="r">단위</th><th class="r">수량</th><th class="r">단가</th><th class="r">공급가액</th><th class="r">세액</th><th class="r">합계</th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table>'
-      + '<div class="stmt-sheet__unit-note">(단위 : 원, VAT 별도)</div>'
+      + '<div class="stmt-sheet__unit-note">(단위 : 원, ' + (s.vatExempt ? '부가세 면세' : 'VAT 별도') + ')</div>'
       // 합계 (공급가액 → 부가세 → 합계 계산)
       + '<div class="stmt-sheet__totals">'
         + (g.shipping ? '<div class="stmt-sheet__trow"><span class="tk">품목 공급가액</span><span class="tv">' + won(g.itemsSupply) + '</span></div>'
             + '<div class="stmt-sheet__trow"><span class="tk">배송비</span><span class="tv">' + won(g.shipping) + '</span></div>' : '')
-        + '<div class="stmt-sheet__trow"><span class="tk">공급가액 (VAT 별도)</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
-        + '<div class="stmt-sheet__trow"><span class="tk">부가세액</span><span class="tv">' + won(s.vat) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">공급가액' + (s.vatExempt ? '' : ' (VAT 별도)') + '</span><span class="tv">' + won(s.supplyAmount) + '</span></div>'
+        + '<div class="stmt-sheet__trow"><span class="tk">부가세액' + (s.vatExempt ? ' <span style="color:#888;font-weight:400">(면세)</span>' : '') + '</span><span class="tv">' + won(s.vat) + '</span></div>'
         + '<div class="stmt-sheet__trow stmt-sheet__trow--grand"><span class="tk">합계</span><span class="tv">₩' + won(s.total) + '</span></div>'
       + '</div>'
       // 입금 계좌 · 회계 담당
@@ -7352,9 +7518,9 @@
     // 품목
     h += '<tr>'
       + '<th class="h">항목</th><th class="h">규격</th><th class="h">단위</th><th class="h">수량</th>'
-      + '<th class="h">단가</th><th class="h">공급가액</th><th class="h">합계(VAT포함)</th></tr>';
+      + '<th class="h">단가</th><th class="h">공급가액</th><th class="h">합계' + (cfg.vatExempt ? '' : '(VAT포함)') + '</th></tr>';
     (cfg.items || []).forEach(function (it) {
-      var l = stmtLine(it);
+      var l = stmtLine(it, cfg.vatExempt);
       h += '<tr>'
         + '<td>' + esc(it.name || "") + '</td>'
         + '<td>' + esc(it.spec || "") + '</td>'
@@ -7366,8 +7532,8 @@
         + '</tr>';
     });
     // 합계
-    h += '<tr><td class="k" colspan="5">공급가액 (VAT 별도)</td><td class="r" colspan="2">' + (+cfg.supplyAmount || 0) + '</td></tr>';
-    h += '<tr><td class="k" colspan="5">부가세액</td><td class="r" colspan="2">' + (+cfg.vat || 0) + '</td></tr>';
+    h += '<tr><td class="k" colspan="5">공급가액' + (cfg.vatExempt ? '' : ' (VAT 별도)') + '</td><td class="r" colspan="2">' + (+cfg.supplyAmount || 0) + '</td></tr>';
+    h += '<tr><td class="k" colspan="5">부가세액' + (cfg.vatExempt ? ' (면세)' : '') + '</td><td class="r" colspan="2">' + (+cfg.vat || 0) + '</td></tr>';
     h += '<tr><td class="k grand" colspan="5">합계 금액</td><td class="r grand" colspan="2">' + (+cfg.total || 0) + '</td></tr>';
     if (cfg.foot && cfg.foot.length) {
       h += '<tr><td colspan="' + COLS + '" style="border:none;height:6px"></td></tr>';
@@ -7391,7 +7557,7 @@
       ["청구 문구", s.purpose || ""],
     ];
     if (s.notes) foot.push(["특이사항", s.notes]);
-    var body = billExcelBody({ title: "청구서", meta: meta, items: s.items, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
+    var body = billExcelBody({ title: "청구서", meta: meta, items: s.items, vatExempt: s.vatExempt, supplyAmount: s.supplyAmount, vat: s.vat, total: s.total, foot: foot });
     xlsDownload("청구서_" + safeName(s.docNo || s.invoiceDate) + "_" + safeName(s.customerName) + ".xls", body);
   }
 
@@ -7981,6 +8147,10 @@
       var crewDetailEditBtn = ev.target.closest("#crewDetailEditBtn");
       if (crewDetailEditBtn) { var cd = findById(window.CREW, crewDetailId); if (cd) openCrewModal(cd); return; }
 
+      if (ev.target.closest("#sensiGateBtn")) { submitSensitiveGate(); return; }
+      if (ev.target.closest("#sensiLockBtn")) { sensitiveSetUnlocked(false); renderCrew(); return; }
+      if (ev.target.closest("#sensiSaveBtn")) { saveSensitiveInfo(crewDetailId); return; }
+
       var crewDetailDelBtn = ev.target.closest("#crewDetailDelBtn");
       if (crewDetailDelBtn) {
         if (confirm("이 크루 정보를 삭제할까요?")) {
@@ -8012,6 +8182,10 @@
         ev.preventDefault();
         crewSortDir = crewSortDir === "asc" ? "desc" : "asc";
         renderCrew();
+      }
+      if (ev.key === "Enter" && ev.target.id === "sensiGatePw") {
+        ev.preventDefault();
+        submitSensitiveGate();
       }
     });
 

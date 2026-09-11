@@ -213,6 +213,7 @@ function fieldsFor_(coll) {
     reports: REPORT_FIELDS, interviews: INTERVIEW_FIELDS, attendance: ATTENDANCE_FIELDS,
     notes: NOTE_FIELDS, education: EDUCATION_FIELDS, hrchanges: HRCHANGE_FIELDS,
     partners: (typeof PARTNER_FIELDS !== "undefined" ? PARTNER_FIELDS : null),
+    sensitive: (typeof SENSITIVE_FIELDS !== "undefined" ? SENSITIVE_FIELDS : null),
     processes: (typeof PROCESS_FIELDS !== "undefined" ? PROCESS_FIELDS : null),
     drivehub: (typeof DRIVEHUB_FIELDS !== "undefined" ? DRIVEHUB_FIELDS : null),
     quotes: (typeof QUOTE_FIELDS !== "undefined" ? QUOTE_FIELDS : null),

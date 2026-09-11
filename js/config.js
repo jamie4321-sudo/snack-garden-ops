@@ -38,5 +38,12 @@ window.CONFIG = {
     pwHash: ""   // 비우면 관리자 로그인 비밀번호(4231)로 진입
   },
 
+  /* ---------- 크루 민감정보 탭 게이트 ----------
+     크루 상세 '민감정보' 탭(건강·응급연락처·장애·법적행정)에 들어갈 때 "한 번 더" 물어보는 비밀번호.
+     pwHash 를 비워두면 → 위 관리자 로그인 비밀번호(auth.pwHash)를 그대로 사용합니다. */
+  sensitive: {
+    pwHash: ""   // 비우면 관리자 로그인 비밀번호(4231)로 진입
+  },
+
   journalSheetUrl: "https://docs.google.com/spreadsheets/d/1oF0GK7OLod7YKg84ypJ95irHeSRbvZQXnP0qXJi_Zgc/edit"
 };

@@ -469,6 +469,20 @@
     if (d.drivehub) window.DRIVEHUB_DATA = d.drivehub;      // 드라이브 HUB(drive-hub.js)
   }
 
+  /** 서버가 인증을 거부하면(비밀번호 없이 저장된 예전 세션·비밀번호 변경 등) 로그인 화면으로 되돌린다.
+   *  오염됐을 수 있는 캐시(sg-cache-all-v2)까지 지우고 새로고침 → 다음 진입 시 로그인 화면. */
+  var relocking_ = false;
+  function relock_() {
+    if (relocking_) return;
+    relocking_ = true;
+    try {
+      localStorage.removeItem("sg-auth"); localStorage.removeItem("sg-auth-pw");
+      sessionStorage.removeItem("sg-auth"); sessionStorage.removeItem("sg-auth-pw");
+      localStorage.removeItem(CACHE_ALL_KEY);
+    } catch (e) {}
+    location.reload();
+  }
+
   /** 서버(Supabase 경유 GAS)에서 전체 데이터 로드 → window.* 반영 + 캐시 저장.
    *  응답이 중간 캐시에 잡히지 않게 매번 캐시버스팅. */
   function loadData() {
@@ -477,7 +491,13 @@
     var url = withPw_(ep + (ep.indexOf("?") > -1 ? "&" : "?") + "action=all&_ts=" + Date.now());
     return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.json(); })
-      .then(function (d) { applyAllData(d); saveCacheAll(d); return true; })
+      .then(function (d) {
+        if (!d || d.ok === false) {            // 서버 거부(unauthorized 등): 잘못된 응답을 캐시에 저장하지 않는다
+          if (d && d.error === "unauthorized") relock_();
+          return false;
+        }
+        applyAllData(d); saveCacheAll(d); return true;
+      })
       .catch(function (e) { console.warn("[데이터 로드 실패] 캐시로 표시합니다.", e); return false; });
   }
 
@@ -8415,9 +8435,18 @@
   if (alreadyAuthed) {
     try { API_PW = localStorage.getItem("sg-auth-pw") || sessionStorage.getItem("sg-auth-pw") || ""; } catch (e) {}
     window.SG_API_PW = API_PW;
+  }
+  if (alreadyAuthed && API_PW) {
     document.documentElement.setAttribute("data-authed", "1");
     boot();
   } else {
+    // '로그인 유지' 표시는 있으나 저장된 비밀번호가 없는 예전 세션
+    // (2026-09-11 서버 인증 도입 이전에 로그인해 둔 경우) → 서버가 모든 요청을
+    // unauthorized 로 거부해 일정 등 데이터가 안 보인다. 로그인 화면으로 되돌려 재입력을 유도한다.
+    try {
+      localStorage.removeItem("sg-auth"); sessionStorage.removeItem("sg-auth");
+    } catch (e) {}
+    document.documentElement.removeAttribute("data-authed");
     wireLock();
   }
 })();

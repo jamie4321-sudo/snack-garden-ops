@@ -1789,7 +1789,7 @@
      CREW VIEW
      ====================================================== */
   var crewDisFilter = "전체";
-  var crewGroupFilter = "전체";
+  var crewGroupFilter = (function () { try { return localStorage.getItem("sg-crew-group-default") || "전체"; } catch (e) { return "전체"; } })();
   var crewStatusFilter = "전체";
   var crewSortDir = "asc";        // 입사일 정렬 방향 : "asc"(오래된 입사순) | "desc"(최신 입사순)
   var crewQuery = "";
@@ -7784,7 +7784,259 @@
     }
   }
 
+  /* ===========================================================
+     설정 (SETTINGS)
+     시스템·데이터 백업(엑셀)·알림·보안·화면·정보
+     =========================================================== */
+  function _p2(n) { return (n < 10 ? "0" : "") + n; }
+  function todayStamp() { var d0 = new Date(); return d0.getFullYear() + "-" + _p2(d0.getMonth() + 1) + "-" + _p2(d0.getDate()); }
+
+  function setToast(msg, ok) {
+    var t = document.getElementById("setToast");
+    if (!t) { t = document.createElement("div"); t.id = "setToast"; t.className = "set-toast"; document.body.appendChild(t); }
+    t.textContent = msg;
+    t.className = "set-toast is-show" + (ok === false ? " is-err" : "");
+    clearTimeout(setToast._h);
+    setToast._h = setTimeout(function () { t.className = "set-toast"; }, 2400);
+  }
+
+  /* --- 엑셀 내보내기 공용 표 --- */
+  function xlsSimpleTable(title, subtitle, cols, rows) {
+    var n = cols.length;
+    var h = '<table><tr><td class="t" colspan="' + n + '">' + esc(title) + '</td></tr>';
+    if (subtitle) h += '<tr><td class="sub" colspan="' + n + '">' + esc(subtitle) + '</td></tr>';
+    h += '<tr><td colspan="' + n + '" style="border:none;height:6px"></td></tr>';
+    h += '<tr>' + cols.map(function (c) { return '<th class="h">' + esc(c[0]) + '</th>'; }).join("") + '</tr>';
+    h += rows.map(function (r) {
+      return '<tr>' + cols.map(function (c) {
+        var v = typeof c[1] === "function" ? c[1](r) : r[c[1]];
+        return '<td>' + esc(v == null ? "" : String(v)) + '</td>';
+      }).join("") + '</tr>';
+    }).join("");
+    return h + '</table>';
+  }
+
+  /* 내보내기 정의: key → {label, get()} */
+  var SETTINGS_EXPORTS = {
+    crew: { label: "크루 목록", icon: "👥", get: function () {
+      var rows = window.CREW || [];
+      var cols = [["이름", "name"], ["파트", "group"], ["직무", "role"], ["재직상태", "status"], ["입사일", "joinDate"], ["퇴사일", "leftDate"], ["생일", "birthDate"], ["연락처", "phone"], ["계약형태", "contractType"], ["계약종료", "contractEndDate"], ["장애", "disability"], ["장애유형", "disabilityType"], ["근무시간", "workHours"], ["사원번호", "badgeNumber"], ["비고", "note"]];
+      return { rows: rows, body: xlsSimpleTable("크루 목록", "스낵앤가든 · " + todayStamp() + " 기준 · 총 " + rows.length + "명", cols, rows), file: "스낵가든_크루목록_" + todayStamp() + ".xls" };
+    } },
+    interview: { label: "면담 & 근무기록", icon: "📝", get: function () {
+      var rows = (window.INTERVIEWS || []).slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+      var cols = [["날짜", "date"], ["시간", "time"], ["크루", "crewName"], ["유형", "type"], ["컨디션", "condition"], ["내용", "content"], ["후속조치", "followUp"], ["후속메모", "followUpNote"], ["기록자", "recorder"]];
+      return { rows: rows, body: xlsSimpleTable("면담 & 근무기록", "총 " + rows.length + "건 · " + todayStamp() + " 추출 (개인 메모 제외)", cols, rows), file: "스낵가든_면담기록_" + todayStamp() + ".xls" };
+    } },
+    attendance: { label: "근태 기록", icon: "🕒", get: function () {
+      var rows = (window.ATTENDANCE || []).slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+      var cols = [["날짜", "date"], ["시간", "time"], ["크루", "crewName"], ["구분", "kind"], ["사유", "reason"], ["기록자", "recorder"]];
+      return { rows: rows, body: xlsSimpleTable("근태 기록", "총 " + rows.length + "건 · " + todayStamp() + " 추출", cols, rows), file: "스낵가든_근태기록_" + todayStamp() + ".xls" };
+    } },
+    education: { label: "교육 이수 현황", icon: "🎓", get: function () {
+      var rows = (window.EDUCATION || []).slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+      var cols = [["구분", "category"], ["교육명", "title"], ["대상", "crewName"], ["실시일", "date"], ["마감일", "dueDate"], ["상태", "status"], ["기관/강사", "provider"], ["시간", "hours"], ["비고", "note"]];
+      return { rows: rows, body: xlsSimpleTable("교육 이수 현황", "총 " + rows.length + "건 · " + todayStamp() + " 추출", cols, rows), file: "스낵가든_교육현황_" + todayStamp() + ".xls" };
+    } },
+    hrchange: { label: "인사 변동 이력", icon: "🔄", get: function () {
+      var rows = (window.HR_CHANGES || []).slice().sort(function (a, b) { return (b.date || "").localeCompare(a.date || ""); });
+      var cols = [["날짜", "date"], ["크루", "crewName"], ["유형", function (r) { return r.typeLabel || r.type; }], ["변경 전", "before"], ["변경 후", "after"], ["사유", "reason"], ["기록자", "recorder"]];
+      return { rows: rows, body: xlsSimpleTable("인사 변동 이력", "총 " + rows.length + "건 · " + todayStamp() + " 추출", cols, rows), file: "스낵가든_인사변동_" + todayStamp() + ".xls" };
+    } },
+  };
+
+  var SETTINGS_START_VIEWS = [
+    ["", "선택 안 함 (기본: 일정 관리)"], ["schedule", "일정 관리"], ["dashboard", "대시보드"],
+    ["crew", "크루 목록"], ["interview", "면담 & 근무기록"], ["attendance", "근태 기록"],
+    ["workreport", "업무 보고"], ["statement", "청구 관리"], ["kpi", "2026 KPI"],
+  ];
+
+  function renderSettings() {
+    var live = isLive();
+    var cache = loadCacheAll();
+    var syncAt = null;
+    try { var raw = localStorage.getItem(CACHE_ALL_KEY); if (raw) { var o = JSON.parse(raw); if (o && o.t) syncAt = new Date(o.t); } } catch (e) {}
+    var epHost = ""; try { epHost = endpoint() ? new URL(endpoint()).host : ""; } catch (e) { epHost = "google apps script"; }
+    var notif = loadNotifySettings();
+    var isLight = document.documentElement.getAttribute("data-theme") === "light";
+    var startPref = ""; try { startPref = localStorage.getItem("sg-start-view") || ""; } catch (e) {}
+    var groupPref = ""; try { groupPref = localStorage.getItem("sg-crew-group-default") || "전체"; } catch (e) { groupPref = "전체"; }
+    var timingLabel = ({ "0": "당일", "1": "1일 전", "3": "3일 전", "7": "7일 전" })[String(notif.timing)] || ("D-" + notif.timing);
+
+    var h = "";
+    h += '<div class="page-head"><div>'
+      + '<p class="eyebrow">System / Settings</p><h2>설정</h2>'
+      + '<p class="sub">연동 상태 확인 · 데이터 백업(엑셀) · 알림 · 보안 · 화면을 한곳에서 관리합니다.</p>'
+      + '</div></div>';
+
+    h += '<div class="set-grid">';
+
+    /* 1. 시스템 · 연동 상태 */
+    h += '<section class="set-card">'
+      + '<h3 class="set-card__t">시스템 · 연동 상태</h3>'
+      + '<div class="set-rows">'
+        + '<div class="set-row"><span class="set-row__k">연동 상태</span><span class="set-row__v">' + (live ? '<span class="set-badge is-on">● LIVE · Supabase 연동</span>' : '<span class="set-badge is-off">● 데모 모드 (연동 없음)</span>') + '</span></div>'
+        + '<div class="set-row"><span class="set-row__k">엔드포인트</span><span class="set-row__v set-muted">' + esc(epHost || "—") + '</span></div>'
+        + '<div class="set-row"><span class="set-row__k">마지막 동기화</span><span class="set-row__v set-muted" id="setSyncAt">' + (syncAt ? fmtSyncAt(syncAt) : "기록 없음") + '</span></div>'
+        + '<div class="set-row"><span class="set-row__k">앱 버전</span><span class="set-row__v set-muted">SNACK &amp; GARDEN OPS · v1.0</span></div>'
+      + '</div>'
+      + '<div class="set-actions">'
+        + '<button type="button" class="btn btn--primary btn--sm" id="setRefreshBtn">🔄 데이터 새로고침</button>'
+        + '<button type="button" class="btn btn--sm" id="setCacheBtn">🧹 캐시 초기화</button>'
+      + '</div>'
+      + '<p class="set-hint">담당자 화면에 데이터가 안 보이거나 오래된 값이 보이면 <b>새로고침</b> → 그래도 안 되면 <b>캐시 초기화</b>로 복구하세요.</p>'
+      + '</section>';
+
+    /* 2. 데이터 내보내기 (엑셀) */
+    h += '<section class="set-card">'
+      + '<h3 class="set-card__t">데이터 내보내기 · 엑셀 백업</h3>'
+      + '<p class="set-card__sub">현재 화면에 불러온 데이터를 엑셀(.xls) 파일로 저장합니다.</p>'
+      + '<div class="set-exports">';
+    Object.keys(SETTINGS_EXPORTS).forEach(function (k) {
+      var def = SETTINGS_EXPORTS[k];
+      var cnt = (def.get().rows || []).length;
+      h += '<button type="button" class="set-export" data-export="' + k + '">'
+        + '<span class="set-export__ic">' + def.icon + '</span>'
+        + '<span class="set-export__l">' + esc(def.label) + '</span>'
+        + '<span class="set-export__c">' + cnt + '건</span>'
+        + '<span class="set-export__dl">⬇ .xls</span>'
+        + '</button>';
+    });
+    h += '</div></section>';
+
+    /* 3. 알림 설정 */
+    h += '<section class="set-card">'
+      + '<h3 class="set-card__t">알림 설정</h3>'
+      + '<div class="set-rows">'
+        + '<div class="set-row"><span class="set-row__k">생일 축하</span><span class="set-row__v">' + (notif.birthday ? '<span class="set-badge is-on">켜짐</span>' : '<span class="set-badge is-off">꺼짐</span>') + '</span></div>'
+        + '<div class="set-row"><span class="set-row__k">입사 기념일 축하</span><span class="set-row__v">' + (notif.anniversary ? '<span class="set-badge is-on">켜짐</span>' : '<span class="set-badge is-off">꺼짐</span>') + '</span></div>'
+        + '<div class="set-row"><span class="set-row__k">알림 시점</span><span class="set-row__v set-muted">' + esc(timingLabel) + '</span></div>'
+      + '</div>'
+      + '<div class="set-actions"><button type="button" class="btn btn--sm" id="setNotifyBtn">🔔 알림 설정 열기</button></div>'
+      + '</section>';
+
+    /* 4. 보안 · 접근 관리 */
+    h += '<section class="set-card">'
+      + '<h3 class="set-card__t">보안 · 접근 관리</h3>'
+      + '<div class="set-actions set-actions--col">'
+        + '<button type="button" class="btn btn--sm" id="setVaultBtn">🔑 비밀번호 HUB 열기</button>'
+        + '<button type="button" class="btn btn--sm" id="setRelockBtn">🔒 크루 민감정보 재잠금</button>'
+        + '<button type="button" class="btn btn--sm btn--danger" id="setLogoutBtn">↩ 관리자 로그아웃</button>'
+      + '</div>'
+      + '<p class="set-hint">자리를 비울 땐 <b>민감정보 재잠금</b>으로 건강·응급연락처 등 민감 탭을 다시 잠글 수 있어요.</p>'
+      + '</section>';
+
+    /* 5. 화면 · 표시 */
+    h += '<section class="set-card">'
+      + '<h3 class="set-card__t">화면 · 표시</h3>'
+      + '<div class="set-rows">'
+        + '<div class="set-row"><span class="set-row__k">테마</span><span class="set-row__v"><div class="seg">'
+          + '<button type="button" class="btn btn--sm btn--pill' + (!isLight ? " is-on" : "") + '" data-theme-set="dark">다크</button>'
+          + '<button type="button" class="btn btn--sm btn--pill' + (isLight ? " is-on" : "") + '" data-theme-set="light">라이트</button>'
+        + '</div></span></div>'
+        + '<div class="set-row"><span class="set-row__k">기본 시작 화면</span><span class="set-row__v"><select class="set-select" id="setStartView">'
+          + SETTINGS_START_VIEWS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === startPref ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("")
+        + '</select></span></div>'
+        + '<div class="set-row"><span class="set-row__k">크루 목록 기본 파트</span><span class="set-row__v"><select class="set-select" id="setGroupDefault">'
+          + ['전체'].concat(CREW_GROUPS).map(function (g) { return '<option value="' + esc(g) + '"' + (g === groupPref ? " selected" : "") + '>' + esc(g) + '</option>'; }).join("")
+        + '</select></span></div>'
+      + '</div>'
+      + '<p class="set-hint">기본 시작 화면·파트는 다음 접속(또는 새로고침)부터 적용됩니다.</p>'
+      + '</section>';
+
+    /* 6. 정보 · 지원 */
+    h += '<section class="set-card">'
+      + '<h3 class="set-card__t">정보 · 지원</h3>'
+      + '<div class="set-rows">'
+        + '<div class="set-row"><span class="set-row__k">운영</span><span class="set-row__v set-muted">링키지랩 · 스낵앤가든 사업팀</span></div>'
+        + '<div class="set-row"><span class="set-row__k">면담일지 시트</span><span class="set-row__v">' + (window.CONFIG && window.CONFIG.journalSheetUrl ? '<a class="set-link" href="' + esc(window.CONFIG.journalSheetUrl) + '" target="_blank" rel="noopener">구글 시트 열기 ↗</a>' : '<span class="set-muted">—</span>') + '</span></div>'
+        + '<div class="set-row"><span class="set-row__k">데이터 저장소</span><span class="set-row__v set-muted">Supabase + Google Apps Script</span></div>'
+      + '</div>'
+      + '</section>';
+
+    h += '</div>';
+    view.innerHTML = h;
+    bindSettings();
+  }
+
+  function fmtSyncAt(dt) {
+    var mm = _p2(dt.getMonth() + 1), dd = _p2(dt.getDate()), hh = _p2(dt.getHours()), mi = _p2(dt.getMinutes());
+    return dt.getFullYear() + "-" + mm + "-" + dd + " " + hh + ":" + mi;
+  }
+
+  function bindSettings() {
+    // 내보내기
+    Array.prototype.forEach.call(view.querySelectorAll("[data-export]"), function (btn) {
+      btn.addEventListener("click", function () {
+        var def = SETTINGS_EXPORTS[btn.getAttribute("data-export")];
+        if (!def) return;
+        var out = def.get();
+        if (!out.rows || !out.rows.length) { setToast(def.label + " — 내보낼 데이터가 없습니다.", false); return; }
+        xlsDownload(out.file, out.body);
+        setToast(def.label + " 엑셀 저장됨 ✓ (" + out.rows.length + "건)");
+      });
+    });
+    // 데이터 새로고침
+    var rf = view.querySelector("#setRefreshBtn");
+    if (rf) rf.addEventListener("click", function () {
+      rf.disabled = true; rf.textContent = "불러오는 중…";
+      loadData().then(function (ok) {
+        rf.disabled = false; rf.textContent = "🔄 데이터 새로고침";
+        if (ok) { setToast("최신 데이터로 갱신됨 ✓"); if (location.hash.slice(1) === "settings") renderSettings(); }
+        else setToast("서버 응답 없음 — 캐시 유지", false);
+      });
+    });
+    // 캐시 초기화
+    var cb = view.querySelector("#setCacheBtn");
+    if (cb) cb.addEventListener("click", function () {
+      if (!window.confirm("이 브라우저에 저장된 화면 캐시를 비우고 새로 불러올까요?\n(로그인·설정은 유지됩니다)")) return;
+      try { localStorage.removeItem(CACHE_ALL_KEY); } catch (e) {}
+      setToast("캐시를 비웠어요. 다시 불러옵니다…");
+      loadData().then(function () { if (location.hash.slice(1) === "settings") renderSettings(); });
+    });
+    // 알림 설정 열기
+    var nb = view.querySelector("#setNotifyBtn");
+    if (nb) nb.addEventListener("click", function () { go("notify"); });
+    // 보안
+    var vb = view.querySelector("#setVaultBtn");
+    if (vb) vb.addEventListener("click", function () { go("vault"); });
+    var rl = view.querySelector("#setRelockBtn");
+    if (rl) rl.addEventListener("click", function () {
+      try { sessionStorage.removeItem(SENSITIVE_SESSION_KEY); } catch (e) {}
+      setToast("크루 민감정보를 다시 잠갔어요 🔒");
+    });
+    var lo = view.querySelector("#setLogoutBtn");
+    if (lo) lo.addEventListener("click", function () {
+      var real = document.getElementById("logoutBtn");
+      if (real) real.click();
+    });
+    // 테마
+    Array.prototype.forEach.call(view.querySelectorAll("[data-theme-set]"), function (btn) {
+      btn.addEventListener("click", function () {
+        var mode = btn.getAttribute("data-theme-set");
+        if (mode === "light") { document.documentElement.setAttribute("data-theme", "light"); }
+        else { document.documentElement.removeAttribute("data-theme"); }
+        try { localStorage.setItem("sg-theme", mode); } catch (e) {}
+        renderSettings();
+      });
+    });
+    // 기본 시작 화면
+    var sv = view.querySelector("#setStartView");
+    if (sv) sv.addEventListener("change", function () {
+      try { sv.value ? localStorage.setItem("sg-start-view", sv.value) : localStorage.removeItem("sg-start-view"); } catch (e) {}
+      setToast("기본 시작 화면 저장됨 ✓");
+    });
+    // 크루 기본 파트
+    var gd = view.querySelector("#setGroupDefault");
+    if (gd) gd.addEventListener("change", function () {
+      try { localStorage.setItem("sg-crew-group-default", gd.value); } catch (e) {}
+      crewGroupFilter = gd.value;
+      setToast("크루 목록 기본 파트 저장됨 ✓");
+    });
+  }
+
   var VIEWS = {
+    settings:    { title: "SETTINGS", render: renderSettings },
     statement:   { title: "BILLING", render: renderBilling },
     quote:       { title: "BILLING", render: renderBilling },
     invoice:     { title: "BILLING", render: renderBilling },
@@ -8315,7 +8567,9 @@
   /* ---------- boot : 데이터 로드 후 라우팅 ---------- */
   function boot() {
     updateModeBadge();
-    var initial = location.hash.slice(1) || "schedule";
+    var startPref = "";
+    try { startPref = localStorage.getItem("sg-start-view") || ""; } catch (e) {}
+    var initial = location.hash.slice(1) || startPref || "schedule";
     var cached = loadCacheAll();
 
     if (cached) {

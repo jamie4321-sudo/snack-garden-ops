@@ -2775,6 +2775,17 @@ textarea.phub-in { resize: vertical; line-height: 1.55; }
 .mtg-multi { min-height: 108px; padding: 6px; }
 .mtg-multi option { padding: 4px 6px; border-radius: 5px; }
 
+.mtg-links { display: flex; flex-wrap: wrap; gap: 5px; }
+.mtg-pill {
+  display: inline-flex; align-items: center; gap: 3px; max-width: 160px;
+  font-size: 11px; font-weight: 600; color: var(--ink-2); text-decoration: none;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 100px;
+  padding: 3px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: border-color .12s, color .12s;
+}
+.mtg-pill:hover { border-color: var(--accent); color: var(--ink); }
+.mtg-pill--rec { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+
 .mtg-actlist { display: flex; flex-direction: column; gap: 6px; }
 .mtg-act { display: grid; grid-template-columns: auto 1fr 90px 140px auto; gap: 6px; align-items: center; }
 .mtg-act input[type="text"], .mtg-act input[type="date"] {

@@ -8097,6 +8097,18 @@
     return esc(all.length > 3 ? head + " 외 " + (all.length - 3) + "명" : head);
   }
 
+  function meetingLinksCell(m) {
+    var out = [];
+    if (m.recordingUrl) out.push('<a class="mtg-pill mtg-pill--rec" href="' + esc(m.recordingUrl) + '" target="_blank" rel="noopener" title="녹음 열기">🎧 녹음</a>');
+    (m.attachments || []).forEach(function (a) {
+      var url = (a && a.url) || (typeof a === "string" ? a : "");
+      if (!url) return;
+      var label = (a && a.label) ? a.label : "링크";
+      out.push('<a class="mtg-pill" href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(a && a.label ? a.label : url) + '">🔗 ' + esc(label) + '</a>');
+    });
+    return out.length ? '<div class="mtg-links">' + out.join("") + '</div>' : '<span class="set-muted">—</span>';
+  }
+
   function renderMeeting() {
     var rows = filteredMeetings();
     var html = "";
@@ -8121,7 +8133,7 @@
     html += '<div class="board">'
       + '<div class="board__head"><h3 class="board__title">회의록 <span class="chip-mono">' + rows.length + '건</span></h3></div>'
       + '<div class="board__scroll"><table class="board__table"><thead><tr>'
-      + '<th>날짜</th><th>제목</th><th>유형</th><th>참석</th><th>녹음</th><th>상태</th>'
+      + '<th>날짜</th><th>제목</th><th>유형</th><th>참석</th><th>자료 · 링크</th><th>상태</th>'
       + '</tr></thead><tbody>'
       + (rows.length ? rows.map(function (m) {
           var when = (m.date || "—") + (m.startTime ? " " + m.startTime : "");
@@ -8130,7 +8142,7 @@
             + '<td><b>' + esc(m.title || "(제목 없음)") + '</b>' + (m.agenda ? '<span class="mtg-sub">' + esc(m.agenda.split(/[\n,]/)[0]) + '</span>' : '') + '</td>'
             + '<td><span class="mtg-cat" style="--c:' + meetingCatColor(m.category) + '">' + esc(m.category) + '</span></td>'
             + '<td>' + meetingAttendeesLabel(m) + '</td>'
-            + '<td>' + (m.recordingUrl ? '🎧' : '<span class="set-muted">—</span>') + '</td>'
+            + '<td>' + meetingLinksCell(m) + '</td>'
             + '<td><span class="mtg-status mtg-status--' + (m.status === "완료" ? "done" : m.status === "예정" ? "soon" : "prog") + '">' + esc(m.status) + '</span></td>'
             + '</tr>';
         }).join("")
@@ -8152,7 +8164,8 @@
     var sb = view.querySelector("#mtgSearch");
     if (sb) sb.addEventListener("input", function () { mtgQuery = sb.value; var rows = filteredMeetings(); /* 가벼운 갱신 */ renderMeeting(); var el = view.querySelector("#mtgSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
     Array.prototype.forEach.call(view.querySelectorAll(".board__row[data-mtg-id]"), function (tr) {
-      tr.addEventListener("click", function () {
+      tr.addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return; // 링크 클릭은 새 탭 열기 → 수정 모달 열지 않음
         var m = findById(getMeetings(), tr.getAttribute("data-mtg-id"));
         if (m) openMeetingModal(m);
       });

@@ -8241,7 +8241,7 @@
     var stats = MEETING_STATUSES.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join("");
     wrap.innerHTML =
       '<div class="modal__backdrop"></div>'
-      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="회의록 등록">'
+      + '<div class="modal__card modal__card--mtg" role="dialog" aria-modal="true" aria-label="회의록 등록">'
       + '<div class="modal__head"><h3 id="meetingModalTitle">회의록 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
       + '<form id="meetingForm">'
       + '<label class="fld"><span>회의 제목 <em>*</em></span><input type="text" name="title" required maxlength="80" placeholder="예) 10월 카카오 정기 리뷰"></label>'

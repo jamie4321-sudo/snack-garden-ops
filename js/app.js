@@ -8171,6 +8171,16 @@
       + '</div>';
   }
 
+  function meetingLinkRow(l) {
+    if (typeof l === "string") l = { label: "", url: l };
+    l = l || { label: "", url: "" };
+    return '<div class="mtg-act mtg-link">'
+      + '<input type="text" class="mtg-link__label" placeholder="제목 (선택)" value="' + esc(l.label || "") + '">'
+      + '<input type="url" class="mtg-link__url" placeholder="https://..." value="' + esc(l.url || "") + '">'
+      + '<button type="button" class="mtg-act__x" data-link-del aria-label="삭제">×</button>'
+      + '</div>';
+  }
+
   function openMeetingModal(prefill) {
     var el = document.getElementById("meetingModal");
     if (!el) { el = buildMeetingModal(); document.body.appendChild(el); }
@@ -8188,7 +8198,6 @@
     form.category.value = (prefill && prefill.category) || "정기회의";
     form.place.value = (prefill && prefill.place) || "";
     form.onlineUrl.value = (prefill && prefill.onlineUrl) || "";
-    form.extAttendees.value = (prefill && prefill.extAttendees) || "";
     form.agenda.value = (prefill && prefill.agenda) || "";
     form.content.value = (prefill && prefill.content) || "";
     form.decisions.value = (prefill && prefill.decisions) || "";
@@ -8198,17 +8207,20 @@
     form.status.value = (prefill && prefill.status) || "완료";
     el.querySelector("#mtgRecorder").textContent = (prefill && prefill.recorder) || CURRENT_USER;
 
-    // 참석자(크루) 멀티선택
-    var sel = form.attendees;
-    var chosen = (prefill && prefill.attendees) || [];
-    sel.innerHTML = (window.CREW || []).slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (c) {
-      return '<option value="' + esc(c.name) + '"' + (chosen.indexOf(c.name) > -1 ? ' selected' : '') + '>' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
-    }).join("");
+    // 참석자 (직접 작성) — 기존 크루 선택분 + 외부 참석자를 합쳐 표시
+    var att = (prefill && prefill.attendees) || [];
+    if (prefill && prefill.extAttendees) att = att.concat(prefill.extAttendees.split(/[,\n]/).map(function (s) { return s.trim(); }).filter(Boolean));
+    form.attendees.value = att.join(", ");
 
     // 액션 아이템
     var actWrap = el.querySelector("#mtgActList");
     var acts = (prefill && prefill.actions && prefill.actions.length) ? prefill.actions : [];
     actWrap.innerHTML = acts.length ? acts.map(meetingActionRow).join("") : meetingActionRow(null);
+
+    // 관련 링크
+    var linkWrap = el.querySelector("#mtgLinkList");
+    var links = (prefill && prefill.attachments && prefill.attachments.length) ? prefill.attachments : [];
+    linkWrap.innerHTML = links.length ? links.map(meetingLinkRow).join("") : meetingLinkRow(null);
 
     // 녹음 미리보기
     renderMeetingAudio(el, form.recordingUrl.value);
@@ -8258,8 +8270,7 @@
         + '<label class="fld"><span>장소 <em>(오프라인)</em></span><input type="text" name="place" maxlength="60" placeholder="예) 본사 3층 회의실"></label>'
         + '<label class="fld"><span>온라인 링크 <em>(선택)</em></span><input type="url" name="onlineUrl" placeholder="줌 · 구글밋 링크"></label>'
       + '</div>'
-      + '<label class="fld"><span>참석자 <em>(크루 · 여러 명 선택 가능)</em></span><select name="attendees" multiple size="5" class="mtg-multi"></select></label>'
-      + '<label class="fld"><span>외부 참석자 <em>(선택 · 쉼표로 구분)</em></span><input type="text" name="extAttendees" placeholder="예) 카카오 김OO 매니저, 협력사 이OO"></label>'
+      + '<label class="fld"><span>참석자 <em>(직접 작성 · 쉼표로 구분)</em></span><input type="text" name="attendees" placeholder="예) 제이미, 엘리, 카카오 김OO 매니저"></label>'
       + '<label class="fld"><span>안건 · 목적</span><textarea name="agenda" rows="2" placeholder="왜 모였는지 · 논의 주제"></textarea></label>'
       + '<label class="fld"><span>논의 사항</span><textarea name="content" rows="4" placeholder="회의에서 오간 내용을 기록하세요…"></textarea></label>'
       + '<label class="fld"><span>결정 사항</span><textarea name="decisions" rows="2" placeholder="확정된 내용만 정리"></textarea></label>'
@@ -8269,6 +8280,10 @@
       + '</div>'
       + '<label class="fld"><span>🎧 녹음본 <em>(구글 드라이브 공유 링크)</em></span><input type="url" name="recordingUrl" placeholder="https://drive.google.com/file/d/..."></label>'
       + '<div id="mtgAudio" class="mtg-audio" hidden></div>'
+      + '<div class="fld"><span>🔗 관련 링크 <em>(자료 · 문서 · 회의록 등)</em></span>'
+        + '<div id="mtgLinkList" class="mtg-actlist"></div>'
+        + '<button type="button" class="btn btn--sm" id="mtgLinkAdd" style="margin-top:6px">+ 링크 추가</button>'
+      + '</div>'
       + '<div class="fld-row">'
         + '<label class="fld"><span>다음 회의 <em>(선택)</em></span><input type="date" name="nextDate"></label>'
         + '<label class="fld"><span>태그 <em>(선택)</em></span><input type="text" name="tags" placeholder="예) 정산, 인력"></label>'
@@ -8296,6 +8311,18 @@
         if (row) { row.remove(); if (!list2.children.length) list2.insertAdjacentHTML("beforeend", meetingActionRow(null)); }
         return;
       }
+      if (ev.target.closest("#mtgLinkAdd")) {
+        var llist = wrap.querySelector("#mtgLinkList");
+        llist.insertAdjacentHTML("beforeend", meetingLinkRow(null));
+        var us = llist.querySelectorAll(".mtg-link__url"); if (us.length) us[us.length - 1].focus();
+        return;
+      }
+      if (ev.target.hasAttribute("data-link-del")) {
+        var lrow = ev.target.closest(".mtg-act");
+        var llist2 = wrap.querySelector("#mtgLinkList");
+        if (lrow) { lrow.remove(); if (!llist2.children.length) llist2.insertAdjacentHTML("beforeend", meetingLinkRow(null)); }
+        return;
+      }
       var delBtn = ev.target.closest("#meetingDelBtn");
       if (delBtn) {
         var f0 = wrap.querySelector("form"); var did = f0.dataset.id;
@@ -8311,17 +8338,20 @@
       var f = ev.target;
       var title = f.title.value.trim();
       if (!title) { alert("회의 제목을 입력해주세요."); f.title.focus(); return; }
-      var attendees = Array.prototype.map.call(f.attendees.selectedOptions, function (o) { return o.value; });
+      var attendees = f.attendees.value.split(/[,\n]/).map(function (s) { return s.trim(); }).filter(Boolean);
       var actions = Array.prototype.map.call(wrap.querySelectorAll("#mtgActList .mtg-act"), function (r) {
         return { task: r.querySelector(".mtg-act__task").value.trim(), owner: r.querySelector(".mtg-act__owner").value.trim(), due: r.querySelector(".mtg-act__due").value, done: r.querySelector(".mtg-act__done").checked };
       }).filter(function (a) { return a.task; });
+      var attachments = Array.prototype.map.call(wrap.querySelectorAll("#mtgLinkList .mtg-link"), function (r) {
+        return { label: r.querySelector(".mtg-link__label").value.trim(), url: r.querySelector(".mtg-link__url").value.trim() };
+      }).filter(function (l) { return l.url; });
       var id = f.dataset.id;
       var rec = {
         id: id || newId("mtg"), title: title, date: f.date.value, startTime: f.startTime.value, endTime: f.endTime.value,
         category: f.category.value, place: f.place.value.trim(), onlineUrl: f.onlineUrl.value.trim(),
-        attendees: attendees, extAttendees: f.extAttendees.value.trim(),
+        attendees: attendees, extAttendees: "",
         agenda: f.agenda.value.trim(), content: f.content.value.trim(), decisions: f.decisions.value.trim(),
-        actions: actions, recordingUrl: f.recordingUrl.value.trim(), attachments: [],
+        actions: actions, recordingUrl: f.recordingUrl.value.trim(), attachments: attachments,
         status: f.status.value, nextDate: f.nextDate.value, tags: f.tags.value.trim(),
         recorder: (id && findById(getMeetings(), id) || {}).recorder || CURRENT_USER,
       };

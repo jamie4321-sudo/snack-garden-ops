@@ -55,6 +55,7 @@ var NOTE_FIELDS = ["id","date","time","part","text","author","link","deletedAt"]
 var NOTE_RETENTION_DAYS = 365;
 var EDUCATION_FIELDS = ["id","category","title","crewId","crewName","date","dueDate","status","provider","hours","note","link","checklist"];
 var HRCHANGE_FIELDS = ["id","crewId","crewName","type","typeLabel","date","before","after","reason","recorder","link"];
+var MEETING_FIELDS = ["id","title","date","startTime","endTime","category","place","onlineUrl","attendees","extAttendees","agenda","content","decisions","actions","recordingUrl","attachments","status","nextDate","tags","recorder"];
 // 거래명세서 : 공급자=주식회사 링키지랩(앱 상수). items 는 품목 배열의 JSON 문자열로 저장한다.
 // driveUrl : 저장 시 생성해 드라이브에 보관한 PDF 링크(서버에서 채움).
 // vatExempt : "Y"="부가세 제외(면세)로 계산" 체크, ""=기본(부가세 10% 적용).
@@ -273,6 +274,7 @@ function doGet(e) {
   if (action === "notes")      return json_(mapNotes_(rows_notesFresh_()));
   if (action === "education")  return json_(mapEducation_(rows_("education", EDUCATION_FIELDS)));
   if (action === "hrchanges")  return json_(mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]));
+  if (action === "meetings")   return json_(mapDates_(rows_("meetings", MEETING_FIELDS), ["date","nextDate"]));
   if (action === "partners")   return json_(rows_("partners", PARTNER_FIELDS));
   if (action === "sensitive")  return json_(rows_("sensitive", SENSITIVE_FIELDS));
   if (action === "statements") return json_(mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]));
@@ -297,6 +299,7 @@ function doGet(e) {
     notes: mapNotes_(rows_notesFresh_()),
     education: mapEducation_(rows_("education", EDUCATION_FIELDS)),
     hrChanges: mapDates_(rows_("hrchanges", HRCHANGE_FIELDS), ["date"]),
+    meetings: mapDates_(rows_("meetings", MEETING_FIELDS), ["date","nextDate"]),
     partners: rows_("partners", PARTNER_FIELDS),
     sensitive: rows_("sensitive", SENSITIVE_FIELDS),
     statements: mapDates_(rows_("statements", STATEMENT_FIELDS), ["billDate","dueDate"]),
@@ -552,6 +555,7 @@ function doPost(e) {
   if (data.type === "note")     return handleNote_(action, data);
   if (data.type === "education") return handleEducation_(action, data);
   if (data.type === "hrchange") return handleHrChange_(action, data);
+  if (data.type === "meeting")  return handleMeeting_(action, data);
   if (data.type === "partner")  return handlePartner_(action, data);
   if (data.type === "sensitive") return handleSensitive_(action, data);
   if (data.type === "statement") return handleStatement_(action, data);
@@ -756,6 +760,38 @@ function handleHrChange_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, hrChangeValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+
+  return json_({ ok: false, error: "unknown action" });
+}
+
+// 회의록 관리 — attendees/actions/attachments 는 프론트에서 JSON 문자열로 전송받아 그대로 저장
+function meetingValuesObj_(data) {
+  return {
+    id: data.id, title: data.title || "", date: data.date || "", startTime: data.startTime || "", endTime: data.endTime || "",
+    category: data.category || "정기회의", place: data.place || "", onlineUrl: data.onlineUrl || "",
+    attendees: data.attendees || "", extAttendees: data.extAttendees || "",
+    agenda: data.agenda || "", content: data.content || "", decisions: data.decisions || "",
+    actions: data.actions || "", recordingUrl: data.recordingUrl || "", attachments: data.attachments || "",
+    status: data.status || "완료", nextDate: data.nextDate || "", tags: data.tags || "", recorder: data.recorder || ""
+  };
+}
+
+function handleMeeting_(action, data) {
+  if (typeof sbEnabled_ === "function" && sbEnabled_("meetings")) return sbHandle_("meetings", action, data, meetingValuesObj_);
+  var sh = sheet_("meetings", MEETING_FIELDS);
+
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, meetingValuesObj_(Object.assign({}, data, { id: id })));
     return json_({ ok: true, id: id });
   }
 

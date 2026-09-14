@@ -460,6 +460,7 @@
     if (d.education) window.EDUCATION = d.education.map(normEducation);
     if (d.notes) window.NOTES = d.notes.map(normNote);
     if (d.hrChanges) window.HR_CHANGES = d.hrChanges.map(normHrChange);
+    if (d.meetings) { window.MEETINGS = d.meetings.map(normMeeting); try { localStorage.setItem("sg-meetings-v1", JSON.stringify(window.MEETINGS)); } catch (e) {} }
     if (d.partners) window.PARTNERS = d.partners.map(normPartner);
     if (d.sensitive) window.SENSITIVE_INFO = d.sensitive.map(normSensitiveInfo);
     if (d.statements) window.STATEMENTS = d.statements.map(normStatement);
@@ -8035,7 +8036,330 @@
     });
   }
 
+  /* ===========================================================
+     회의록 관리 (MEETINGS) — 1차: 기본정보·참석자·안건·내용·결정·
+     액션아이템 + 구글 드라이브 녹음 링크 저장/재생
+     =========================================================== */
+  var MEETINGS_KEY = "sg-meetings-v1";
+  var MEETING_CATS = [
+    { key: "정기회의", c: "#6ea8ff" }, { key: "카카오 미팅", c: "#ffd23f" },
+    { key: "내부 운영", c: "#7ee081" }, { key: "파트별", c: "#c58cff" },
+    { key: "긴급", c: "#ff6b6b" }, { key: "교육", c: "#4dd0c7" }, { key: "기타", c: "#9aa0a6" },
+  ];
+  var MEETING_STATUSES = ["예정", "완료", "후속 진행중"];
+  function meetingCatColor(k) { for (var i = 0; i < MEETING_CATS.length; i++) if (MEETING_CATS[i].key === k) return MEETING_CATS[i].c; return "#9aa0a6"; }
+  function _mArr(v) {
+    if (Array.isArray(v)) return v;
+    if (typeof v === "string" && v.trim()) { try { var p = JSON.parse(v); if (Array.isArray(p)) return p; } catch (e) {} return v.split(/[\n,]/).map(function (s) { return s.trim(); }).filter(Boolean); }
+    return [];
+  }
+  function normMeeting(r) {
+    return {
+      id: r.id || "", title: r.title || "", date: fmtDay(r.date), startTime: r.startTime || "", endTime: r.endTime || "",
+      category: r.category || "정기회의", place: r.place || "", onlineUrl: r.onlineUrl || "",
+      attendees: _mArr(r.attendees), extAttendees: r.extAttendees || "",
+      agenda: r.agenda || "", content: r.content || "", decisions: r.decisions || "",
+      actions: _mArr(r.actions).map(function (a) { return typeof a === "string" ? { task: a, owner: "", due: "", done: false } : { task: a.task || "", owner: a.owner || "", due: a.due || "", done: !!a.done }; }),
+      recordingUrl: r.recordingUrl || "", attachments: _mArr(r.attachments),
+      status: r.status || "완료", nextDate: fmtDay(r.nextDate), tags: r.tags || "", recorder: r.recorder || "",
+    };
+  }
+  function loadMeetingsLocal() { try { var raw = localStorage.getItem(MEETINGS_KEY); return raw ? JSON.parse(raw).map(normMeeting) : []; } catch (e) { return []; } }
+  function saveMeetingsLocal() { try { localStorage.setItem(MEETINGS_KEY, JSON.stringify(window.MEETINGS || [])); } catch (e) {} }
+  function getMeetings() { if (!window.MEETINGS) window.MEETINGS = loadMeetingsLocal(); return window.MEETINGS; }
+
+  /* 구글 드라이브 파일 링크 → 미리보기(iframe) URL */
+  function drivePreviewUrl(url) {
+    var m = /\/d\/([-\w]{20,})|[?&]id=([-\w]{20,})/.exec(url || "");
+    var id = m ? (m[1] || m[2]) : "";
+    return id ? "https://drive.google.com/file/d/" + id + "/preview" : "";
+  }
+
+  var mtgCatFilter = "전체", mtgStatusFilter = "전체", mtgQuery = "";
+
+  function filteredMeetings() {
+    var q = mtgQuery.trim().toLowerCase();
+    return getMeetings().slice().filter(function (m) {
+      if (mtgCatFilter !== "전체" && m.category !== mtgCatFilter) return false;
+      if (mtgStatusFilter !== "전체" && m.status !== mtgStatusFilter) return false;
+      if (q) {
+        var hay = [m.title, m.agenda, m.content, m.decisions, m.tags, m.attendees.join(" "), m.extAttendees].join(" ").toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    }).sort(function (a, b) { return (b.date + b.startTime).localeCompare(a.date + a.startTime); });
+  }
+
+  function meetingAttendeesLabel(m) {
+    var all = m.attendees.concat(m.extAttendees ? m.extAttendees.split(/[,\n]/).map(function (s) { return s.trim(); }).filter(Boolean) : []);
+    if (!all.length) return '<span class="set-muted">—</span>';
+    var head = all.slice(0, 3).map(esc).join(", ");
+    return esc(all.length > 3 ? head + " 외 " + (all.length - 3) + "명" : head);
+  }
+
+  function renderMeeting() {
+    var rows = filteredMeetings();
+    var html = "";
+    html += '<div class="page-head">'
+      + '<div><p class="eyebrow">Operation / Meetings</p><h2>회의록 관리</h2>'
+      + '<p class="sub">회의 일시 · 참석자 · 안건 · 결정사항 · 액션 아이템을 기록하고, 녹음본(구글 드라이브)을 함께 보관하세요.</p></div>'
+      + '<div class="page-head__actions"><button class="btn btn--primary" id="addMeetingBtn">+ 회의록 등록</button></div>'
+      + '</div>';
+
+    html += '<div class="toolbar-row">'
+      + '<div class="filter" id="mtgCatFilter">'
+        + ['전체'].concat(MEETING_CATS.map(function (c) { return c.key; })).map(function (f) {
+            return '<button class="btn btn--sm btn--pill ' + (f === mtgCatFilter ? "is-on" : "") + '" data-mc="' + esc(f) + '">' + esc(f) + '</button>';
+          }).join("")
+      + '</div>'
+      + '<select class="filter-select" id="mtgStatusFilter">'
+        + ['전체'].concat(MEETING_STATUSES).map(function (s) { return '<option value="' + esc(s) + '"' + (s === mtgStatusFilter ? ' selected' : '') + '>' + esc(s === '전체' ? '전체 상태' : s) + '</option>'; }).join("")
+      + '</select>'
+      + '<input class="searchbox" id="mtgSearch" type="search" placeholder="제목 · 안건 · 참석자 · 내용 검색" value="' + esc(mtgQuery) + '">'
+      + '</div>';
+
+    html += '<div class="board">'
+      + '<div class="board__head"><h3 class="board__title">회의록 <span class="chip-mono">' + rows.length + '건</span></h3></div>'
+      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<th>날짜</th><th>제목</th><th>유형</th><th>참석</th><th>녹음</th><th>상태</th>'
+      + '</tr></thead><tbody>'
+      + (rows.length ? rows.map(function (m) {
+          var when = (m.date || "—") + (m.startTime ? " " + m.startTime : "");
+          return '<tr class="board__row" data-mtg-id="' + esc(m.id) + '">'
+            + '<td style="white-space:nowrap">' + esc(when) + '</td>'
+            + '<td><b>' + esc(m.title || "(제목 없음)") + '</b>' + (m.agenda ? '<span class="mtg-sub">' + esc(m.agenda.split(/[\n,]/)[0]) + '</span>' : '') + '</td>'
+            + '<td><span class="mtg-cat" style="--c:' + meetingCatColor(m.category) + '">' + esc(m.category) + '</span></td>'
+            + '<td>' + meetingAttendeesLabel(m) + '</td>'
+            + '<td>' + (m.recordingUrl ? '🎧' : '<span class="set-muted">—</span>') + '</td>'
+            + '<td><span class="mtg-status mtg-status--' + (m.status === "완료" ? "done" : m.status === "예정" ? "soon" : "prog") + '">' + esc(m.status) + '</span></td>'
+            + '</tr>';
+        }).join("")
+        : '<tr><td colspan="6" class="board__empty">등록된 회의록이 없습니다. <b style="color:var(--accent-text)">+ 회의록 등록</b>으로 첫 회의를 남겨보세요.</td></tr>')
+      + '</tbody></table></div></div>';
+
+    view.innerHTML = html;
+    bindMeeting();
+  }
+
+  function bindMeeting() {
+    var add = view.querySelector("#addMeetingBtn");
+    if (add) add.addEventListener("click", function () { openMeetingModal(null); });
+    Array.prototype.forEach.call(view.querySelectorAll("#mtgCatFilter [data-mc]"), function (b) {
+      b.addEventListener("click", function () { mtgCatFilter = b.getAttribute("data-mc"); renderMeeting(); });
+    });
+    var sf = view.querySelector("#mtgStatusFilter");
+    if (sf) sf.addEventListener("change", function () { mtgStatusFilter = sf.value; renderMeeting(); });
+    var sb = view.querySelector("#mtgSearch");
+    if (sb) sb.addEventListener("input", function () { mtgQuery = sb.value; var rows = filteredMeetings(); /* 가벼운 갱신 */ renderMeeting(); var el = view.querySelector("#mtgSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
+    Array.prototype.forEach.call(view.querySelectorAll(".board__row[data-mtg-id]"), function (tr) {
+      tr.addEventListener("click", function () {
+        var m = findById(getMeetings(), tr.getAttribute("data-mtg-id"));
+        if (m) openMeetingModal(m);
+      });
+    });
+  }
+
+  /* ---------- 액션 아이템 리피터 ---------- */
+  function meetingActionRow(a) {
+    a = a || { task: "", owner: "", due: "", done: false };
+    return '<div class="mtg-act">'
+      + '<input type="checkbox" class="mtg-act__done"' + (a.done ? ' checked' : '') + ' aria-label="완료">'
+      + '<input type="text" class="mtg-act__task" placeholder="할 일" value="' + esc(a.task) + '">'
+      + '<input type="text" class="mtg-act__owner" placeholder="담당" value="' + esc(a.owner) + '">'
+      + '<input type="date" class="mtg-act__due" value="' + esc(a.due) + '">'
+      + '<button type="button" class="mtg-act__x" data-act-del aria-label="삭제">×</button>'
+      + '</div>';
+  }
+
+  function openMeetingModal(prefill) {
+    var el = document.getElementById("meetingModal");
+    if (!el) { el = buildMeetingModal(); document.body.appendChild(el); }
+    var form = el.querySelector("form");
+    form.reset();
+    var editing = !!(prefill && prefill.id);
+    form.dataset.id = editing ? prefill.id : "";
+    el.querySelector("#meetingModalTitle").textContent = editing ? "회의록 수정" : "회의록 등록";
+    el.querySelector("#meetingDelBtn").hidden = !editing;
+
+    form.title.value = (prefill && prefill.title) || "";
+    form.date.value = (prefill && prefill.date) || TODAY;
+    form.startTime.value = (prefill && prefill.startTime) || "";
+    form.endTime.value = (prefill && prefill.endTime) || "";
+    form.category.value = (prefill && prefill.category) || "정기회의";
+    form.place.value = (prefill && prefill.place) || "";
+    form.onlineUrl.value = (prefill && prefill.onlineUrl) || "";
+    form.extAttendees.value = (prefill && prefill.extAttendees) || "";
+    form.agenda.value = (prefill && prefill.agenda) || "";
+    form.content.value = (prefill && prefill.content) || "";
+    form.decisions.value = (prefill && prefill.decisions) || "";
+    form.recordingUrl.value = (prefill && prefill.recordingUrl) || "";
+    form.tags.value = (prefill && prefill.tags) || "";
+    form.nextDate.value = (prefill && prefill.nextDate) || "";
+    form.status.value = (prefill && prefill.status) || "완료";
+    el.querySelector("#mtgRecorder").textContent = (prefill && prefill.recorder) || CURRENT_USER;
+
+    // 참석자(크루) 멀티선택
+    var sel = form.attendees;
+    var chosen = (prefill && prefill.attendees) || [];
+    sel.innerHTML = (window.CREW || []).slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (c) {
+      return '<option value="' + esc(c.name) + '"' + (chosen.indexOf(c.name) > -1 ? ' selected' : '') + '>' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+    }).join("");
+
+    // 액션 아이템
+    var actWrap = el.querySelector("#mtgActList");
+    var acts = (prefill && prefill.actions && prefill.actions.length) ? prefill.actions : [];
+    actWrap.innerHTML = acts.length ? acts.map(meetingActionRow).join("") : meetingActionRow(null);
+
+    // 녹음 미리보기
+    renderMeetingAudio(el, form.recordingUrl.value);
+
+    el.hidden = false;
+    setTimeout(function () { form.title.focus(); }, 30);
+  }
+  function closeMeetingModal() { var el = document.getElementById("meetingModal"); if (el) el.hidden = true; }
+
+  function renderMeetingAudio(el, url) {
+    var box = el.querySelector("#mtgAudio");
+    var prev = drivePreviewUrl(url);
+    if (prev) {
+      box.innerHTML = '<iframe class="mtg-audioframe" src="' + esc(prev) + '" allow="autoplay" title="녹음 재생"></iframe>'
+        + '<a class="set-link" href="' + esc(url) + '" target="_blank" rel="noopener">드라이브에서 열기 ↗</a>';
+      box.hidden = false;
+    } else if (url && /\.(mp3|m4a|wav|webm|ogg|aac)(\?|$)/i.test(url)) {
+      box.innerHTML = '<audio controls preload="none" src="' + esc(url) + '" style="width:100%"></audio>';
+      box.hidden = false;
+    } else if (url) {
+      box.innerHTML = '<a class="set-link" href="' + esc(url) + '" target="_blank" rel="noopener">🎧 녹음 열기 ↗</a>';
+      box.hidden = false;
+    } else { box.innerHTML = ""; box.hidden = true; }
+  }
+
+  function buildMeetingModal() {
+    var wrap = document.createElement("div");
+    wrap.className = "modal"; wrap.id = "meetingModal"; wrap.hidden = true;
+    var cats = MEETING_CATS.map(function (c) { return '<option value="' + esc(c.key) + '">' + esc(c.key) + '</option>'; }).join("");
+    var stats = MEETING_STATUSES.map(function (s) { return '<option value="' + esc(s) + '">' + esc(s) + '</option>'; }).join("");
+    wrap.innerHTML =
+      '<div class="modal__backdrop"></div>'
+      + '<div class="modal__card modal__card--iv" role="dialog" aria-modal="true" aria-label="회의록 등록">'
+      + '<div class="modal__head"><h3 id="meetingModalTitle">회의록 등록</h3><button type="button" class="modal__x" data-close aria-label="닫기">×</button></div>'
+      + '<form id="meetingForm">'
+      + '<label class="fld"><span>회의 제목 <em>*</em></span><input type="text" name="title" required maxlength="80" placeholder="예) 10월 카카오 정기 리뷰"></label>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>날짜 <em>*</em></span><input type="date" name="date" required></label>'
+        + '<label class="fld"><span>시작</span><input type="time" name="startTime"></label>'
+        + '<label class="fld"><span>종료</span><input type="time" name="endTime"></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>회의 유형</span><select name="category">' + cats + '</select></label>'
+        + '<label class="fld"><span>상태</span><select name="status">' + stats + '</select></label>'
+      + '</div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>장소 <em>(오프라인)</em></span><input type="text" name="place" maxlength="60" placeholder="예) 본사 3층 회의실"></label>'
+        + '<label class="fld"><span>온라인 링크 <em>(선택)</em></span><input type="url" name="onlineUrl" placeholder="줌 · 구글밋 링크"></label>'
+      + '</div>'
+      + '<label class="fld"><span>참석자 <em>(크루 · 여러 명 선택 가능)</em></span><select name="attendees" multiple size="5" class="mtg-multi"></select></label>'
+      + '<label class="fld"><span>외부 참석자 <em>(선택 · 쉼표로 구분)</em></span><input type="text" name="extAttendees" placeholder="예) 카카오 김OO 매니저, 협력사 이OO"></label>'
+      + '<label class="fld"><span>안건 · 목적</span><textarea name="agenda" rows="2" placeholder="왜 모였는지 · 논의 주제"></textarea></label>'
+      + '<label class="fld"><span>논의 사항</span><textarea name="content" rows="4" placeholder="회의에서 오간 내용을 기록하세요…"></textarea></label>'
+      + '<label class="fld"><span>결정 사항</span><textarea name="decisions" rows="2" placeholder="확정된 내용만 정리"></textarea></label>'
+      + '<div class="fld"><span>액션 아이템 <em>(할 일 · 담당 · 기한)</em></span>'
+        + '<div id="mtgActList" class="mtg-actlist"></div>'
+        + '<button type="button" class="btn btn--sm" id="mtgActAdd" style="margin-top:6px">+ 항목 추가</button>'
+      + '</div>'
+      + '<label class="fld"><span>🎧 녹음본 <em>(구글 드라이브 공유 링크)</em></span><input type="url" name="recordingUrl" placeholder="https://drive.google.com/file/d/..."></label>'
+      + '<div id="mtgAudio" class="mtg-audio" hidden></div>'
+      + '<div class="fld-row">'
+        + '<label class="fld"><span>다음 회의 <em>(선택)</em></span><input type="date" name="nextDate"></label>'
+        + '<label class="fld"><span>태그 <em>(선택)</em></span><input type="text" name="tags" placeholder="예) 정산, 인력"></label>'
+      + '</div>'
+      + '<div class="fld"><span>기록자</span><div class="iv-recorder" id="mtgRecorder">' + esc(CURRENT_USER) + '</div></div>'
+      + '<div class="modal__foot">'
+        + '<button type="button" class="btn btn--danger" id="meetingDelBtn" hidden>삭제</button>'
+        + '<div class="modal__spacer"></div>'
+        + '<button type="button" class="btn" data-close>취소</button>'
+        + '<button type="submit" class="btn btn--primary">저장</button>'
+      + '</div>'
+      + '</form></div>';
+
+    wrap.addEventListener("click", function (ev) {
+      if (ev.target.hasAttribute("data-close")) { closeMeetingModal(); return; }
+      if (ev.target.closest("#mtgActAdd")) {
+        var list = wrap.querySelector("#mtgActList");
+        list.insertAdjacentHTML("beforeend", meetingActionRow(null));
+        var inputs = list.querySelectorAll(".mtg-act__task"); if (inputs.length) inputs[inputs.length - 1].focus();
+        return;
+      }
+      if (ev.target.hasAttribute("data-act-del")) {
+        var row = ev.target.closest(".mtg-act");
+        var list2 = wrap.querySelector("#mtgActList");
+        if (row) { row.remove(); if (!list2.children.length) list2.insertAdjacentHTML("beforeend", meetingActionRow(null)); }
+        return;
+      }
+      var delBtn = ev.target.closest("#meetingDelBtn");
+      if (delBtn) {
+        var f0 = wrap.querySelector("form"); var did = f0.dataset.id;
+        if (did && confirm("이 회의록을 삭제할까요? 되돌릴 수 없습니다.")) { deleteMeeting(did); closeMeetingModal(); }
+        return;
+      }
+    });
+    wrap.querySelector('[name="recordingUrl"]').addEventListener("change", function (e) {
+      renderMeetingAudio(wrap, e.target.value.trim());
+    });
+    wrap.querySelector("form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var f = ev.target;
+      var title = f.title.value.trim();
+      if (!title) { alert("회의 제목을 입력해주세요."); f.title.focus(); return; }
+      var attendees = Array.prototype.map.call(f.attendees.selectedOptions, function (o) { return o.value; });
+      var actions = Array.prototype.map.call(wrap.querySelectorAll("#mtgActList .mtg-act"), function (r) {
+        return { task: r.querySelector(".mtg-act__task").value.trim(), owner: r.querySelector(".mtg-act__owner").value.trim(), due: r.querySelector(".mtg-act__due").value, done: r.querySelector(".mtg-act__done").checked };
+      }).filter(function (a) { return a.task; });
+      var id = f.dataset.id;
+      var rec = {
+        id: id || newId("mtg"), title: title, date: f.date.value, startTime: f.startTime.value, endTime: f.endTime.value,
+        category: f.category.value, place: f.place.value.trim(), onlineUrl: f.onlineUrl.value.trim(),
+        attendees: attendees, extAttendees: f.extAttendees.value.trim(),
+        agenda: f.agenda.value.trim(), content: f.content.value.trim(), decisions: f.decisions.value.trim(),
+        actions: actions, recordingUrl: f.recordingUrl.value.trim(), attachments: [],
+        status: f.status.value, nextDate: f.nextDate.value, tags: f.tags.value.trim(),
+        recorder: (id && findById(getMeetings(), id) || {}).recorder || CURRENT_USER,
+      };
+      saveMeeting(rec);
+      closeMeetingModal();
+    });
+    return wrap;
+  }
+
+  function saveMeeting(rec) {
+    getMeetings();
+    var idx = indexById(window.MEETINGS, rec.id);
+    var isNew = idx < 0;
+    if (isNew) window.MEETINGS.push(rec); else window.MEETINGS[idx] = rec;
+    saveMeetingsLocal();
+    saveToSheet({
+      type: "meeting", action: isNew ? "add" : "update",
+      id: rec.id, title: rec.title, date: rec.date, startTime: rec.startTime, endTime: rec.endTime,
+      category: rec.category, place: rec.place, onlineUrl: rec.onlineUrl,
+      attendees: JSON.stringify(rec.attendees), extAttendees: rec.extAttendees,
+      agenda: rec.agenda, content: rec.content, decisions: rec.decisions,
+      actions: JSON.stringify(rec.actions), recordingUrl: rec.recordingUrl, attachments: JSON.stringify(rec.attachments),
+      status: rec.status, nextDate: rec.nextDate, tags: rec.tags, recorder: rec.recorder,
+    });
+    if (typeof setToast === "function") setToast("회의록 저장됨 ✓");
+    renderMeeting();
+  }
+  function deleteMeeting(id) {
+    getMeetings();
+    window.MEETINGS = window.MEETINGS.filter(function (m) { return String(m.id) !== String(id); });
+    saveMeetingsLocal();
+    saveToSheet({ type: "meeting", action: "delete", id: id });
+    if (typeof setToast === "function") setToast("회의록을 삭제했어요");
+    renderMeeting();
+  }
+
   var VIEWS = {
+    meeting:     { title: "MEETINGS", render: renderMeeting },
     settings:    { title: "SETTINGS", render: renderSettings },
     statement:   { title: "BILLING", render: renderBilling },
     quote:       { title: "BILLING", render: renderBilling },

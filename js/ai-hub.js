@@ -41,7 +41,14 @@
     var d = new Date();
     return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
   }
-  function normGroup(g) { return GROUPS.indexOf(g) !== -1 ? g : GROUPS[0]; }
+  // 그룹은 기본 3종 + 사용자가 추가한(=엔트리에 존재하는) 카테고리까지 허용한다.
+  function normGroup(g) { g = String(g == null ? "" : g).trim(); return g || GROUPS[0]; }
+  // 현재 유효한 그룹 목록 : 기본 그룹 + db 엔트리에서 발견된 커스텀 그룹(등장 순서 유지)
+  function effectiveGroups() {
+    var out = GROUPS.slice();
+    if (db) db.forEach(function (e) { if (e.group && out.indexOf(e.group) === -1) out.push(e.group); });
+    return out;
+  }
   // 카테고리(그룹) 표시 이름 — 설정에서 바꾼 이름이 있으면 그걸 쓴다(키는 그대로).
   function gLabel(g) {
     return (window.SG_HUB_LABELS && window.SG_HUB_LABELS.cat) ? window.SG_HUB_LABELS.cat("aihub", g, g) : g;
@@ -137,7 +144,7 @@
     if (!wired) { wire(); wired = true; }
     state.query = "";
     state.modal = null;
-    if (GROUPS.indexOf(state.group) === -1) state.group = GROUPS[0];
+    if (effectiveGroups().indexOf(state.group) === -1) state.group = GROUPS[0];
     paint();
   }
 
@@ -177,7 +184,7 @@
 
     // 그룹 탭
     h += '<div class="dhub-tabs" role="tablist">';
-    GROUPS.forEach(function (g) {
+    effectiveGroups().forEach(function (g) {
       var on = g === state.group && !state.query;
       h += '<button type="button" class="dhub-tab' + (on ? ' is-on' : '') + '" data-ah-group="' + esc(g) + '" role="tab" aria-selected="' + (on ? 'true' : 'false') + '">'
         + '<span class="dhub-tab__n">' + esc(gLabel(g)) + '</span>'
@@ -284,9 +291,11 @@
   function viewModal() {
     var m = state.modal;
     var isNew = !m.id;
-    var opts = GROUPS.map(function (g) {
-      return '<option value="' + esc(g) + '"' + (g === m.group ? ' selected' : '') + '>' + esc(gLabel(g)) + '</option>';
+    var newCat = !!m.newCat;
+    var opts = effectiveGroups().map(function (g) {
+      return '<option value="' + esc(g) + '"' + (!newCat && g === m.group ? ' selected' : '') + '>' + esc(gLabel(g)) + '</option>';
     }).join("");
+    opts += '<option value="__new__"' + (newCat ? ' selected' : '') + '>+ 새 카테고리 추가…</option>';
     var dlist = existingPaths().map(function (p) { return '<option value="' + esc(p) + '">'; }).join("");
     return '<div class="dhub-modal" id="ahModal">'
       + '<div class="dhub-modal__bd" data-ah-act="modal-cancel"></div>'
@@ -297,6 +306,8 @@
         + '</div>'
         + '<div class="dhub-modal__body">'
           + '<label class="dhub-fld"><span>그룹</span><select id="ahGroup" class="dhub-in">' + opts + '</select></label>'
+          + '<label class="dhub-fld" id="ahNewGroupFld"' + (newCat ? '' : ' style="display:none"') + '><span>새 카테고리 이름 <em class="req">*</em></span>'
+            + '<input type="text" id="ahNewGroup" class="dhub-in" maxlength="30" placeholder="예) 사내 공유용" value="' + esc(newCat ? (m.newGroup || "") : "") + '"></label>'
           + '<label class="dhub-fld"><span>폴더 경로 <em>( “ > ” 로 단계 구분 · 선택 )</em></span>'
             + '<input type="text" id="ahPath" class="dhub-in" list="ahPathList" placeholder="예) 모빌리티 조경" value="' + esc(m.path) + '">'
             + '<datalist id="ahPathList">' + dlist + '</datalist></label>'
@@ -316,8 +327,12 @@
   function syncModal() {
     if (!state.modal) return;
     var g = document.getElementById("ahGroup"), p = document.getElementById("ahPath"),
-        n = document.getElementById("ahName"), u = document.getElementById("ahUrl");
-    if (g) state.modal.group = g.value;
+        n = document.getElementById("ahName"), u = document.getElementById("ahUrl"),
+        ng = document.getElementById("ahNewGroup");
+    if (g) {
+      if (g.value === "__new__") { state.modal.newCat = true; state.modal.newGroup = ng ? ng.value : ""; }
+      else { state.modal.newCat = false; state.modal.group = g.value; }
+    }
     if (p) state.modal.path = p.value;
     if (n) state.modal.name = n.value;
     if (u) state.modal.url = u.value;
@@ -325,6 +340,17 @@
   function saveModal() {
     syncModal();
     var m = state.modal;
+    // '+ 새 카테고리 추가…' 선택 시 : 입력한 새 그룹명을 사용(빈칸이면 경고)
+    var groupVal = m.group;
+    if (m.newCat) {
+      var ngName = (m.newGroup || "").trim();
+      if (!ngName) {
+        var ng = document.getElementById("ahNewGroup");
+        if (ng) { ng.focus(); ng.classList.add("dhub-in--err"); }
+        return;
+      }
+      groupVal = ngName;
+    }
     var name = (m.name || "").trim();
     if (!name) {
       var n = document.getElementById("ahName");
@@ -332,7 +358,7 @@
       return;
     }
     var now = todayIso();
-    var clean = { group: normGroup(m.group), path: normPath(m.path), name: name, url: normUrl(m.url) };
+    var clean = { group: normGroup(groupVal), path: normPath(m.path), name: name, url: normUrl(m.url) };
     if (m.id) {
       var e = byId(m.id);
       if (e) { e.group = clean.group; e.path = clean.path; e.name = clean.name; e.url = clean.url; e.updatedAt = now; persist("update", e); }
@@ -364,11 +390,20 @@
       if (body) body.innerHTML = state.query.trim() ? searchBody(state.query.trim()) : groupBody(state.group);
       syncTabs();
     }
+    // 그룹 선택에서 '+ 새 카테고리 추가…' 고르면 새 이름 입력칸을 보여준다
+    if (s && s.id === "ahGroup") {
+      var fld = document.getElementById("ahNewGroupFld");
+      var isNew = s.value === "__new__";
+      if (fld) {
+        fld.style.display = isNew ? "" : "none";
+        if (isNew) { var ng = document.getElementById("ahNewGroup"); if (ng) ng.focus(); }
+      }
+    }
   }
   function onKey(ev) {
     if (!document.getElementById("aihub")) return;
     if (ev.key === "Escape" && state.modal) { state.modal = null; paint(); return; }
-    if (ev.key === "Enter" && state.modal && ev.target && /^ah(Name|Path|Url)$/.test(ev.target.id || "")) {
+    if (ev.key === "Enter" && state.modal && ev.target && /^ah(Name|Path|Url|NewGroup)$/.test(ev.target.id || "")) {
       ev.preventDefault(); saveModal();
     }
   }
@@ -435,5 +470,9 @@
 
   /* ---------- export ---------- */
   // categories: 설정(HUB 메뉴·카테고리 이름)에서 카테고리 트리를 그릴 때 사용
-  window.AiHub = { render: render, categories: GROUPS.map(function (g) { return { key: g, def: g }; }) };
+  // (기본 그룹 + 사용자가 추가한 커스텀 그룹까지 동적으로 반영)
+  window.AiHub = {
+    render: render,
+    get categories() { return effectiveGroups().map(function (g) { return { key: g, def: g }; }); },
+  };
 })();

@@ -48,6 +48,10 @@
     return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
   }
   function normGroup(g) { return GROUPS.indexOf(g) !== -1 ? g : GROUPS[0]; }
+  // 카테고리(그룹) 표시 이름 — 설정에서 바꾼 이름이 있으면 그걸 쓴다(키는 그대로).
+  function gLabel(g) {
+    return (window.SG_HUB_LABELS && window.SG_HUB_LABELS.cat) ? window.SG_HUB_LABELS.cat("vault", g, g) : g;
+  }
   function normUrl(u) {
     u = String(u || "").trim();
     if (!u) return "";
@@ -218,7 +222,7 @@
     GROUPS.forEach(function (g) {
       var on = g === state.group && !state.query;
       h += '<button type="button" class="vault-tab' + (on ? ' is-on' : '') + '" data-vh-group="' + esc(g) + '" role="tab" aria-selected="' + (on ? 'true' : 'false') + '">'
-        + '<span class="vault-tab__n">' + esc(g) + '</span>'
+        + '<span class="vault-tab__n">' + esc(gLabel(g)) + '</span>'
         + '<span class="vault-tab__c">' + groupCount(g) + '</span>'
         + '</button>';
     });
@@ -267,7 +271,7 @@
       ? '<a class="vault-card__open" href="' + esc(normUrl(e.url)) + '" target="_blank" rel="noopener" title="사이트 열기" onclick="event.stopPropagation()">' + ARROW + '</a>'
       : '';
 
-    var meta = withContext ? '<span class="vault-card__ctx">' + esc(e.group) + '</span>'
+    var meta = withContext ? '<span class="vault-card__ctx">' + esc(gLabel(e.group)) + '</span>'
       : (dom ? '<span class="vault-card__dom">' + esc(dom) + '</span>' : '');
 
     var userRow = '<div class="vault-field">'
@@ -314,7 +318,7 @@
     var m = state.modal;
     var isNew = !m.id;
     var opts = GROUPS.map(function (g) {
-      return '<option value="' + esc(g) + '"' + (g === m.group ? ' selected' : '') + '>' + esc(g) + '</option>';
+      return '<option value="' + esc(g) + '"' + (g === m.group ? ' selected' : '') + '>' + esc(gLabel(g)) + '</option>';
     }).join("");
     return '<div class="vault-modal" id="vhModal">'
       + '<div class="vault-modal__bd" data-vh-act="modal-cancel"></div>'
@@ -525,5 +529,5 @@
   }
 
   /* ---------- export ---------- */
-  window.VaultHub = { render: render };
+  window.VaultHub = { render: render, categories: GROUPS.map(function (g) { return { key: g, def: g }; }) };
 })();

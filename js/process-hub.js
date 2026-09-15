@@ -65,6 +65,11 @@
     return p[0] + "." + p[1] + "." + p[2];
   }
   function catOf(id) { for (var i = 0; i < CATEGORIES.length; i++) if (CATEGORIES[i].id === id) return CATEGORIES[i]; return { id: id, name: id || "미분류" }; }
+  // 카테고리 표시 이름 — 설정에서 바꾼 이름이 있으면 그걸 쓴다(id는 그대로).
+  function catDisp(id) {
+    var def = catOf(id).name;
+    return (window.SG_HUB_LABELS && window.SG_HUB_LABELS.cat) ? window.SG_HUB_LABELS.cat("process", id, def) : def;
+  }
   function prioOf(id) { for (var i = 0; i < PRIORITIES.length; i++) if (PRIORITIES[i].id === id) return PRIORITIES[i]; return PRIORITIES[3]; }
   function byId(id) { for (var i = 0; i < db.length; i++) if (db[i].id === id) return db[i]; return null; }
 
@@ -292,7 +297,7 @@
     CATEGORIES.forEach(function (c) {
       var n = db.filter(function (p) { return p.category === c.id; }).length;
       h += '<button type="button" class="phub-catpill' + (n ? '' : ' is-empty') + '" data-ph-cat="' + c.id + '">'
-        + '<span class="phub-catpill__n">' + esc(c.name) + '</span>'
+        + '<span class="phub-catpill__n">' + esc(catDisp(c.id)) + '</span>'
         + '<span class="phub-catpill__c">' + n + '</span>'
         + '</button>';
     });
@@ -322,7 +327,7 @@
       recent.forEach(function (p) {
         var c = catOf(p.category);
         h += '<button type="button" class="phub-recent__row" data-ph-id="' + p.id + '">'
-          + '<span class="phub-recent__cat">' + esc(c.name) + '</span>'
+          + '<span class="phub-recent__cat">' + esc(catDisp(p.category)) + '</span>'
           + '<span class="phub-recent__t">' + esc(p.title) + '</span>'
           + '<span class="phub-recent__date">' + fmtDate(p.updatedAt) + ' 업데이트</span>'
           + '</button>';
@@ -338,7 +343,7 @@
   /* ---------- 검색 ---------- */
   function searchMatch(p, q) {
     q = q.toLowerCase();
-    var hay = [p.title, p.subCategory, p.purpose, p.trigger, catOf(p.category).name]
+    var hay = [p.title, p.subCategory, p.purpose, p.trigger, catOf(p.category).name, catDisp(p.category)]
       .concat(p.tags || [])
       .concat((p.processSteps || []).map(function (s) { return s.title + " " + (s.desc || ""); }))
       .concat((p.decisionPoints || []).map(function (d) { return d.situation + " " + d.criteria; }))
@@ -364,7 +369,7 @@
     } else {
       var c = catOf(state.catFilter);
       rows = db.filter(function (p) { return p.category === state.catFilter; });
-      titleHtml = esc(c.name);
+      titleHtml = esc(catDisp(state.catFilter));
     }
     var h = ""
       + '<div class="phub__head">'
@@ -389,7 +394,7 @@
           + (p.favorite ? '<span class="phub-card__fav">' + STAR + '</span>' : '')
         + '</div>'
         + '<h3 class="phub-card__t">' + esc(p.title) + '</h3>'
-        + '<p class="phub-card__cat">' + esc(c.name) + (p.subCategory ? ' · ' + esc(p.subCategory) : '') + '</p>'
+        + '<p class="phub-card__cat">' + esc(catDisp(p.category)) + (p.subCategory ? ' · ' + esc(p.subCategory) : '') + '</p>'
         + (p.purpose ? '<p class="phub-card__purpose">' + esc(p.purpose) + '</p>' : '')
         + '<div class="phub-card__tags">' + (p.tags || []).slice(0, 5).map(function (t) { return '<span class="phub-chip">#' + esc(t) + '</span>'; }).join("") + '</div>'
         + '<p class="phub-card__date">' + fmtDate(p.updatedAt) + ' 업데이트</p>'
@@ -421,7 +426,7 @@
     h += '<section class="phub-detail__hero">'
       + '<span class="phub-prio ph-prio--' + p.priority + ' phub-prio--lg">' + pr.label + '</span>'
       + '<h1 class="phub-detail__title">' + esc(p.title) + '</h1>'
-      + '<p class="phub-detail__crumb">' + esc(c.name) + (p.subCategory ? ' <span class="phub-detail__sep">›</span> ' + esc(p.subCategory) : '') + '</p>'
+      + '<p class="phub-detail__crumb">' + esc(catDisp(p.category)) + (p.subCategory ? ' <span class="phub-detail__sep">›</span> ' + esc(p.subCategory) : '') + '</p>'
       + '<div class="phub-detail__meta">'
         + (p.purpose ? '<div class="phub-meta"><span class="phub-meta__k">업무 목적</span><p class="phub-meta__v">' + esc(p.purpose) + '</p></div>' : '')
         + (p.trigger ? '<div class="phub-meta"><span class="phub-meta__k">발생 조건</span><p class="phub-meta__v">' + esc(p.trigger) + '</p></div>' : '')
@@ -657,7 +662,7 @@
   }
   function selectCategory(cur) {
     return '<select id="phCategory" class="phub-in">' + CATEGORIES.map(function (c) {
-      return '<option value="' + c.id + '"' + (c.id === cur ? ' selected' : '') + '>' + c.name + '</option>';
+      return '<option value="' + c.id + '"' + (c.id === cur ? ' selected' : '') + '>' + esc(catDisp(c.id)) + '</option>';
     }).join("") + '</select>';
   }
   function stepRow(s, i, total) {
@@ -927,5 +932,5 @@
   }, true);
 
   /* ---------- export ---------- */
-  window.ProcessHub = { render: render };
+  window.ProcessHub = { render: render, categories: CATEGORIES.map(function (c) { return { key: c.id, def: c.name }; }) };
 })();

@@ -10,6 +10,65 @@
   var viewTitle = document.getElementById("viewTitle");
   var navItems = Array.prototype.slice.call(document.querySelectorAll(".nav__item[data-view]"));
 
+  /* ---------- HUB 메뉴 이름(사이드바 폴더명 + 카테고리) : 설정에서 변경 가능 ----------
+     · 상단 HUB 메뉴 이름과, 각 HUB 아래 카테고리(폴더 탭) 표시 이름을 관리자가 바꿀 수 있게 한다.
+     · 저장: localStorage(sg-hub-labels-v1) = { menus:{view:label}, cats:{view:{key:label}} }
+     · 카테고리는 각 HUB 모듈이 window.<Module>.categories = [{key,def}] 로 노출한 목록을 사용한다.
+       (엔트리에 저장된 카테고리 키는 그대로 두고 '표시 이름'만 덮어써서 데이터 호환을 유지) */
+  var HUB_LABELS_KEY = "sg-hub-labels-v1";
+  var HUB_MENUS = [
+    { view: "process",  def: "업무 프로세스 HUB", module: "ProcessHub" },
+    { view: "drivehub", def: "드라이브 HUB",       module: "DriveHub" },
+    { view: "aihub",    def: "AI 자료 HUB",        module: "AiHub" },
+    { view: "vault",    def: "비밀번호 HUB",        module: "VaultHub" },
+  ];
+  function loadHubLabels() {
+    var out = { menus: {}, cats: {} };
+    try {
+      var raw = localStorage.getItem(HUB_LABELS_KEY);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && typeof o === "object") {
+          if (o.menus && typeof o.menus === "object") out.menus = o.menus;
+          else { // 구버전(평면 {view:label}) 호환
+            HUB_MENUS.forEach(function (m) { if (typeof o[m.view] === "string") out.menus[m.view] = o[m.view]; });
+          }
+          if (o.cats && typeof o.cats === "object") out.cats = o.cats;
+        }
+      }
+    } catch (e) {}
+    return out;
+  }
+  function saveHubLabels(obj) { try { localStorage.setItem(HUB_LABELS_KEY, JSON.stringify(obj)); } catch (e) {} }
+  function hubMenuDef(view) { for (var i = 0; i < HUB_MENUS.length; i++) if (HUB_MENUS[i].view === view) return HUB_MENUS[i].def; return ""; }
+  function hubMenuLabel(view) {
+    var v = loadHubLabels().menus[view];
+    return (typeof v === "string" && v.trim()) ? v.trim() : hubMenuDef(view);
+  }
+  function hubCatLabel(view, key, def) {
+    var cats = loadHubLabels().cats[view] || {};
+    var v = cats[key];
+    return (typeof v === "string" && v.trim()) ? v.trim() : (def || key);
+  }
+  // 각 HUB 모듈이 노출한 카테고리 목록 [{key,def}] (모듈 미로딩 시 빈 배열)
+  function hubCategories(view) {
+    for (var i = 0; i < HUB_MENUS.length; i++) {
+      if (HUB_MENUS[i].view === view) {
+        var mod = window[HUB_MENUS[i].module];
+        if (mod && Array.isArray(mod.categories)) return mod.categories;
+      }
+    }
+    return [];
+  }
+  function applyHubLabels() {
+    HUB_MENUS.forEach(function (m) {
+      var el = document.querySelector('.nav__item[data-view="' + m.view + '"]');
+      if (el) el.textContent = hubMenuLabel(m.view);
+    });
+  }
+  // 각 HUB 모듈이 카테고리 표시 이름을 조회할 때 쓰는 공용 API
+  window.SG_HUB_LABELS = { menu: hubMenuLabel, cat: hubCatLabel };
+
   /* ---------- date helpers ---------- */
   var WD = ["일", "월", "화", "수", "목", "금", "토"];
   function d(iso) { var p = iso.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
@@ -468,6 +527,7 @@
     if (d.invoices) window.INVOICES = d.invoices.map(normInvoice);
     if (d.processes) window.PROCESS_HUB_DATA = d.processes; // 업무 프로세스 HUB(process-hub.js)
     if (d.drivehub) window.DRIVEHUB_DATA = d.drivehub;      // 드라이브 HUB(drive-hub.js)
+    if (d.aihub) window.AIHUB_DATA = d.aihub;               // AI 자료 HUB(ai-hub.js)
   }
 
   /** 서버가 인증을 거부하면(비밀번호 없이 저장된 예전 세션·비밀번호 변경 등) 로그인 화면으로 되돌린다.
@@ -7777,6 +7837,14 @@
     }
   }
 
+  function renderAiHub() {
+    if (window.AiHub && typeof window.AiHub.render === "function") {
+      window.AiHub.render(view);
+    } else {
+      view.innerHTML = '<div class="board__empty">AI 자료 HUB 모듈을 불러오지 못했습니다.</div>';
+    }
+  }
+
   function renderVault() {
     if (window.VaultHub && typeof window.VaultHub.render === "function") {
       window.VaultHub.render(view);
@@ -7945,6 +8013,40 @@
       + '<p class="set-hint">기본 시작 화면·파트는 다음 접속(또는 새로고침)부터 적용됩니다.</p>'
       + '</section>';
 
+    /* 5.5 HUB 메뉴 이름 (사이드바 메뉴 + 카테고리 폴더) */
+    h += '<section class="set-card set-card--wide">'
+      + '<h3 class="set-card__t">HUB 메뉴 · 카테고리 이름</h3>'
+      + '<p class="set-card__sub">사이드바 HUB 메뉴 이름과, 각 HUB 안의 카테고리(폴더 탭) 이름을 바꿉니다.</p>'
+      + '<div class="set-hub">';
+    HUB_MENUS.forEach(function (m) {
+      var cats = hubCategories(m.view);
+      h += '<div class="set-hub__grp">'
+        + '<div class="set-hub__row set-hub__row--menu">'
+          + '<span class="set-hub__k" title="' + esc(m.def) + '">' + esc(m.def) + '</span>'
+          + '<input type="text" class="set-input" data-hub-menu="' + esc(m.view) + '" maxlength="30" placeholder="' + esc(m.def) + '" value="' + esc(hubMenuLabel(m.view)) + '">'
+        + '</div>';
+      if (cats.length) {
+        h += '<div class="set-hub__cats">';
+        cats.forEach(function (c) {
+          h += '<div class="set-hub__row set-hub__row--cat">'
+            + '<span class="set-hub__k set-hub__k--sub" title="' + esc(c.def) + '">' + esc(c.def) + '</span>'
+            + '<input type="text" class="set-input set-input--sm" data-hub-cat="' + esc(m.view) + '::' + esc(c.key) + '" maxlength="30" placeholder="' + esc(c.def) + '" value="' + esc(hubCatLabel(m.view, c.key, c.def)) + '">'
+            + '</div>';
+        });
+        h += '</div>';
+      } else {
+        h += '<p class="set-hub__none">카테고리 목록을 불러오는 중… (해당 HUB를 한 번 열면 표시돼요)</p>';
+      }
+      h += '</div>';
+    });
+    h += '</div>'
+      + '<div class="set-actions">'
+        + '<button type="button" class="btn btn--primary btn--sm" id="setHubSave">저장</button>'
+        + '<button type="button" class="btn btn--sm" id="setHubReset">기본값으로</button>'
+      + '</div>'
+      + '<p class="set-hint">저장하면 메뉴는 바로, 카테고리는 해당 HUB를 다시 열 때 반영됩니다. 빈칸은 기본 이름을 사용해요.</p>'
+      + '</section>';
+
     /* 6. 정보 · 지원 */
     h += '<section class="set-card">'
       + '<h3 class="set-card__t">정보 · 지원</h3>'
@@ -8033,6 +8135,34 @@
       try { localStorage.setItem("sg-crew-group-default", gd.value); } catch (e) {}
       crewGroupFilter = gd.value;
       setToast("크루 목록 기본 파트 저장됨 ✓");
+    });
+    // HUB 메뉴 · 카테고리 이름 저장
+    var hubSave = view.querySelector("#setHubSave");
+    if (hubSave) hubSave.addEventListener("click", function () {
+      var out = { menus: {}, cats: {} };
+      Array.prototype.forEach.call(view.querySelectorAll("[data-hub-menu]"), function (inp) {
+        var v = (inp.value || "").trim();
+        if (v) out.menus[inp.getAttribute("data-hub-menu")] = v;
+      });
+      Array.prototype.forEach.call(view.querySelectorAll("[data-hub-cat]"), function (inp) {
+        var v = (inp.value || "").trim();
+        if (!v) return;
+        var pair = inp.getAttribute("data-hub-cat").split("::");
+        var vw = pair[0], key = pair.slice(1).join("::");
+        if (!out.cats[vw]) out.cats[vw] = {};
+        out.cats[vw][key] = v;
+      });
+      saveHubLabels(out);
+      applyHubLabels();
+      setToast("HUB 메뉴 · 카테고리 이름 저장됨 ✓");
+    });
+    // HUB 메뉴 이름 기본값 복원
+    var hubReset = view.querySelector("#setHubReset");
+    if (hubReset) hubReset.addEventListener("click", function () {
+      try { localStorage.removeItem(HUB_LABELS_KEY); } catch (e) {}
+      applyHubLabels();
+      renderSettings();
+      setToast("HUB 메뉴 이름을 기본값으로 되돌렸어요");
     });
   }
 
@@ -8422,6 +8552,7 @@
     kpi:         { title: "2026 KPI", render: renderKpi },
     process:     { title: "PROCESS HUB", render: renderProcess },
     drivehub:    { title: "DRIVE HUB", render: renderDriveHub },
+    aihub:       { title: "AI HUB", render: renderAiHub },
     vault:       { title: "PASSWORD HUB", render: renderVault },
   };
 
@@ -8447,6 +8578,7 @@
   navItems.forEach(function (a) {
     a.addEventListener("click", function () { go(a.getAttribute("data-view")); });
   });
+  applyHubLabels(); // 저장된 HUB 메뉴 이름을 사이드바에 반영
 
   /* ---------- view 내부 이벤트 위임 (한 번만 등록) ---------- */
   function wireDelegation() {

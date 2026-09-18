@@ -506,6 +506,61 @@
     } catch (e) { return null; }
   }
 
+  /* ---------- 편집 즉시 캐시 반영 (write-through) ----------
+     기존엔 편집 후 캐시를 갱신하지 않아, 새로고침 시 stale-while-revalidate 가
+     "예전 캐시"를 먼저 그려 방금 한 편집이 잠깐(=느린 서버 재조회가 끝날 때까지,
+     12~45초) 되돌려진 것처럼 보였다. 저장(saveToSheet) 직후 해당 컬렉션을
+     현재 메모리(window.*) 값으로 캐시에 덮어써서, 새로고침해도 편집이 그대로 보이게 한다.
+     window.* 는 서버 응답을 정규화(norm*)한 형태이고 norm* 은 멱등이라, 캐시에 넣어도
+     다음 부팅의 applyAllData 재정규화에서 값이 바뀌지 않는다. */
+  function cacheColl_(type) {
+    switch (type) {
+      case "crew":       return { key: "crew",       val: window.CREW };
+      case "schedule":   return { key: "schedule",   val: window.SCHEDULE };
+      case "issue":      return { key: "issues",     val: (window.SUMMARY || {}).issues };
+      case "point":      return { key: "points",     val: (window.SUMMARY || {}).points };
+      case "report":     return { key: "reports",    val: (window.SUMMARY || {}).reports };
+      case "interview":  return { key: "interviews", val: window.INTERVIEWS };
+      case "attendance": return { key: "attendance", val: window.ATTENDANCE };
+      case "note":       return { key: "notes",      val: window.NOTES };
+      case "education":  return { key: "education",  val: window.EDUCATION };
+      case "hrchange":   return { key: "hrChanges",  val: window.HR_CHANGES };
+      case "meeting":    return { key: "meetings",   val: window.MEETINGS };
+      case "partner":    return { key: "partners",   val: window.PARTNERS };
+      case "sensitive":  return { key: "sensitive",  val: window.SENSITIVE_INFO };
+      case "statement":  return { key: "statements", val: window.STATEMENTS };
+      case "quote":      return { key: "quotes",     val: window.QUOTES };
+      case "invoice":    return { key: "invoices",   val: window.INVOICES };
+      case "process":    return { key: "processes",  val: window.PROCESS_HUB_DATA };
+      case "drivehub":   return { key: "drivehub",   val: window.DRIVEHUB_DATA };
+      case "aihub":      return { key: "aihub",      val: window.AIHUB_DATA };
+      default:           return null;
+    }
+  }
+  var _cachePatchTimer = null, _cachePatchTypes = {};
+  function patchCacheForType_(type) {
+    if (!cacheColl_(type)) return;              // 캐시 번들에 없는 타입(kpi 등)은 무시
+    _cachePatchTypes[type] = true;
+    if (_cachePatchTimer) clearTimeout(_cachePatchTimer);
+    // 반복 일정 대량 추가처럼 짧은 시간에 여러 번 저장돼도 캐시 쓰기는 1회로 합침(디바운스)
+    _cachePatchTimer = setTimeout(function () {
+      _cachePatchTimer = null;
+      var types = _cachePatchTypes; _cachePatchTypes = {};
+      try {
+        var raw = localStorage.getItem(CACHE_ALL_KEY);
+        if (!raw) return;                       // 전체 캐시가 아직 없으면(최초 세션) 부분 캐시를 만들지 않는다
+        var o = JSON.parse(raw);
+        if (!o || !o.d) return;
+        Object.keys(types).forEach(function (t) {
+          var c = cacheColl_(t);
+          if (c && c.val !== undefined) o.d[c.key] = c.val;
+        });
+        o.t = Date.now();
+        localStorage.setItem(CACHE_ALL_KEY, JSON.stringify(o));
+      } catch (e) {}
+    }, 250);
+  }
+
   /** 받은 전체 번들(d)을 window.* 로 반영 (fetch·캐시 공용) */
   function applyAllData(d) {
     if (!d) return;
@@ -569,9 +624,13 @@
 
   /** 시트에 저장/수정/삭제 (Content-Type 미지정 → CORS 프리플라이트 회피, fire-and-forget) */
   function saveToSheet(payload) {
+    // 방금 한 편집을 로컬 캐시에도 즉시 반영 → 새로고침 시 편집이 그대로 보인다
+    // (느린 서버 재조회가 끝나기 전에 예전 캐시가 그려져 되돌려진 것처럼 보이던 문제 해결)
+    try { if (payload && payload.type) patchCacheForType_(payload.type); } catch (e) {}
     var ep = endpoint();
     if (!ep) return Promise.resolve();
-    return fetch(ep, { method: "POST", body: JSON.stringify(withPwBody_(payload)) })
+    // keepalive: 저장 직후 새로고침해도 전송이 중단되지 않게 한다(fire-and-forget 보완)
+    return fetch(ep, { method: "POST", body: JSON.stringify(withPwBody_(payload)), keepalive: true })
       .catch(function (e) { console.warn("[시트 저장 실패]", e); });
   }
 

@@ -620,10 +620,19 @@ html[data-authed="1"] .lock { display: none; }
   font-family: var(--mono); font-weight: 500; font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase;
   border-bottom: 1px solid var(--line); background: var(--panel); white-space: nowrap;
 }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2) th:nth-child(1) { width: 132px; }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2) th:nth-child(2) { width: 96px; }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2) th:nth-child(3) { width: 92px; }
-.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2) th:nth-child(5) { width: 88px; text-align: right; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2):not(.board__table--mtg) th:nth-child(1) { width: 132px; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2):not(.board__table--mtg) th:nth-child(2) { width: 96px; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2):not(.board__table--mtg) th:nth-child(3) { width: 92px; }
+.board__table:not(.board__table--iv):not(.board__table--ak):not(.board__table--jd):not(.board__table--note):not(.board__table--note-archive):not(.board__table--hc):not(.board__table--ob):not(.board__table--edu2):not(.board__table--mtg) th:nth-child(5) { width: 88px; text-align: right; }
+
+/* 회의록 표 — 제목 칸을 넓게(자동 확장), 참석 칸은 좁게 */
+.board__table--mtg th:nth-child(1) { width: 150px; }        /* 날짜 */
+.board__table--mtg th:nth-child(2) { width: auto; min-width: 260px; } /* 제목 — 넓게 */
+.board__table--mtg th:nth-child(3) { width: 84px; }         /* 유형 */
+.board__table--mtg th:nth-child(4) { width: 64px; }         /* 참석 — 좁게 */
+.board__table--mtg th:nth-child(5) { width: 92px; }         /* 자료·링크 */
+.board__table--mtg th:nth-child(6) { width: 72px; }         /* 상태 */
+.board__table--mtg .mtg-sub { max-width: none; }
 .board__table--iv th:nth-child(1) { width: 190px; }
 .board__table--iv th:nth-child(2) { width: 132px; }
 .board__table--iv th:nth-child(3) { width: 96px; }

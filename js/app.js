@@ -8321,7 +8321,7 @@
 
     html += '<div class="board">'
       + '<div class="board__head"><h3 class="board__title">회의록 <span class="chip-mono">' + rows.length + '건</span></h3></div>'
-      + '<div class="board__scroll"><table class="board__table"><thead><tr>'
+      + '<div class="board__scroll"><table class="board__table board__table--mtg"><thead><tr>'
       + '<th>날짜</th><th>제목</th><th>유형</th><th>참석</th><th>자료 · 링크</th><th>상태</th>'
       + '</tr></thead><tbody>'
       + (rows.length ? rows.map(function (m) {

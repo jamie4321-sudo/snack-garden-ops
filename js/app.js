@@ -184,6 +184,16 @@
     if (isNaN(d.getTime())) return s;
     return new Date(d.getTime() + 12 * 3600 * 1000).toISOString().slice(0, 10);
   }
+  // 시간값 정규화 → "HH:MM". 구글시트에서 온 시간셀은 "1899-12-30T07:32:08.000Z" 같은
+  // Date 직렬화 문자열로 들어오므로 로컬 기준 HH:MM 만 뽑아낸다.
+  function fmtTime(v) {
+    if (!v) return "";
+    var s = String(v).trim();
+    if (/^\d{1,2}:\d{2}$/.test(s)) return (s.length === 4 ? "0" + s : s);
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return /^\d/.test(s) ? s : "";
+    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
   function normCrew(r) {
     return {
       id: r.id || "", name: r.name || "", role: r.role || "", team: r.team || "", group: r.group || "미지정",
@@ -8244,7 +8254,7 @@
   }
   function normMeeting(r) {
     return {
-      id: r.id || "", title: r.title || "", date: fmtDay(r.date), startTime: r.startTime || "", endTime: r.endTime || "",
+      id: r.id || "", title: r.title || "", date: fmtDay(r.date), startTime: fmtTime(r.startTime), endTime: fmtTime(r.endTime),
       category: r.category || "정기회의", place: r.place || "", onlineUrl: r.onlineUrl || "",
       attendees: _mArr(r.attendees), extAttendees: r.extAttendees || "",
       agenda: r.agenda || "", content: r.content || "", decisions: r.decisions || "",
@@ -8320,26 +8330,32 @@
       + '</div>';
 
     html += '<div class="board">'
-      + '<div class="board__head"><h3 class="board__title">회의록 <span class="chip-mono">' + rows.length + '건</span></h3></div>'
+      + '<div class="board__head"><h3 class="board__title">회의록 <span class="chip-mono" id="mtgCount">' + rows.length + '건</span></h3></div>'
       + '<div class="board__scroll"><table class="board__table board__table--mtg"><thead><tr>'
       + '<th>날짜</th><th>제목</th><th>유형</th><th>참석</th><th>자료 · 링크</th><th>상태</th>'
-      + '</tr></thead><tbody>'
-      + (rows.length ? rows.map(function (m) {
-          var when = (m.date || "—") + (m.startTime ? " " + m.startTime : "");
-          return '<tr class="board__row" data-mtg-id="' + esc(m.id) + '">'
-            + '<td style="white-space:nowrap">' + esc(when) + '</td>'
-            + '<td><b>' + esc(m.title || "(제목 없음)") + '</b>' + (m.agenda ? '<span class="mtg-sub">' + esc(m.agenda.split(/[\n,]/)[0]) + '</span>' : '') + '</td>'
-            + '<td><span class="mtg-cat" style="--c:' + meetingCatColor(m.category) + '">' + esc(m.category) + '</span></td>'
-            + '<td>' + meetingAttendeesLabel(m) + '</td>'
-            + '<td>' + meetingLinksCell(m) + '</td>'
-            + '<td><span class="mtg-status mtg-status--' + (m.status === "완료" ? "done" : m.status === "예정" ? "soon" : "prog") + '">' + esc(m.status) + '</span></td>'
-            + '</tr>';
-        }).join("")
-        : '<tr><td colspan="6" class="board__empty">등록된 회의록이 없습니다. <b style="color:var(--accent-text)">+ 회의록 등록</b>으로 첫 회의를 남겨보세요.</td></tr>')
+      + '</tr></thead><tbody id="mtgBody">'
+      + meetingTbodyHTML(rows)
       + '</tbody></table></div></div>';
 
     view.innerHTML = html;
     bindMeeting();
+  }
+
+  function meetingRowHTML(m) {
+    var when = (m.date || "—") + (m.startTime ? " " + m.startTime : "");
+    return '<tr class="board__row" data-mtg-id="' + esc(m.id) + '">'
+      + '<td style="white-space:nowrap">' + esc(when) + '</td>'
+      + '<td><b>' + esc(m.title || "(제목 없음)") + '</b>' + (m.agenda ? '<span class="mtg-sub">' + esc(m.agenda.split(/[\n,]/)[0]) + '</span>' : '') + '</td>'
+      + '<td><span class="mtg-cat" style="--c:' + meetingCatColor(m.category) + '">' + esc(m.category) + '</span></td>'
+      + '<td>' + meetingAttendeesLabel(m) + '</td>'
+      + '<td>' + meetingLinksCell(m) + '</td>'
+      + '<td><span class="mtg-status mtg-status--' + (m.status === "완료" ? "done" : m.status === "예정" ? "soon" : "prog") + '">' + esc(m.status) + '</span></td>'
+      + '</tr>';
+  }
+
+  function meetingTbodyHTML(rows) {
+    return rows.length ? rows.map(meetingRowHTML).join("")
+      : '<tr><td colspan="6" class="board__empty">등록된 회의록이 없습니다. <b style="color:var(--accent-text)">+ 회의록 등록</b>으로 첫 회의를 남겨보세요.</td></tr>';
   }
 
   function bindMeeting() {
@@ -8350,8 +8366,16 @@
     });
     var sf = view.querySelector("#mtgStatusFilter");
     if (sf) sf.addEventListener("change", function () { mtgStatusFilter = sf.value; renderMeeting(); });
+    // 검색 입력은 표 본문(tbody)만 갱신 → 입력창 재생성 안 함 → 한글 IME 조합이 끊기지 않음
     var sb = view.querySelector("#mtgSearch");
-    if (sb) sb.addEventListener("input", function () { mtgQuery = sb.value; var rows = filteredMeetings(); /* 가벼운 갱신 */ renderMeeting(); var el = view.querySelector("#mtgSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
+    if (sb) sb.addEventListener("input", function () {
+      mtgQuery = sb.value;
+      var rows = filteredMeetings();
+      var body = document.getElementById("mtgBody");
+      if (body) body.innerHTML = meetingTbodyHTML(rows);
+      var cnt = document.getElementById("mtgCount");
+      if (cnt) cnt.textContent = rows.length + "건";
+    });
     Array.prototype.forEach.call(view.querySelectorAll(".board__row[data-mtg-id]"), function (tr) {
       tr.addEventListener("click", function (ev) {
         if (ev.target.closest("a")) return; // 링크 클릭은 새 탭 열기 → 수정 모달 열지 않음

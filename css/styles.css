@@ -630,10 +630,11 @@ html[data-authed="1"] .lock { display: none; }
 .board__table--mtg th:nth-child(1) { width: 140px; }        /* 날짜 */
 .board__table--mtg th:nth-child(2) { width: auto; }         /* 제목 — 남는 폭 전부 */
 .board__table--mtg th:nth-child(3) { width: 96px; }         /* 유형 */
-.board__table--mtg th:nth-child(4) { width: 60px; }         /* 참석 — 좁게 */
+.board__table--mtg th:nth-child(4) { width: 104px; }        /* 참석 — 1명 + 외 N명 */
 .board__table--mtg th:nth-child(5) { width: 100px; }        /* 자료·링크 */
 .board__table--mtg th:nth-child(6) { width: 76px; }         /* 상태 */
 .board__table--mtg td { vertical-align: middle; }
+.board__table--mtg td:nth-child(4) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board__table--mtg td:nth-child(1) { font-size: 12.5px; color: var(--ink-2); }
 .board__table--mtg .mtg-sub { max-width: none; }
 /* 유형·상태 pill 이 세로로 쪼개지지 않도록 */

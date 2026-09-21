@@ -8276,10 +8276,24 @@
   }
 
   var mtgCatFilter = "전체", mtgStatusFilter = "전체", mtgQuery = "";
+  var mtgAnchor = TODAY;   // 회의록 목록에서 보고 있는 기준 월/년
+  var mtgMode = "all";     // "all" | "month" | "year"
+
+  function mtgScopeLabel() {
+    if (mtgMode === "year") return (+mtgAnchor.slice(0, 4)) + "년";
+    if (mtgMode === "month") return monthLabel(mtgAnchor);
+    return "전체 기간";
+  }
+  function meetingsInScope() {
+    var list = getMeetings();
+    if (mtgMode === "year") { var y = mtgAnchor.slice(0, 4); return list.filter(function (m) { return (m.date || "").slice(0, 4) === y; }); }
+    if (mtgMode === "month") { var ym = mtgAnchor.slice(0, 7); return list.filter(function (m) { return (m.date || "").slice(0, 7) === ym; }); }
+    return list.slice();
+  }
 
   function filteredMeetings() {
     var q = mtgQuery.trim().toLowerCase();
-    return getMeetings().slice().filter(function (m) {
+    return meetingsInScope().filter(function (m) {
       if (mtgCatFilter !== "전체" && m.category !== mtgCatFilter) return false;
       if (mtgStatusFilter !== "전체" && m.status !== mtgStatusFilter) return false;
       if (q) {
@@ -8293,8 +8307,8 @@
   function meetingAttendeesLabel(m) {
     var all = m.attendees.concat(m.extAttendees ? m.extAttendees.split(/[,\n]/).map(function (s) { return s.trim(); }).filter(Boolean) : []);
     if (!all.length) return '<span class="set-muted">—</span>';
-    var head = all.slice(0, 3).map(esc).join(", ");
-    return esc(all.length > 3 ? head + " 외 " + (all.length - 3) + "명" : head);
+    var head = esc(all[0]);
+    return all.length > 1 ? head + ' <span class="set-muted">외 ' + (all.length - 1) + '명</span>' : head;
   }
 
   function meetingLinksCell(m) {
@@ -8316,6 +8330,19 @@
       + '<div><p class="eyebrow">Operation / Meetings</p><h2>회의록 관리</h2>'
       + '<p class="sub">회의 일시 · 참석자 · 안건 · 결정사항 · 액션 아이템을 기록하고, 녹음본(구글 드라이브)을 함께 보관하세요.</p></div>'
       + '<div class="page-head__actions"><button class="btn btn--primary" id="addMeetingBtn">+ 회의록 등록</button></div>'
+      + '</div>';
+
+    html += '<div class="month-nav">'
+      + '<div class="month-nav__nav">'
+        + (mtgMode === "all" ? '' : '<button class="iconbtn" data-mtg-nav="-1" aria-label="이전">&larr;</button>')
+        + '<span class="month-nav__label">' + mtgScopeLabel() + '</span>'
+        + (mtgMode === "all" ? '' : '<button class="iconbtn" data-mtg-nav="1" aria-label="다음">&rarr;</button>')
+      + '</div>'
+      + '<div class="seg month-nav__seg">'
+        + '<button class="btn btn--sm ' + (mtgMode === "all" ? "is-on" : "") + '" data-mtg-mode="all">전체</button>'
+        + '<button class="btn btn--sm ' + (mtgMode === "month" ? "is-on" : "") + '" data-mtg-mode="month">월간</button>'
+        + '<button class="btn btn--sm ' + (mtgMode === "year" ? "is-on" : "") + '" data-mtg-mode="year">연간</button>'
+      + '</div>'
       + '</div>';
 
     html += '<div class="toolbar-row">'
@@ -8768,6 +8795,20 @@
 
       var ivModeBtn = ev.target.closest(".month-nav [data-iv-mode]");
       if (ivModeBtn) { ivMode = ivModeBtn.getAttribute("data-iv-mode"); renderInterview(); return; }
+
+      var mtgNavBtn = ev.target.closest(".month-nav .iconbtn[data-mtg-nav]");
+      if (mtgNavBtn) {
+        var mtgDir = +mtgNavBtn.getAttribute("data-mtg-nav");
+        mtgAnchor = addMonths(mtgAnchor, mtgMode === "year" ? mtgDir * 12 : mtgDir);
+        renderMeeting(); return;
+      }
+
+      var mtgModeBtn = ev.target.closest(".month-nav [data-mtg-mode]");
+      if (mtgModeBtn) {
+        var newMode = mtgModeBtn.getAttribute("data-mtg-mode");
+        if (newMode !== "all" && mtgMode === "all") mtgAnchor = TODAY; // 전체→기간 진입 시 이번 달/올해 기준
+        mtgMode = newMode; renderMeeting(); return;
+      }
 
       var jteamBtn = ev.target.closest("#journalTeamFilter button[data-jteam]");
       if (jteamBtn) { journalTeam = jteamBtn.getAttribute("data-jteam"); journalQuery = ""; renderJournal(); return; }

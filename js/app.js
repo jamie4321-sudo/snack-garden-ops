@@ -2936,13 +2936,46 @@
     return p[0] + "." + p[1] + "." + p[2] + " <small>" + WD[wd(iso)] + "</small>";
   }
 
+  /* ---------- 퇴사 크루 제외 (면담·근무·근태 목록 공용) ----------
+     퇴사(status "퇴사")한 크루의 기록은 목록에서 숨긴다.
+     - id가 일치하면 확실히 제외.
+     - 이름 매칭은 동명의 재직/휴직 크루가 없을 때만 (동명이인 오검출 방지). */
+  function leftCrewMatcher() {
+    var leftIds = {}, leftNames = {}, activeNames = {};
+    (window.CREW || []).forEach(function (c) {
+      if (c.status === "퇴사") {
+        if (c.id != null && c.id !== "") leftIds[String(c.id)] = true;
+        if (c.name) leftNames[c.name] = true;
+      } else if (c.name) {
+        activeNames[c.name] = true;
+      }
+    });
+    return function (r) {
+      if (r.crewId != null && r.crewId !== "" && leftIds[String(r.crewId)]) return true;
+      if (r.crewName && leftNames[r.crewName] && !activeNames[r.crewName]) return true;
+      return false;
+    };
+  }
+
+  /** 기록 등록 모달용 크루 옵션 — 퇴사 크루는 제외하되, 편집 중인 대상(currentId)은 유지 */
+  function recordCrewOptions(currentId) {
+    currentId = currentId == null ? "" : String(currentId);
+    return '<option value="">크루 선택</option>' + (window.CREW || []).filter(function (c) {
+      return c.status !== "퇴사" || String(c.id) === currentId;
+    }).map(function (c) {
+      return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
+    }).join("");
+  }
+
   function interviewsInScope() {
+    var isLeft = leftCrewMatcher();
+    var base = (window.INTERVIEWS || []).filter(function (r) { return !isLeft(r); });
     if (ivMode === "year") {
       var y = ivAnchor.slice(0, 4);
-      return (window.INTERVIEWS || []).filter(function (r) { return (r.date || "").slice(0, 4) === y; });
+      return base.filter(function (r) { return (r.date || "").slice(0, 4) === y; });
     }
     var ym = ivAnchor.slice(0, 7);
-    return (window.INTERVIEWS || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
+    return base.filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
   }
 
   function filteredInterviews() {
@@ -3031,11 +3064,9 @@
     el.querySelector("#interviewModalTitle").textContent = editing ? "면담 · 근무 기록 수정" : "면담 · 근무 기록 등록";
     el.querySelector("#interviewDelBtn").hidden = !editing;
 
-    // 크루 셀렉트 옵션 재구성 (현재 크루 목록 반영)
+    // 크루 셀렉트 옵션 재구성 — 퇴사 크루 제외(편집 중 대상은 유지)
     var sel = form.crewId;
-    sel.innerHTML = '<option value="">크루 선택</option>' + (window.CREW || []).map(function (c) {
-      return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
-    }).join("");
+    sel.innerHTML = recordCrewOptions((prefill && prefill.crewId) || "");
 
     form.crewId.value = (prefill && prefill.crewId) || "";
     form.date.value = (prefill && prefill.date) || TODAY;
@@ -3191,12 +3222,14 @@
   function attScopeLabel() { return attMode === "year" ? (+attAnchor.slice(0, 4)) + "년" : monthLabel(attAnchor); }
 
   function attendanceInScope() {
+    var isLeft = leftCrewMatcher();
+    var base = (window.ATTENDANCE || []).filter(function (r) { return !isLeft(r); });
     if (attMode === "year") {
       var y = attAnchor.slice(0, 4);
-      return (window.ATTENDANCE || []).filter(function (r) { return (r.date || "").slice(0, 4) === y; });
+      return base.filter(function (r) { return (r.date || "").slice(0, 4) === y; });
     }
     var ym = attAnchor.slice(0, 7);
-    return (window.ATTENDANCE || []).filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
+    return base.filter(function (r) { return (r.date || "").slice(0, 7) === ym; });
   }
 
   function filteredAttendance() {
@@ -3355,9 +3388,7 @@
     el.querySelector("#attendanceDelBtn").hidden = !editing;
 
     var sel = form.crewId;
-    sel.innerHTML = '<option value="">크루 선택</option>' + (window.CREW || []).map(function (c) {
-      return '<option value="' + esc(c.id) + '">' + esc(c.name) + (c.group ? ' · ' + esc(c.group) : '') + '</option>';
-    }).join("");
+    sel.innerHTML = recordCrewOptions((prefill && prefill.crewId) || "");
 
     form.crewId.value = (prefill && prefill.crewId) || "";
     form.date.value = (prefill && prefill.date) || TODAY;

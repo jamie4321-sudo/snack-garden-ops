@@ -184,15 +184,16 @@
     if (isNaN(d.getTime())) return s;
     return new Date(d.getTime() + 12 * 3600 * 1000).toISOString().slice(0, 10);
   }
-  // 시간값 정규화 → "HH:MM". 구글시트에서 온 시간셀은 "1899-12-30T07:32:08.000Z" 같은
-  // Date 직렬화 문자열로 들어오므로 로컬 기준 HH:MM 만 뽑아낸다.
+  // 시간값 정규화 → "HH:MM". 폼(type=time)은 "HH:MM" 로 저장하지만, 구글시트 시간셀은
+  // "1899-12-30T07:32:08.000Z" 처럼 Date 직렬화 문자열로 들어온다. 이 1899 값은 과거 시간대
+  // 오프셋(서울 LMT +8:27) 때문에 로컬 변환 시 분(分)까지 틀어지므로 신뢰할 수 없다 → 버린다.
+  // 순수 "HH:MM" 형태만 살리고 날짜가 섞인 값은 폐기해 날짜 칸을 깔끔히 유지한다.
   function fmtTime(v) {
     if (!v) return "";
     var s = String(v).trim();
-    if (/^\d{1,2}:\d{2}$/.test(s)) return (s.length === 4 ? "0" + s : s);
-    var d = new Date(s);
-    if (isNaN(d.getTime())) return /^\d/.test(s) ? s : "";
-    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    if (/\d{4}-\d{2}-\d{2}/.test(s)) return "";       // 날짜 포함(ISO 직렬화 손상값) → 폐기
+    var m = /^(\d{1,2}):(\d{2})/.exec(s);
+    return m ? ("0" + m[1]).slice(-2) + ":" + m[2] : "";
   }
   function normCrew(r) {
     return {

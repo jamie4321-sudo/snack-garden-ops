@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="2026년 1~8월 오아시스 라면존 운영 리포트 — 결제·소진·이용패턴·인력 현황">
+<style>html,body{margin:0;padding:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>라면존 운영 리포트</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;700;800;900&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ground:#FBF8F4;
+    --surface:#FFFFFF;
+    --surface-2:#F6F1EA;
+    --ink:#231C16;
+    --muted:#8A7E72;
+    --faint:#B4A99C;
+    --line:#ECE3D8;
+    --line-2:#E2D6C7;
+    --accent:#D24A1E;
+    --accent-2:#E88C4A;
+    --accent-soft:#F7E4D6;
+    --track:#EFE7DC;
+    --good:#3F7D4F;
+    --warn:#B5661C;
+    --shadow:0 1px 2px rgba(60,40,20,.04),0 6px 20px rgba(80,55,30,.05);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#171310;
+      --surface:#211B16;
+      --surface-2:#2A2219;
+      --ink:#F1E9DF;
+      --muted:#A99C8C;
+      --faint:#7C7062;
+      --line:#332A21;
+      --line-2:#3D3228;
+      --accent:#EE744A;
+      --accent-2:#F0A469;
+      --accent-soft:#3A281D;
+      --track:#2E2619;
+      --good:#6FB07E;
+      --warn:#D79A54;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#171310;
+    --surface:#211B16;
+    --surface-2:#2A2219;
+    --ink:#F1E9DF;
+    --muted:#A99C8C;
+    --faint:#7C7062;
+    --line:#332A21;
+    --line-2:#3D3228;
+    --accent:#EE744A;
+    --accent-2:#F0A469;
+    --accent-soft:#3A281D;
+    --track:#2E2619;
+    --good:#6FB07E;
+    --warn:#D79A54;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:'IBM Plex Sans KR','Gothic A1',system-ui,sans-serif;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding-inline:20px;padding-block:0}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+
+  /* ---------- header ---------- */
+  header.top{padding-block:40px 20px;border-bottom:1px solid var(--line)}
+  .eyebrow{
+    font-family:'Gothic A1',sans-serif;font-weight:700;font-size:12px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+    display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--accent);border-radius:2px}
+  h1.title{
+    font-family:'Gothic A1',sans-serif;font-weight:900;letter-spacing:-.02em;
+    font-size:clamp(30px,6vw,44px);line-height:1.05;margin:12px 0 6px;text-wrap:balance;
+  }
+  .sub{color:var(--muted);font-size:15px;max-width:60ch}
+
+  /* ---------- section ---------- */
+  section{padding-block:34px;border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:none}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+  h2{font-family:'Gothic A1',sans-serif;font-weight:800;font-size:20px;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:10px}
+  h2 .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+  .sec-note{color:var(--muted);font-size:13px}
+
+  /* ---------- KPI ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;box-shadow:var(--shadow)}
+  .kpi .lab{font-size:12.5px;color:var(--muted);font-weight:600;letter-spacing:.01em}
+  .kpi .val{font-family:'Gothic A1',sans-serif;font-weight:900;font-size:30px;line-height:1.1;margin-top:8px;letter-spacing:-.02em}
+  .kpi .val small{font-size:15px;font-weight:700;color:var(--muted);margin-left:2px}
+  .kpi .meta{font-size:12px;color:var(--faint);margin-top:5px}
+
+  /* ---------- monthly bar chart ---------- */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+  .mbars{display:flex;align-items:flex-end;gap:min(2.4vw,20px);height:220px;padding-top:10px}
+  .mcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;height:100%;min-width:0}
+  .mcol .bwrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+  .mcol .bar{width:70%;max-width:34px;background:linear-gradient(180deg,var(--accent-2),var(--accent));border-radius:6px 6px 3px 3px;position:relative;transition:height .2s}
+  .mcol .bar .cnt{position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:700;color:var(--ink);white-space:nowrap}
+  .mcol .mlab{font-size:12px;color:var(--muted);font-weight:600}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12.5px;margin-top:6px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  /* ---------- generic table ---------- */
+  .tbl-scroll{overflow-x:auto;margin:0 -2px;-webkit-overflow-scrolling:touch}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+  th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-family:'Gothic A1',sans-serif;font-weight:700;color:var(--muted);font-size:12px;letter-spacing:.02em;border-bottom:1.5px solid var(--line-2);background:var(--surface)}
+  tbody tr:hover{background:var(--surface-2)}
+  tbody tr.total-row{background:var(--surface-2);font-weight:700}
+  tbody tr.total-row td{border-bottom:none}
+  .cell-strong{color:var(--accent);font-weight:700}
+
+  /* ---------- ranking cards ---------- */
+  .rank-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .rank-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+  .rank-card h3{font-family:'Gothic A1',sans-serif;font-size:15px;font-weight:800;margin:0 0 12px;display:flex;align-items:center;justify-content:space-between}
+  .rank-card h3 .tot{font-size:11.5px;font-weight:600;color:var(--faint)}
+  .rlist{display:flex;flex-direction:column;gap:9px}
+  .ritem{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:9px}
+  .rnum{font-family:'Gothic A1',sans-serif;font-weight:900;font-size:14px;color:var(--faint);text-align:center}
+  .ritem.first .rnum{color:var(--accent)}
+  .rname{font-size:13px;line-height:1.25;min-width:0}
+  .rname .new{font-size:9.5px;font-weight:700;color:var(--accent);border:1px solid var(--accent-soft);background:var(--accent-soft);border-radius:4px;padding:1px 4px;margin-left:5px;vertical-align:1px}
+  .rcnt{font-size:12.5px;font-weight:700;color:var(--muted)}
+
+  /* ---------- horizontal bar rows (day / time) ---------- */
+  .hbars{display:flex;flex-direction:column;gap:10px}
+  .hrow{display:grid;grid-template-columns:64px 1fr 52px;align-items:center;gap:12px}
+  .hrow .hl{font-size:13px;color:var(--muted);font-weight:600}
+  .htrack{height:20px;background:var(--track);border-radius:6px;overflow:hidden}
+  .hfill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:6px}
+  .hrow.peak .hfill{background:linear-gradient(90deg,var(--accent),var(--accent))}
+  .hrow.dim .hfill{background:var(--faint);opacity:.55}
+  .hv{font-size:13px;font-weight:700;text-align:right}
+  .cols-2{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+
+  /* ---------- staff ---------- */
+  .staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+  .staff{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;box-shadow:var(--shadow)}
+  .staff .m{font-size:12.5px;color:var(--muted);font-weight:600}
+  .staff .n{font-family:'Gothic A1',sans-serif;font-weight:900;font-size:24px;margin:4px 0 2px}
+  .staff .n small{font-size:13px;font-weight:600;color:var(--muted)}
+  .staff .d{font-size:11px;color:var(--faint)}
+
+  .callout{background:var(--accent-soft);border:1px solid var(--line-2);border-radius:12px;padding:14px 16px;font-size:13.5px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;margin-top:16px}
+  .callout b{color:var(--accent)}
+  .callout::before{content:"›";font-family:'Gothic A1',sans-serif;font-weight:900;color:var(--accent);font-size:16px;line-height:1.3}
+
+  footer{padding:26px 0 46px;color:var(--faint);font-size:12px;text-align:center}
+
+  @media (max-width:720px){
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .rank-grid{grid-template-columns:repeat(2,1fr)}
+    .cols-2{grid-template-columns:1fr;gap:26px}
+    .mcol .bar .cnt{font-size:10px}
+  }
+  @media (max-width:440px){
+    .rank-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">2026 운영 리포트 · 1월–8월</div>
+    <h1 class="title">라면존 운영 리포트</h1>
+    <p class="sub">오아시스 라면존의 결제·소진·인력 현황을 월별로 정리했습니다. (2026년 1월 ~ 8월 집계, 9월 이후 미집계)</p>
+  </header>
+
+  <!-- ===== SUMMARY ===== -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="dot"></span>누적 요약</h2>
+      <span class="sec-note">8개월 누계 기준</span>
+    </div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="lab">총 결제건수</div>
+        <div class="val num">10,065<small>건</small></div>
+        <div class="meta">월 평균 1,258건</div>
+      </div>
+      <div class="kpi">
+        <div class="lab">총 매출</div>
+        <div class="val num">981<small>만원</small></div>
+        <div class="meta">건당 1,000원</div>
+      </div>
+      <div class="kpi">
+        <div class="lab">일 평균 이용자수</div>
+        <div class="val num">45<small>명</small></div>
+        <div class="meta">평일 기준 55~71명</div>
+      </div>
+      <div class="kpi">
+        <div class="lab">무전취식 비율</div>
+        <div class="val num">5.4<small>%</small></div>
+        <div class="meta">누적 563건 / 라면 소진</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MONTHLY TREND ===== -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="dot"></span>월별 결제건수 추이</h2>
+      <span class="sec-note">단위: 건</span>
+    </div>
+    <div class="panel">
+      <div class="mbars" id="mbars"></div>
+    </div>
+
+    <div class="tbl-scroll" style="margin-top:16px">
+      <table class="num">
+        <thead>
+          <tr><th>월</th><th>운영일수</th><th>결제건수</th><th>일평균</th><th>매출</th></tr>
+        </thead>
+        <tbody id="monthly-body"></tbody>
+      </table>
+    </div>
+    <div class="callout">6월 이후 결제건수가 <b>1,470건 이상</b>으로 안정화되었으며, 7월(1,557건)이 최고치입니다. 2월은 운영일수(23일)가 가장 적어 결제건수도 최저였습니다.</div>
+  </section>
+
+  <!-- ===== RAMEN RANKING ===== -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="dot"></span>라면 인기순위 (월별 TOP 3)</h2>
+      <span class="sec-note">숫자 = 소진 개수</span>
+    </div>
+    <div class="rank-grid" id="rank-grid"></div>
+    <div class="callout"><span><b>농심 얼큰한너구리</b>와 <b>신라면 건면</b>이 전 기간 상위권을 유지합니다. 신제품(빠개장면·하림 닭칼국수·제주 똣똣라면)은 출시 월에 1위로 급등하는 경향을 보입니다.</span></div>
+  </section>
+
+  <!-- ===== NON-RAMEN ITEMS ===== -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="dot"></span>라면 외 품목 소진량</h2>
+      <span class="sec-note">단위: 개</span>
+    </div>
+    <div class="tbl-scroll">
+      <table class="num">
+        <thead>
+          <tr><th>월</th><th>계란</th><th>음료</th><th>김치</th><th>햇반</th><th>단무지</th></tr>
+        </thead>
+        <tbody id="items-body"></tbody>
+      </table>
+    </div>
+    <div class="callout">계란이 매월 가장 많이 소진되는 부재료(월 1,100~1,830개)이며, 음료·김치가 뒤를 잇습니다.</div>
+  </section>
+
+  <!-- ===== DAY & TIME ===== -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="dot"></span>이용 패턴 분석</h2>
+      <span class="sec-note">1월–8월 누계</span>
+    </div>
+    <div class="cols-2">
+      <div>
+        <h3 style="font-family:'Gothic A1';font-size:14px;margin:0 0 14px;color:var(--muted)">요일별 결제건수</h3>
+        <div class="hbars" id="day-bars"></div>
+      </div>
+      <div>
+        <h3 style="font-family:'Gothic A1';font-size:14px;margin:0 0 14px;color:var(--muted)">시간대별 결제건수</h3>
+        <div class="hbars" id="time-bars"></div>
+      </div>
+    </div>
+    <div class="callout">이용은 <b>수·목·화요일</b>에 집중되고 주말은 크게 낮습니다. 시간대는 <b>점심(11–13시)</b>과 <b>저녁(17–20시)</b> 두 봉우리가 뚜렷합니다.</div>
+  </section>
+
+  <!-- ===== STAFF ===== -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="dot"></span>오아시스 &amp; 라면존 인력현황</h2>
+      <span class="sec-note">단위: 명</span>
+    </div>
+    <div class="staff-grid" id="staff-grid"></div>
+    <div class="callout">정원(TO) <b>3명</b> 기준으로 전 기간 운영합니다. (비장애 1 · 발달장애 1 · 심장장애 1)</div>
+  </section>
+
+  <footer>라면존 운영 데이터 · 2026년 1월–8월 집계</footer>
+</div>
+
+<script>
+  const months = ['1월','2월','3월','4월','5월','6월','7월','8월'];
+  const pay =    [1078, 900, 1327, 1186, 1070, 1477, 1557, 1470];
+  const days =   [24, 23, 31, 30, 31, 30, 31, 31];
+  const dailyAvg=[45, 39, 43, 40, 35, 49, 50, 47];
+  const sales =  ['107.8','90.0','132.7','118.6','107.0','147.7','130.2','147.0']; // 만원
+
+  // monthly bars
+  const maxPay = Math.max(...pay);
+  document.getElementById('mbars').innerHTML = months.map((m,i)=>`
+    <div class="mcol">
+      <div class="bwrap"><div class="bar" style="height:${(pay[i]/maxPay*100).toFixed(1)}%">
+        <span class="cnt num">${pay[i].toLocaleString()}</span></div></div>
+      <div class="mlab">${m}</div>
+    </div>`).join('');
+
+  // monthly table
+  document.getElementById('monthly-body').innerHTML = months.map((m,i)=>`
+    <tr><td>${m}</td><td>${days[i]}</td><td class="cell-strong">${pay[i].toLocaleString()}</td>
+    <td>${dailyAvg[i]}</td><td>₩${(pay[i]).toLocaleString()},000</td></tr>`).join('')
+    + `<tr class="total-row"><td>누계</td><td>231</td><td>10,065</td><td>45</td><td>₩9,810,000</td></tr>`;
+
+  // ranking
+  const ranks = [
+    {m:'1월',tot:1099,list:[['농심 얼큰한너구리',210,0],['농심 신라면 건면',193,0],['오뚜기 참깨라면',135,0]]},
+    {m:'2월',tot:951, list:[['농심 얼큰한너구리',179,0],['에이스쿡 소유라멘',143,0],['농심 신라면 건면',128,0]]},
+    {m:'3월',tot:1408,list:[['농심 신라면 건면',243,0],['농심 얼큰한너구리',229,0],['오뚜기 참깨라면',170,0]]},
+    {m:'4월',tot:1293,list:[['빠개장면',382,1],['농심 얼큰한너구리',170,0],['농심 신라면 건면',138,0]]},
+    {m:'5월',tot:1123,list:[['농심 얼큰한너구리',181,0],['농심 신라면 건면',154,0],['농심 오징어짬뽕',153,0]]},
+    {m:'6월',tot:1558,list:[['농심 신라면 건면',240,0],['팔도 틈새빨계떡면',200,1],['농심 얼큰한너구리',195,0]]},
+    {m:'7월',tot:1649,list:[['하림 닭칼국수',312,1],['얼큰한너구리',245,0],['신라면 건면',220,0]]},
+    {m:'8월',tot:1547,list:[['제주 똣똣라면',508,1],['얼큰한너구리',201,0],['신라면 건면',178,0]]},
+  ];
+  document.getElementById('rank-grid').innerHTML = ranks.map(r=>`
+    <div class="rank-card">
+      <h3>${r.m}<span class="tot num">소진 ${r.tot.toLocaleString()}</span></h3>
+      <div class="rlist">
+        ${r.list.map((it,idx)=>`
+          <div class="ritem ${idx===0?'first':''}">
+            <span class="rnum">${idx+1}</span>
+            <span class="rname">${it[0]}${it[2]?'<span class="new">NEW</span>':''}</span>
+            <span class="rcnt num">${it[1]}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+
+  // non-ramen items
+  const items = [
+    ['1월',1325,1004,781,597,144],
+    ['2월',1089,922,695,392,243],
+    ['3월',1564,1358,988,594,360],
+    ['4월',1493,1202,900,460,351],
+    ['5월',1200,1160,795,404,258],
+    ['6월',1830,1254,1102,648,417],
+    ['7월',1808,953,1280,890,399],
+    ['8월',1680,1289,1059,720,410],
+  ];
+  document.getElementById('items-body').innerHTML = items.map(r=>`
+    <tr><td>${r[0]}</td><td class="cell-strong">${r[1].toLocaleString()}</td>
+    <td>${r[2].toLocaleString()}</td><td>${r[3].toLocaleString()}</td>
+    <td>${r[4].toLocaleString()}</td><td>${r[5].toLocaleString()}</td></tr>`).join('');
+
+  // day of week
+  const dow = [['월',1566],['화',2202],['수',2320],['목',2281],['금',1293],['토',218],['일',185]];
+  const maxDow = Math.max(...dow.map(d=>d[1]));
+  document.getElementById('day-bars').innerHTML = dow.map(d=>{
+    const cls = d[1]>2100?'peak':(d[1]<300?'dim':'');
+    return `<div class="hrow ${cls}"><span class="hl">${d[0]}요일</span>
+      <div class="htrack"><div class="hfill" style="width:${(d[1]/maxDow*100).toFixed(1)}%"></div></div>
+      <span class="hv num">${d[1].toLocaleString()}</span></div>`;
+  }).join('');
+
+  // time of day
+  const tod = [
+    ['06–09',706],['09–11',376],['11–12',1542],['12–13',1323],['13–15',667],
+    ['15–17',744],['17–18',865],['18–19',1568],['19–20',1274],['20–22',730],['22–06',270]
+  ];
+  const maxTod = Math.max(...tod.map(t=>t[1]));
+  document.getElementById('time-bars').innerHTML = tod.map(t=>{
+    const cls = t[1]>1200?'peak':(t[1]<400?'dim':'');
+    return `<div class="hrow ${cls}"><span class="hl">${t[0]}시</span>
+      <div class="htrack"><div class="hfill" style="width:${(t[1]/maxTod*100).toFixed(1)}%"></div></div>
+      <span class="hv num">${t[1].toLocaleString()}</span></div>`;
+  }).join('');
+
+  // staff
+  const staff = [
+    ['1월',3],['2월',3],['3월',3],['4월',3],['5월',3],['6월',3],['7월',3],['8월',3]
+  ];
+  document.getElementById('staff-grid').innerHTML = staff.map(s=>`
+    <div class="staff"><div class="m">${s[0]}</div>
+    <div class="n num">${s[1]}<small> 명</small></div>
+    <div class="d">비장애·발달·심장</div></div>`).join('');
+</script>
+</body>
+</html>

@@ -122,6 +122,7 @@
       e("제안서", "모빌리티 조경", "모빌리티 조경 관리구역 변경 검토 보고서", ""),
       e("제안서", "모빌리티 조경", "모빌리티 조경관리 근무시간조정 확정안", ""),
       e("제안서", "카카오페이", "카카오페이 스낵바 수주검토 대표보고 (v3)", ""),
+      e("제안서", "운영 보고서", "라면존 운영 리포트 (2026 상반기)", "https://jamie4321-sudo.github.io/snack-garden-ops/reports/ramen-zone-2026.html"),
       // 운영 웹앱
       e("운영 웹앱", "대시보드", "SNACK & GARDEN 운영 대시보드", "https://jamie4321-sudo.github.io/snack-garden-ops/"),
       e("운영 웹앱", "대시보드", "가든 운영 대시보드 (garden-dash)", "https://jamie4321-sudo.github.io/garden-dash/"),

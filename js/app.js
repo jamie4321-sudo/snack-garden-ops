@@ -663,6 +663,7 @@
     var links = evtLinks(evt);
     return {
       type: "schedule", action: action, id: evt.id, date: evt.date, time: evt.time, title: evt.title,
+      titleColor: evt.titleColor || "",
       category: evt.category, halfDay: evt.halfDay || "", done: evt.done, assignee: evt.assignee,
       link: links[0] || "", links: JSON.stringify(links),
       alarm: evt.alarm, alarmTime: evt.alarmTime || "",
@@ -833,12 +834,12 @@
     var shown = events.slice(0, max).map(function (e) {
       if (isAnnualLeave(e)) {
         return '<div class="mchip mchip--leave" data-id="' + esc(e.id || "") + '" title="' + esc(e.title) + ' · 종일 휴식">'
-          + '<span class="mchip__t">' + esc(e.title) + '</span></div>';
+          + '<span class="mchip__t"' + (e.titleColor ? ' style="color:' + e.titleColor + '"' : '') + '>' + esc(e.title) + '</span></div>';
       }
       var color = CATCOLOR[e.category] || "#cbd5e1";
       return '<div class="mchip' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.title) + '">'
         + '<span class="mchip__dot" style="background:' + color + '"></span>'
-        + '<span class="mchip__t">' + esc(e.title) + '</span></div>';
+        + '<span class="mchip__t"' + (e.titleColor ? ' style="color:' + e.titleColor + '"' : '') + '>' + esc(e.title) + '</span></div>';
     }).join("");
     var more = events.length > max
       ? '<div class="mchip mchip--more" data-date="' + iso + '">+' + (events.length - max) + '건 더보기</div>'
@@ -853,6 +854,18 @@
 
   /* ---------- 일정 등록/수정 모달 ---------- */
   var CATEGORIES = ["운영", "채용", "교육", "내부", "외부", "보고", "근태", "행정", "휴일", "기타"];
+
+  // 일정 제목 색상 팔레트 (노랑 제외 — 카드 디자인 규칙과 동일 기조)
+  var TITLE_COLORS = ["#ef4444", "#f97316", "#16a34a", "#2563eb", "#7c3aed", "#475569"];
+  function titleColorSwatchesHTML(current) {
+    var cur = current || "";
+    return '<div class="evt-colors" id="eventColors" role="radiogroup" aria-label="제목 색상">'
+      + '<button type="button" class="evt-color-sw evt-color-sw--none' + (cur ? "" : " is-active") + '" data-color="" title="기본" aria-label="기본 색상"></button>'
+      + TITLE_COLORS.map(function (c) {
+        return '<button type="button" class="evt-color-sw' + (cur === c ? " is-active" : "") + '" data-color="' + c + '" style="background:' + c + '" title="' + c + '" aria-label="' + c + '"></button>';
+      }).join("")
+      + '</div>';
+  }
 
   var EVENT_LINK_MAX = 5;
   function eventLinkRowHTML(val) {
@@ -894,6 +907,11 @@
     form.date.value = (prefill && prefill.date) || TODAY;
     form.time.value = (prefill && prefill.time) || "";
     form.title.value = (prefill && prefill.title) || "";
+    var titleColor = (prefill && prefill.titleColor) || "";
+    form.titleColor.value = titleColor;
+    Array.prototype.forEach.call(el.querySelectorAll("#eventColors .evt-color-sw"), function (b) {
+      b.classList.toggle("is-active", (b.dataset.color || "") === titleColor);
+    });
     form.category.value = (prefill && prefill.category) || "운영";
     form.halfDay.value = (prefill && prefill.halfDay) || "";
     form.assignee.value = (prefill && prefill.assignee) || "";
@@ -935,6 +953,10 @@
         + '</select></label>'
       + '</div>'
       + '<label class="fld"><span>제목</span><input type="text" name="title" maxlength="60" placeholder="일정 제목"></label>'
+      + '<div class="fld"><span>제목 색상 <em>(선택)</em></span>'
+        + titleColorSwatchesHTML("")
+        + '<input type="hidden" name="titleColor" value="">'
+      + '</div>'
       + '<label class="fld"><span>반차 <em>(선택)</em></span><select name="halfDay">'
         + '<option value="">해당 없음</option>'
         + '<option value="오전">오전 반차</option>'
@@ -974,6 +996,14 @@
     });
     wrap.querySelector('input[name="date"]').addEventListener("change", function (ev) {
       wrap.querySelector('input[name="repeatUntil"]').min = ev.target.value;
+    });
+    wrap.querySelector("#eventColors").addEventListener("click", function (ev) {
+      var btn = ev.target.closest(".evt-color-sw");
+      if (!btn) return;
+      var box = wrap.querySelector("#eventColors");
+      Array.prototype.forEach.call(box.querySelectorAll(".evt-color-sw"), function (b) { b.classList.remove("is-active"); });
+      btn.classList.add("is-active");
+      wrap.querySelector('input[name="titleColor"]').value = btn.dataset.color || "";
     });
     // 링크 추가/삭제 (최대 5개)
     var linksBox = wrap.querySelector("#eventLinks");
@@ -1023,6 +1053,7 @@
         date: f.date.value,
         time: f.time.value || "",
         title: title,
+        titleColor: f.titleColor.value || "",
         category: f.category.value,
         halfDay: half,
         done: f.done.checked,
@@ -1109,7 +1140,7 @@
     return '<div class="evt evt--leave" data-id="' + esc(e.id || "") + '" title="연차 · 종일 휴식 · 클릭하여 수정">'
       + '<span class="evt-leave2">'
         + '<span class="evt-leave2__ic">' + LEAF_SVG + '</span>'
-        + '<span class="evt-leave2__t">' + esc(e.title) + '</span>'
+        + '<span class="evt-leave2__t"' + (e.titleColor ? ' style="color:' + e.titleColor + '"' : '') + '>' + esc(e.title) + '</span>'
         + '<span class="evt-leave2__tag">종일</span>'
       + '</span>'
       + '<span class="evt__actions">'
@@ -1147,7 +1178,7 @@
     var halfMark = e.halfDay ? '<span class="evt__half evt__half--' + (e.halfDay === "오전" ? "am" : "pm") + '">' + esc(e.halfDay) + ' 반차</span>' : '';
     return '<div class="evt' + (e.done ? " is-done" : "") + '" data-id="' + esc(e.id || "") + '" title="' + esc(e.category) + (e.halfDay ? " · " + esc(e.halfDay) + " 반차" : "") + (e.assignee ? " · " + esc(e.assignee) : "") + ' · 클릭하여 수정">'
       + toggle
-      + '<span class="evt__body">' + lead + '<span class="evt__text">' + esc(e.title) + halfMark + '</span></span>'
+      + '<span class="evt__body">' + lead + '<span class="evt__text"' + (e.titleColor ? ' style="color:' + e.titleColor + '"' : '') + '>' + esc(e.title) + halfMark + '</span></span>'
       + link
       + actions
       + '</div>';

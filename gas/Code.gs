@@ -9,7 +9,7 @@
  *                 | contractType | contractEndDate | birthDate | disability | disabilityType | emergencyContact | badgeNumber | workHours
  *                 (leftDate = 퇴사일, status="퇴사"일 때만 의미 있음)
  *                 (contractEndDate = 계약 종료일, contractType="단기계약"일 때만 의미 있음)
- *  - "schedule" : id | date | time | title | category | halfDay | done | assignee | link
+ *  - "schedule" : id | date | time | title | titleColor | category | halfDay | done | assignee | link
  *  - "interviews"  : id | date | time | crewId | crewName | type | condition | recorder | content | followUp | followUpNote | privateNote
  *  - "attendance"  : id | date | time | crewId | crewName | kind | reason | recorder  (kind = 지각|조퇴)
  *  - "education"   : id | category | title | crewId | crewName | date | dueDate | status | provider | hours | note | link | checklist
@@ -43,7 +43,7 @@ var CREW_FIELDS = [
   "contractType","contractEndDate","birthDate","disability","disabilityType","emergencyContact","badgeNumber","workHours"
 ];
 // link = 대표(첫 번째) 링크 · links = 최대 5개 링크의 JSON 배열 문자열
-var SCH_FIELDS = ["id","date","time","title","category","halfDay","done","assignee","link","links","alarm","alarmTime"];
+var SCH_FIELDS = ["id","date","time","title","titleColor","category","halfDay","done","assignee","link","links","alarm","alarmTime"];
 var ISSUE_FIELDS = ["id","text","link"];
 var POINT_FIELDS = ["id","text"];
 var REPORT_FIELDS = ["id","text","link","urgent","done","reportedAt"];
@@ -638,7 +638,7 @@ function handleCrew_(action, data) {
 
 function scheduleValuesObj_(data) {
   return {
-    id: data.id, date: data.date || "", time: data.time || "", title: data.title || "",
+    id: data.id, date: data.date || "", time: data.time || "", title: data.title || "", titleColor: data.titleColor || "",
     category: data.category || "", halfDay: data.halfDay || "", done: data.done ? "완료" : "", assignee: data.assignee || "", link: data.link || "",
     links: (typeof data.links === "string") ? data.links : JSON.stringify(data.links || []),
     alarm: data.alarm ? "켜짐" : "", alarmTime: data.alarmTime || ""

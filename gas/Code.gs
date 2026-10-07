@@ -261,8 +261,16 @@ function checkAuth_(pw) {
   return !!pw && sha256Hex_(pw) === API_PW_HASH;
 }
 
+function crewNames_() {
+  return rows_("crew", CREW_FIELDS)
+    .filter(function (c) { return c.status === "재직"; })
+    .map(function (c) { return { name: c.name, group: c.group || "", role: c.role || "", status: c.status }; });
+}
+
 function doGet(e) {
   var action = (e && e.parameter && e.parameter.action) || "all";
+  // EDU SIGN(공개 정적 사이트)의 명단 불러오기용 — 비밀번호 없이 재직 크루의 이름·소속·직무만 공개(연락처 등 민감정보 제외)
+  if (action === "crewnames") return json_(crewNames_());
   if (!checkAuth_(e && e.parameter && e.parameter.pw)) return json_({ ok: false, error: "unauthorized" });
   if (action === "crew")     return json_(rows_("crew", CREW_FIELDS));
   if (action === "schedule") return json_(mapSchedule_(rows_("schedule", SCH_FIELDS)));

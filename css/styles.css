@@ -2866,3 +2866,35 @@ textarea.phub-in { resize: vertical; line-height: 1.55; }
   .mtg-act { grid-template-columns: auto 1fr auto; }
   .mtg-act__owner, .mtg-act__due { grid-column: 2; }
 }
+
+/* ── AI 자료 HUB · 로그인 정보(아이디·비밀번호, 최대 5개 · 이 브라우저에만) ── */
+#ahModal .dhub-modal__card { display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
+#ahModal .dhub-modal__body { overflow-y: auto; }
+.ah-credfld { gap: 8px; }
+.ah-credrow { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) 28px; gap: 6px; align-items: center; }
+.ah-pwwrap { position: relative; display: block; }
+.ah-pwwrap .dhub-in { width: 100%; padding-right: 36px; }
+.ah-pweye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; background: transparent; color: var(--ink-3); cursor: pointer; display: grid; place-items: center; border-radius: var(--r-sm); }
+.ah-pweye:hover, .ah-pweye.is-on { color: var(--ink); }
+.ah-credadd { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px dashed var(--line); border-radius: var(--r-sm); background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .14s, color .14s; }
+.ah-credadd:hover { border-color: var(--accent); color: var(--ink); }
+.ah-credadd em { font-style: normal; font-size: 11px; color: var(--ink-3); font-weight: 400; }
+.ah-credmax { margin: 0; font-size: 12px; color: var(--ink-3); }
+.ah-keybtn { flex: none; display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-2); font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: border-color .14s, color .14s, background .14s; }
+.ah-keybtn:hover, .ah-keybtn.is-on { border-color: var(--accent); color: var(--ink); background: var(--panel-2); }
+.ah-creds { list-style: none; margin: 2px 0 8px 46px; padding: 10px 12px; border: 1px solid var(--line-soft); border-radius: var(--r-sm); background: var(--panel-2); display: flex; flex-direction: column; gap: 6px; animation: dhub-fade .18s ease-out both; }
+.ah-cred { display: grid; grid-template-columns: 18px minmax(0,1fr) minmax(0,1fr); gap: 10px; align-items: center; }
+.ah-cred__no { font-family: var(--mono); font-size: 11px; color: var(--ink-3); font-weight: 700; text-align: right; }
+.ah-cred__f { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ah-cred__f em { font-style: normal; font-size: 11px; color: var(--ink-3); flex: none; margin-right: 4px; }
+.ah-cred__f b { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ah-cred .dhub-iconbtn.is-on { color: var(--ink); }
+.ah-cred .dhub-iconbtn.is-copied { color: var(--accent-text); border-color: var(--accent); }
+.ah-creds__note { margin: 2px 0 0; font-size: 11px; color: var(--ink-3); }
+@media (max-width: 640px) {
+  .ah-creds { margin-left: 0; }
+  .ah-cred { grid-template-columns: 18px minmax(0,1fr); }
+  .ah-cred__f + .ah-cred__f { grid-column: 2; }
+  .ah-credrow { grid-template-columns: minmax(0,1fr) 28px; }
+  .ah-credrow .ah-pwwrap { grid-column: 1; grid-row: 2; }
+}

@@ -11,6 +11,10 @@
   "use strict";
 
   var STORE_KEY = "sg-aihub-v1";
+  // 자료별 로그인 정보(아이디·비밀번호, 최대 5개) — 비밀번호 HUB와 같은 규칙:
+  // 이 브라우저(localStorage)에만 저장하고 구글시트/서버로는 절대 보내지 않는다.
+  var CRED_KEY = "sg-aihub-creds-v1";
+  var CRED_MAX = 5;
   var GROUPS = ["제안서", "운영 웹앱", "이벤트 · 소개"];
   var GROUP_HINT = {
     "제안서": "AI로 제작한 제안서·검토 보고서 — 웹형식은 바로 열람, 문서형은 파일 위치를 남겨요.",
@@ -20,6 +24,9 @@
 
   var FOLDER_ICON = '<svg class="dhub-fold__ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
   var LINK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>';
+  var KEY_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="M18 5l2 2"/><path d="M15 8l2 2"/></svg>';
+  var EYE_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var COPY_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
   var ARROW = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17L17 7"/><path d="M8 7h9v9"/></svg>';
 
   /* ---------- 상태 ---------- */
@@ -27,8 +34,11 @@
   var state = {
     group: GROUPS[0],
     query: "",
-    modal: null,   // null | { id|null, group, path, name, url }
+    modal: null,   // null | { id|null, group, path, name, url, creds:[{u,p}] }
+    open: {},      // id -> true : 로그인 정보 펼침
+    reveal: {},    // "id:i" -> true : 비밀번호 보이기
   };
+  var creds = null; // { entryId: [{u,p}] }
 
   /* ---------- helpers ---------- */
   function esc(s) {
@@ -111,6 +121,30 @@
     else db = load();
   }
   function byId(id) { for (var i = 0; i < db.length; i++) if (db[i].id === id) return db[i]; return null; }
+
+  /* ---------- 로그인 정보 (이 브라우저에만) ---------- */
+  function credMap() {
+    if (creds) return creds;
+    try { creds = JSON.parse(localStorage.getItem(CRED_KEY) || "{}") || {}; } catch (e) { creds = {}; }
+    return creds;
+  }
+  function credsOf(id) { return (credMap()[id] || []).filter(function (c) { return c && (c.u || c.p); }); }
+  function setCreds(id, list) {
+    var m = credMap();
+    list = (list || []).filter(function (c) { return c && (String(c.u || "").trim() || String(c.p || "")); }).slice(0, CRED_MAX)
+      .map(function (c) { return { u: String(c.u || "").trim(), p: String(c.p || "") }; });
+    if (list.length) m[id] = list; else delete m[id];
+    try { localStorage.setItem(CRED_KEY, JSON.stringify(m)); } catch (e) {}
+  }
+  function copyText(text, btn) {
+    function done() {
+      if (!btn) return;
+      btn.classList.add("is-copied"); btn.setAttribute("title", "복사했어요");
+      setTimeout(function () { btn.classList.remove("is-copied"); btn.setAttribute("title", "복사"); }, 1200);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {});
+    else { var t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); done(); } catch (e) {} t.remove(); }
+  }
 
   /* ---------- 시드(그동안 올린 자료) ---------- */
   function seed() {
@@ -236,7 +270,7 @@
   function searchBody(q) {
     var ql = q.toLowerCase();
     var rows = db.filter(function (e) {
-      return [e.name, e.path, e.url, e.group].join(" ").toLowerCase().indexOf(ql) !== -1;
+      return [e.name, e.path, e.url, e.group].concat(credsOf(e.id).map(function (c) { return c.u; })).join(" ").toLowerCase().indexOf(ql) !== -1;
     }).sort(function (a, b) { return (a.group + a.path + a.name).localeCompare(b.group + b.path + b.name, "ko"); });
     var h = '<p class="dhub-hint"><b class="dhub-count">' + rows.length + '</b> 개 결과 · “' + esc(q) + '”</p>';
     if (!rows.length) return h + '<div class="dhub-empty"><p class="dhub-empty__t">일치하는 자료가 없어요.</p></div>';
@@ -259,6 +293,7 @@
   function rowHTML(e, idx, withContext) {
     var dom = domainOf(e.url);
     var hasUrl = !!e.url;
+    var cs = credsOf(e.id), isOpen = !!state.open[e.id];
     var meta = withContext
       ? '<span class="dhub-row__ctx">' + esc(gLabel(e.group)) + (e.path ? ' <span class="dhub-fold__sep">›</span> ' + esc(e.path) : '') + '</span>'
       : (dom ? '<span class="dhub-row__dom">' + esc(dom) + '</span>' : '<span class="dhub-row__dom dhub-row__dom--empty">링크 없음</span>');
@@ -269,6 +304,7 @@
       + '<span class="dhub-row__no">' + ("0" + (idx + 1)).slice(-2) + '</span>'
       + '<span class="dhub-row__ic">' + LINK_ICON + '</span>'
       + '<span class="dhub-row__main"><span class="dhub-row__name">' + esc(e.name || "(제목 없음)") + '</span>' + meta + '</span>'
+      + (cs.length ? '<button type="button" class="ah-keybtn' + (isOpen ? ' is-on' : '') + '" data-ah-act="creds" data-ah-id="' + esc(e.id) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '" title="로그인 정보 ' + cs.length + '개">' + KEY_ICON + '<span>' + cs.length + '</span></button>' : '')
       + '<span class="dhub-row__act">'
         + '<button type="button" class="dhub-iconbtn" data-ah-act="edit" data-ah-id="' + esc(e.id) + '" title="수정">'
           + '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>'
@@ -278,6 +314,24 @@
         + '</button>'
       + '</span>'
       + open
+      + '</li>'
+      + (cs.length && isOpen ? credPanel(e.id, cs) : '');
+  }
+
+  function credPanel(id, cs) {
+    return '<li class="ah-creds" data-ah-credsfor="' + esc(id) + '">'
+      + cs.map(function (c, i) {
+        var k = id + ":" + i, shown = !!state.reveal[k];
+        return '<div class="ah-cred">'
+          + '<span class="ah-cred__no">' + (i + 1) + '</span>'
+          + '<span class="ah-cred__f"><em>아이디</em><b>' + (c.u ? esc(c.u) : '—') + '</b>'
+            + (c.u ? '<button type="button" class="dhub-iconbtn" data-ah-act="copy" data-ah-id="' + esc(id) + '" data-ah-i="' + i + '" data-ah-k="u" title="복사">' + COPY_ICON + '</button>' : '') + '</span>'
+          + '<span class="ah-cred__f"><em>비밀번호</em><b class="ah-cred__pw">' + (c.p ? (shown ? esc(c.p) : '••••••••') : '—') + '</b>'
+            + (c.p ? '<button type="button" class="dhub-iconbtn' + (shown ? ' is-on' : '') + '" data-ah-act="reveal" data-ah-id="' + esc(id) + '" data-ah-i="' + i + '" title="' + (shown ? '숨기기' : '보기') + '">' + EYE_ICON + '</button>'
+              + '<button type="button" class="dhub-iconbtn" data-ah-act="copy" data-ah-id="' + esc(id) + '" data-ah-i="' + i + '" data-ah-k="p" title="복사">' + COPY_ICON + '</button>' : '') + '</span>'
+          + '</div>';
+      }).join("")
+      + '<p class="ah-creds__note">이 브라우저에만 저장돼요 · 시트로 전송되지 않아요</p>'
       + '</li>';
   }
 
@@ -314,6 +368,7 @@
             + '<datalist id="ahPathList">' + dlist + '</datalist></label>'
           + '<label class="dhub-fld"><span>이름 <em class="req">*</em></span><input type="text" id="ahName" class="dhub-in" maxlength="80" placeholder="예) 스낵 큐레이션 제안서" value="' + esc(m.name) + '"></label>'
           + '<label class="dhub-fld"><span>링크 <em>( 선택 )</em></span><input type="url" id="ahUrl" class="dhub-in" placeholder="https://jamie4321-sudo.github.io/..." value="' + esc(m.url) + '"></label>'
+          + credFields(m.creds)
         + '</div>'
         + '<div class="dhub-modal__foot">'
           + (isNew ? '' : '<button type="button" class="btn btn--danger btn--sm" data-ah-act="del" data-ah-id="' + esc(m.id) + '">삭제</button>')
@@ -323,6 +378,22 @@
         + '</div>'
       + '</div>'
     + '</div>';
+  }
+
+  function credFields(list) {
+    list = list || [];
+    var h = '<div class="dhub-fld ah-credfld"><span>로그인 정보 <em>( 선택 · 최대 ' + CRED_MAX + '개 · 이 브라우저에만 저장 )</em></span>';
+    list.forEach(function (c, i) {
+      h += '<div class="ah-credrow">'
+        + '<input type="text" id="ahCredU' + i + '" class="dhub-in" placeholder="아이디" autocomplete="off" spellcheck="false" value="' + esc(c.u) + '">'
+        + '<span class="ah-pwwrap"><input type="' + (c.show ? 'text' : 'password') + '" id="ahCredP' + i + '" class="dhub-in" placeholder="비밀번호" autocomplete="new-password" value="' + esc(c.p) + '">'
+          + '<button type="button" class="ah-pweye' + (c.show ? ' is-on' : '') + '" data-ah-act="cred-eye" data-ah-i="' + i + '" title="' + (c.show ? '숨기기' : '보기') + '">' + EYE_ICON + '</button></span>'
+        + '<button type="button" class="dhub-iconbtn dhub-iconbtn--del" data-ah-act="cred-del" data-ah-i="' + i + '" title="이 계정 빼기">×</button>'
+        + '</div>';
+    });
+    if (list.length < CRED_MAX) h += '<button type="button" class="ah-credadd" data-ah-act="cred-add">+ 아이디 · 비밀번호 추가 <em>' + list.length + ' / ' + CRED_MAX + '</em></button>';
+    else h += '<p class="ah-credmax">최대 ' + CRED_MAX + '개까지 넣을 수 있어요</p>';
+    return h + '</div>';
   }
 
   function syncModal() {
@@ -337,6 +408,10 @@
     if (p) state.modal.path = p.value;
     if (n) state.modal.name = n.value;
     if (u) state.modal.url = u.value;
+    (state.modal.creds || []).forEach(function (c, i) {
+      var cu = document.getElementById("ahCredU" + i), cp = document.getElementById("ahCredP" + i);
+      if (cu) c.u = cu.value; if (cp) c.p = cp.value;
+    });
   }
   function saveModal() {
     syncModal();
@@ -362,11 +437,12 @@
     var clean = { group: normGroup(groupVal), path: normPath(m.path), name: name, url: normUrl(m.url) };
     if (m.id) {
       var e = byId(m.id);
-      if (e) { e.group = clean.group; e.path = clean.path; e.name = clean.name; e.url = clean.url; e.updatedAt = now; persist("update", e); }
+      if (e) { e.group = clean.group; e.path = clean.path; e.name = clean.name; e.url = clean.url; e.updatedAt = now; persist("update", e); setCreds(e.id, m.creds); }
     } else {
       var rec = { id: uid(), group: clean.group, path: clean.path, name: clean.name, url: clean.url, createdAt: now, updatedAt: now };
       db.push(rec);
       persist("add", rec);
+      setCreds(rec.id, m.creds);
       state.group = rec.group;   // 저장한 그룹으로 이동
     }
     state.modal = null;
@@ -404,9 +480,24 @@
   function onKey(ev) {
     if (!document.getElementById("aihub")) return;
     if (ev.key === "Escape" && state.modal) { state.modal = null; paint(); return; }
-    if (ev.key === "Enter" && state.modal && ev.target && /^ah(Name|Path|Url|NewGroup)$/.test(ev.target.id || "")) {
+    if (ev.key === "Enter" && state.modal && ev.target && /^ah(Name|Path|Url|NewGroup|CredU\d|CredP\d)$/.test(ev.target.id || "")) {
       ev.preventDefault(); saveModal();
     }
+  }
+  // 모달 안 입력값을 지키면서 모달만 다시 그린다(포커스 이동 대상 선택)
+  function repaintModal(focusId) {
+    var old = document.getElementById("ahModal");
+    if (!old) return paint();
+    var wrap = document.createElement("div"); wrap.innerHTML = viewModal();
+    var body = old.querySelector(".dhub-modal__body"), scroll = body ? body.scrollTop : 0;
+    old.replaceWith(wrap.firstChild);
+    var nb = document.querySelector("#ahModal .dhub-modal__body"); if (nb) nb.scrollTop = scroll;
+    var f = focusId && document.getElementById(focusId);
+    if (f) { f.focus(); if (f.value && f.setSelectionRange) try { f.setSelectionRange(f.value.length, f.value.length); } catch (e) {} }
+  }
+  function refreshBody() {
+    var body = document.getElementById("ahBody");
+    if (body) body.innerHTML = state.query.trim() ? searchBody(state.query.trim()) : groupBody(state.group);
   }
   function syncTabs() {
     var tabs = host.querySelectorAll(".dhub-tab");
@@ -445,12 +536,12 @@
     switch (act) {
       case "new": {
         var g = (el && el.getAttribute("data-ah-group")) || state.group;
-        state.modal = { id: null, group: normGroup(g), path: "", name: "", url: "" };
+        state.modal = { id: null, group: normGroup(g), path: "", name: "", url: "", creds: [] };
         paint(); return true;
       }
       case "edit": {
         var e = byId(id);
-        if (e) { state.modal = { id: e.id, group: e.group, path: e.path, name: e.name, url: e.url }; paint(); }
+        if (e) { state.modal = { id: e.id, group: e.group, path: e.path, name: e.name, url: e.url, creds: credsOf(e.id).map(function (c) { return { u: c.u, p: c.p }; }) }; paint(); }
         return true;
       }
       case "del": {
@@ -458,12 +549,28 @@
         if (t && confirm('“' + (t.name || "이 자료") + '” 을(를) 삭제할까요?')) {
           db = db.filter(function (x) { return x.id !== id; });
           persist("delete", { id: id });
+          setCreds(id, []);
           state.modal = null;
           paint();
         }
         return true;
       }
       case "modal-save": saveModal(); return true;
+      case "cred-add": {
+        syncModal();
+        if ((state.modal.creds || []).length >= CRED_MAX) return true;
+        state.modal.creds = (state.modal.creds || []).concat([{ u: "", p: "" }]);
+        repaintModal("ahCredU" + (state.modal.creds.length - 1)); return true;
+      }
+      case "cred-del": { syncModal(); state.modal.creds.splice(+el.getAttribute("data-ah-i"), 1); repaintModal(); return true; }
+      case "cred-eye": { syncModal(); var c = state.modal.creds[+el.getAttribute("data-ah-i")]; if (c) c.show = !c.show; repaintModal("ahCredP" + el.getAttribute("data-ah-i")); return true; }
+      case "creds": { state.open[id] = !state.open[id]; refreshBody(); return true; }
+      case "reveal": { var k = id + ":" + el.getAttribute("data-ah-i"); state.reveal[k] = !state.reveal[k]; refreshBody(); return true; }
+      case "copy": {
+        var cc = credsOf(id)[+el.getAttribute("data-ah-i")];
+        if (cc) copyText(el.getAttribute("data-ah-k") === "p" ? cc.p : cc.u, el);
+        return true;
+      }
       case "modal-cancel": state.modal = null; paint(); return true;
     }
     return false;

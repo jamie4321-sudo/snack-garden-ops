@@ -216,6 +216,7 @@ function fieldsFor_(coll) {
     sensitive: (typeof SENSITIVE_FIELDS !== "undefined" ? SENSITIVE_FIELDS : null),
     processes: (typeof PROCESS_FIELDS !== "undefined" ? PROCESS_FIELDS : null),
     drivehub: (typeof DRIVEHUB_FIELDS !== "undefined" ? DRIVEHUB_FIELDS : null),
+    aihub: (typeof AIHUB_FIELDS !== "undefined" ? AIHUB_FIELDS : null),
     quotes: (typeof QUOTE_FIELDS !== "undefined" ? QUOTE_FIELDS : null),
     invoices: (typeof INVOICE_FIELDS !== "undefined" ? INVOICE_FIELDS : null)
   };
@@ -238,6 +239,7 @@ function sheetMappedRows_(coll) {
     case "partners":   return sheetRows_("partners", PARTNER_FIELDS);
     case "processes":  return mapProcesses_(sheetRows_("processes", PROCESS_FIELDS));
     case "drivehub":   return mapDrivehub_(sheetRows_("drivehub", DRIVEHUB_FIELDS));
+    case "aihub":      return mapDrivehub_(sheetRows_("aihub", AIHUB_FIELDS));
     case "quotes":     return mapDates_(sheetRows_("quotes", QUOTE_FIELDS), ["quoteDate", "validUntil"]);
     case "invoices":   return mapDates_(sheetRows_("invoices", INVOICE_FIELDS), ["invoiceDate", "dueDate"]);
     default:           return sheetRows_(coll, fieldsFor_(coll) || []);

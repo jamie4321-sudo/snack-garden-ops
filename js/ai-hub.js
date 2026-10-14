@@ -118,8 +118,27 @@
   function persist(action, e) { save(); pushToSheet(action, e); }
   function ensureDb() {
     if (db) return;
-    if (isLive() && Array.isArray(window.AIHUB_DATA)) db = window.AIHUB_DATA.map(normFromSheet);
+    if (isLive() && Array.isArray(window.AIHUB_DATA)) {
+      db = window.AIHUB_DATA.map(normFromSheet);
+      migrateLocal();
+    }
     else db = load();
+  }
+  // 한 번만(기기별): 그동안 이 브라우저에만 있던 자료를 서버(Supabase)로 올린다.
+  // 서버가 비어 있으면 로컬 목록(없으면 기본 목록)을 통째로, 아니면 서버에 없는 것만(이름+링크 중복 제외).
+  var MIGRATED_KEY = "sg-aihub-migrated-v1";
+  function migrateLocal() {
+    try { if (localStorage.getItem(MIGRATED_KEY)) return; } catch (e) { return; }
+    var hasLocal = false; try { hasLocal = !!localStorage.getItem(STORE_KEY); } catch (e) {}
+    var local = (hasLocal || !db.length) ? load() : [];
+    var ids = {}, keys = {};
+    db.forEach(function (e) { ids[e.id] = 1; keys[(e.name || "") + "|" + (e.url || "")] = 1; });
+    local.forEach(function (e) {
+      if (ids[e.id] || keys[(e.name || "") + "|" + (e.url || "")]) return;
+      db.push(e); pushToSheet("add", e);
+    });
+    save();
+    try { localStorage.setItem(MIGRATED_KEY, "1"); } catch (e) {}
   }
   function byId(id) { for (var i = 0; i < db.length; i++) if (db[i].id === id) return db[i]; return null; }
 

@@ -72,6 +72,9 @@ var SENSITIVE_FIELDS = ["id","crewId","conditions","medications","allergies","he
 var PROCESS_FIELDS = ["id","title","category","subCategory","purpose","trigger","priority","tags","processSteps","decisionPoints","reportRules","stakeholders","relatedResources","pastCases","favorite","createdAt","updatedAt"];
 // 드라이브 HUB : 아지트/구글드라이브/기타 그룹 아래 폴더 경로(path, "A > B")별 링크(이름+URL) 모음. 평면 저장.
 var DRIVEHUB_FIELDS = ["id","group","path","name","url","createdAt","updatedAt"];
+// AI 자료 HUB — Supabase(app_rows, coll="aihub") 우선 · Supabase 미설정 시 시트 "aihub" 탭 폴백.
+// (아이디·비밀번호는 프론트에서 브라우저에만 저장하고 여기로 보내지 않는다.)
+var AIHUB_FIELDS = ["id","group","path","name","url","creator","createdAt","updatedAt"];
 
 // 발행처(공급자) 고정 정보 — 앱의 window.COMPANY 와 동일하게 유지
 var COMPANY = {
@@ -290,6 +293,7 @@ function doGet(e) {
   if (action === "invoices")   return json_(mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]));
   if (action === "processes")  return json_(mapProcesses_(rows_("processes", PROCESS_FIELDS)));
   if (action === "drivehub")   return json_(mapDrivehub_(rows_("drivehub", DRIVEHUB_FIELDS)));
+  if (action === "aihub")      return json_(aihubRows_());
   if (action === "journal")    return json_(getJournalFromSupabase_()); // Supabase 미러 우선(미설정 시 시트 폴백) · 원본 시트 읽기는 getJournalData_()
   if (action === "kpi")        return json_(getKpi_());
   if (action === "drivefolders") return json_(getDriveFolders_());
@@ -314,7 +318,8 @@ function doGet(e) {
     quotes: mapDates_(rows_("quotes", QUOTE_FIELDS), ["quoteDate","validUntil"]),
     invoices: mapDates_(rows_("invoices", INVOICE_FIELDS), ["invoiceDate","dueDate"]),
     processes: mapProcesses_(rows_("processes", PROCESS_FIELDS)),
-    drivehub: mapDrivehub_(rows_("drivehub", DRIVEHUB_FIELDS))
+    drivehub: mapDrivehub_(rows_("drivehub", DRIVEHUB_FIELDS)),
+    aihub: aihubRows_()
   });
 }
 
@@ -571,6 +576,7 @@ function doPost(e) {
   if (data.type === "invoice")  return handleInvoice_(action, data);
   if (data.type === "process")  return handleProcess_(action, data);
   if (data.type === "drivehub") return handleDrivehub_(action, data);
+  if (data.type === "aihub")    return handleAihub_(action, data);
   if (data.type === "kpi")      return handleKpi_(action, data);
   if (data.type === "summarize") return handleSummarize_(data);
   if (data.type === "summarizeAudio") return handleSummarizeAudio_(data);
@@ -1043,6 +1049,39 @@ function handleDrivehub_(action, data) {
   if (action === "add" || action === "update") {
     var id = data.id || Utilities.getUuid();
     upsertRowByHeader_(sh, id, drivehubValuesObj_(Object.assign({}, data, { id: id })));
+    return json_({ ok: true, id: id });
+  }
+  if (action === "delete") {
+    var row = findRowById_(sh, data.id);
+    if (row < 0) return json_({ ok: false, error: "not found" });
+    sh.deleteRow(row);
+    return json_({ ok: true });
+  }
+  return json_({ ok: false, error: "unknown action" });
+}
+
+/* ---------- AI 자료 HUB(aihub) — Supabase 우선 ---------- */
+function aihubUseSb_() { return typeof sb_ready_ === "function" && sb_ready_(); }
+function aihubValuesObj_(data) {
+  return {
+    id: data.id, group: data.group || "", path: data.path || "",
+    name: data.name || "", url: data.url || "", creator: data.creator || "",
+    createdAt: data.createdAt || "", updatedAt: data.updatedAt || ""
+  };
+}
+function aihubRows_() {
+  if (aihubUseSb_()) {
+    try { return mapDrivehub_(sbRows_("aihub")); }
+    catch (err) { Logger.log("[aihub 폴백→시트] " + err); }
+  }
+  return mapDrivehub_(sheetRows_("aihub", AIHUB_FIELDS));
+}
+function handleAihub_(action, data) {
+  if (aihubUseSb_()) return sbHandle_("aihub", action, data, aihubValuesObj_);
+  var sh = sheet_("aihub", AIHUB_FIELDS);
+  if (action === "add" || action === "update") {
+    var id = data.id || Utilities.getUuid();
+    upsertRowByHeader_(sh, id, aihubValuesObj_(Object.assign({}, data, { id: id })));
     return json_({ ok: true, id: id });
   }
   if (action === "delete") {

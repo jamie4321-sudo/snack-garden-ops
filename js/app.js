@@ -9378,7 +9378,14 @@
   }
   if (alreadyAuthed && API_PW) {
     document.documentElement.setAttribute("data-authed", "1");
-    boot();
+    // app.js 는 다른 HUB 모듈(ai-hub.js 등)보다 먼저 실행되는 defer 스크립트라,
+    // #aihub 같은 주소로 바로 열면 모듈이 아직 없어 "불러오지 못했습니다"가 떴다.
+    // → 모든 defer 스크립트가 끝난 뒤(DOMContentLoaded) 첫 화면을 그린다.
+    if (document.readyState === "loading" || document.readyState === "interactive" && !window.AiHub) {
+      document.addEventListener("DOMContentLoaded", boot, { once: true });
+    } else {
+      boot();
+    }
   } else {
     // '로그인 유지' 표시는 있으나 저장된 비밀번호가 없는 예전 세션
     // (2026-09-11 서버 인증 도입 이전에 로그인해 둔 경우) → 서버가 모든 요청을

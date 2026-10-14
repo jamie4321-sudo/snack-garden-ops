@@ -15,6 +15,7 @@
   // 이 브라우저(localStorage)에만 저장하고 구글시트/서버로는 절대 보내지 않는다.
   var CRED_KEY = "sg-aihub-creds-v1";
   var CRED_MAX = 5;
+  var CREATOR_KEY = "sg-aihub-last-creator";   // 새 자료 추가 시 생성자 기본값(마지막 입력)
   var GROUPS = ["제안서", "운영 웹앱", "이벤트 · 소개"];
   var GROUP_HINT = {
     "제안서": "AI로 제작한 제안서·검토 보고서 — 웹형식은 바로 열람, 문서형은 파일 위치를 남겨요.",
@@ -84,13 +85,13 @@
   function normFromSheet(r) {
     return {
       id: r.id || uid(), group: normGroup(r.group), path: normPath(r.path),
-      name: r.name || "", url: r.url || "",
+      name: r.name || "", url: r.url || "", creator: r.creator || "",
       createdAt: r.createdAt || "", updatedAt: r.updatedAt || "",
     };
   }
   function serialize(e) {
     return {
-      id: e.id, group: e.group, path: e.path, name: e.name, url: e.url,
+      id: e.id, group: e.group, path: e.path, name: e.name, url: e.url, creator: e.creator || "",
       createdAt: e.createdAt || "", updatedAt: e.updatedAt || "",
     };
   }
@@ -270,7 +271,7 @@
   function searchBody(q) {
     var ql = q.toLowerCase();
     var rows = db.filter(function (e) {
-      return [e.name, e.path, e.url, e.group].concat(credsOf(e.id).map(function (c) { return c.u; })).join(" ").toLowerCase().indexOf(ql) !== -1;
+      return [e.name, e.path, e.url, e.group, e.creator || ""].concat(credsOf(e.id).map(function (c) { return c.u; })).join(" ").toLowerCase().indexOf(ql) !== -1;
     }).sort(function (a, b) { return (a.group + a.path + a.name).localeCompare(b.group + b.path + b.name, "ko"); });
     var h = '<p class="dhub-hint"><b class="dhub-count">' + rows.length + '</b> 개 결과 · “' + esc(q) + '”</p>';
     if (!rows.length) return h + '<div class="dhub-empty"><p class="dhub-empty__t">일치하는 자료가 없어요.</p></div>';
@@ -297,6 +298,7 @@
     var meta = withContext
       ? '<span class="dhub-row__ctx">' + esc(gLabel(e.group)) + (e.path ? ' <span class="dhub-fold__sep">›</span> ' + esc(e.path) : '') + '</span>'
       : (dom ? '<span class="dhub-row__dom">' + esc(dom) + '</span>' : '<span class="dhub-row__dom dhub-row__dom--empty">링크 없음</span>');
+    if (e.creator) meta = '<span class="ah-meta">' + meta + '<span class="ah-by">생성자 · ' + esc(e.creator) + '</span></span>';
     var open = hasUrl
       ? '<a class="dhub-row__open" href="' + esc(normUrl(e.url)) + '" target="_blank" rel="noopener" title="새 탭에서 열기" onclick="event.stopPropagation()">' + ARROW + '</a>'
       : '<span class="dhub-row__open is-disabled" title="등록된 링크가 없습니다">' + ARROW + '</span>';
@@ -369,6 +371,9 @@
           + '<label class="dhub-fld"><span>이름 <em class="req">*</em></span><input type="text" id="ahName" class="dhub-in" maxlength="80" placeholder="예) 스낵 큐레이션 제안서" value="' + esc(m.name) + '"></label>'
           + '<label class="dhub-fld"><span>링크 <em>( 선택 )</em></span><input type="url" id="ahUrl" class="dhub-in" placeholder="https://jamie4321-sudo.github.io/..." value="' + esc(m.url) + '"></label>'
           + credFields(m.creds)
+          + '<label class="dhub-fld"><span>생성자 <em>( 선택 )</em></span>'
+            + '<input type="text" id="ahCreator" class="dhub-in" list="ahCreatorList" maxlength="30" placeholder="예) Jamie" value="' + esc(m.creator) + '">'
+            + '<datalist id="ahCreatorList">' + existingCreators().map(function (c) { return '<option value="' + esc(c) + '">'; }).join("") + '</datalist></label>'
         + '</div>'
         + '<div class="dhub-modal__foot">'
           + (isNew ? '' : '<button type="button" class="btn btn--danger btn--sm" data-ah-act="del" data-ah-id="' + esc(m.id) + '">삭제</button>')
@@ -380,6 +385,11 @@
     + '</div>';
   }
 
+  function existingCreators() {
+    var set = {}, out = [];
+    db.forEach(function (e) { if (e.creator && !set[e.creator]) { set[e.creator] = 1; out.push(e.creator); } });
+    return out.sort(function (a, b) { return a.localeCompare(b, "ko"); });
+  }
   function credFields(list) {
     list = list || [];
     var h = '<div class="dhub-fld ah-credfld"><span>로그인 정보 <em>( 선택 · 최대 ' + CRED_MAX + '개 · 이 브라우저에만 저장 )</em></span>';
@@ -408,6 +418,7 @@
     if (p) state.modal.path = p.value;
     if (n) state.modal.name = n.value;
     if (u) state.modal.url = u.value;
+    var cr = document.getElementById("ahCreator"); if (cr) state.modal.creator = cr.value;
     (state.modal.creds || []).forEach(function (c, i) {
       var cu = document.getElementById("ahCredU" + i), cp = document.getElementById("ahCredP" + i);
       if (cu) c.u = cu.value; if (cp) c.p = cp.value;
@@ -434,12 +445,13 @@
       return;
     }
     var now = todayIso();
-    var clean = { group: normGroup(groupVal), path: normPath(m.path), name: name, url: normUrl(m.url) };
+    var clean = { group: normGroup(groupVal), path: normPath(m.path), name: name, url: normUrl(m.url), creator: String(m.creator || "").trim() };
+    if (clean.creator) try { localStorage.setItem(CREATOR_KEY, clean.creator); } catch (err) {}
     if (m.id) {
       var e = byId(m.id);
-      if (e) { e.group = clean.group; e.path = clean.path; e.name = clean.name; e.url = clean.url; e.updatedAt = now; persist("update", e); setCreds(e.id, m.creds); }
+      if (e) { e.group = clean.group; e.path = clean.path; e.name = clean.name; e.url = clean.url; e.creator = clean.creator; e.updatedAt = now; persist("update", e); setCreds(e.id, m.creds); }
     } else {
-      var rec = { id: uid(), group: clean.group, path: clean.path, name: clean.name, url: clean.url, createdAt: now, updatedAt: now };
+      var rec = { id: uid(), group: clean.group, path: clean.path, name: clean.name, url: clean.url, creator: clean.creator, createdAt: now, updatedAt: now };
       db.push(rec);
       persist("add", rec);
       setCreds(rec.id, m.creds);
@@ -480,7 +492,7 @@
   function onKey(ev) {
     if (!document.getElementById("aihub")) return;
     if (ev.key === "Escape" && state.modal) { state.modal = null; paint(); return; }
-    if (ev.key === "Enter" && state.modal && ev.target && /^ah(Name|Path|Url|NewGroup|CredU\d|CredP\d)$/.test(ev.target.id || "")) {
+    if (ev.key === "Enter" && state.modal && ev.target && /^ah(Name|Path|Url|NewGroup|Creator|CredU\d|CredP\d)$/.test(ev.target.id || "")) {
       ev.preventDefault(); saveModal();
     }
   }
@@ -536,12 +548,13 @@
     switch (act) {
       case "new": {
         var g = (el && el.getAttribute("data-ah-group")) || state.group;
-        state.modal = { id: null, group: normGroup(g), path: "", name: "", url: "", creds: [] };
+        var lastBy = ""; try { lastBy = localStorage.getItem(CREATOR_KEY) || ""; } catch (err) {}
+        state.modal = { id: null, group: normGroup(g), path: "", name: "", url: "", creator: lastBy, creds: [] };
         paint(); return true;
       }
       case "edit": {
         var e = byId(id);
-        if (e) { state.modal = { id: e.id, group: e.group, path: e.path, name: e.name, url: e.url, creds: credsOf(e.id).map(function (c) { return { u: c.u, p: c.p }; }) }; paint(); }
+        if (e) { state.modal = { id: e.id, group: e.group, path: e.path, name: e.name, url: e.url, creator: e.creator || "", creds: credsOf(e.id).map(function (c) { return { u: c.u, p: c.p }; }) }; paint(); }
         return true;
       }
       case "del": {

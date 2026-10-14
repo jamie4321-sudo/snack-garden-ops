@@ -2898,3 +2898,6 @@ textarea.phub-in { resize: vertical; line-height: 1.55; }
   .ah-credrow { grid-template-columns: minmax(0,1fr) 28px; }
   .ah-credrow .ah-pwwrap { grid-column: 1; grid-row: 2; }
 }
+.ah-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.ah-by { font-size: 11.5px; color: var(--ink-3); }
+.ah-meta > .dhub-row__dom + .ah-by::before, .ah-meta > .dhub-row__ctx + .ah-by::before { content: "·"; margin-right: 8px; }
